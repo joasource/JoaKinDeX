@@ -562,6 +562,11 @@ def main():
         help="Máximo de páginas a ler por PDF (padrão: 4)."
     )
     parser.add_argument(
+        "-f", "--force",
+        action="store_true",
+        help="Força o reprocessamento de todos os PDFs, ignorando os já processados com sucesso."
+    )
+    parser.add_argument(
         "--no-individual",
         action="store_true",
         help="Desativa a criação de arquivos JSON e TXT individuais por PDF (nomeados por MD5)."
@@ -618,42 +623,79 @@ def main():
     if not args.no_individual:
         indiv_dir.mkdir(parents=True, exist_ok=True)
 
-    results: List[Dict[str, Any]] = []
+    consolidated_json_path = out_dir / "classificacao_diplomas.json"
+    existing_by_md5 = {}
 
-    print(f"[*] Iniciando classificação em massa com {args.workers} worker(s)...")
+    # Carrega processamentos anteriores para modo incremental
+    if consolidated_json_path.exists() and not args.force:
+        try:
+            with open(consolidated_json_path, "r", encoding="utf-8") as f:
+                old_data = json.load(f)
+                for item in old_data:
+                    # Reutiliza documentos que foram processados com sucesso ou conferidos manualmente
+                    if "md5" in item:
+                        existing_by_md5[item["md5"]] = item
+        except Exception as e:
+            existing_by_md5 = {}
 
-    def handle_file(pdf: Path):
-        res = process_single_pdf(pdf, client, max_pages=args.max_pages)
-        if not args.no_individual:
-            file_identifier = res["md5"]
-            single_json_path = indiv_dir / f"{file_identifier}.json"
-            with open(single_json_path, "w", encoding="utf-8") as f:
-                json.dump(res, f, ensure_ascii=False, indent=2)
-            single_txt_path = indiv_dir / f"{file_identifier}.txt"
-            with open(single_txt_path, "w", encoding="utf-8") as f:
-                f.write(format_single_txt(res))
-        return res
+    # Separa os arquivos entre já processados e novos
+    files_to_process = []
+    already_done_results = []
 
-    if args.workers > 1:
-        with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            future_to_file = {executor.submit(handle_file, f): f for f in pdf_files}
-            iterator = as_completed(future_to_file)
+    print("[*] Verificando documentos já processados anteriormente...")
+    for pdf in pdf_files:
+        meta = get_file_metadata(pdf)
+        h = meta["md5"]
+        if h in existing_by_md5 and not args.force:
+            already_done_results.append(existing_by_md5[h])
+        else:
+            files_to_process.append(pdf)
+
+    print(f"[*] Total de PDFs: {len(pdf_files)} | Já processados: {len(already_done_results)} | Novos a processar: {len(files_to_process)}")
+
+    new_results = []
+    if files_to_process:
+        print(f"[*] Iniciando classificação de {len(files_to_process)} novo(s) documento(s) com {args.workers} worker(s)...")
+
+        def handle_file(pdf: Path):
+            res = process_single_pdf(pdf, client, max_pages=args.max_pages)
+            if not args.no_individual:
+                file_identifier = res["md5"]
+                single_json_path = indiv_dir / f"{file_identifier}.json"
+                with open(single_json_path, "w", encoding="utf-8") as f:
+                    json.dump(res, f, ensure_ascii=False, indent=2)
+                single_txt_path = indiv_dir / f"{file_identifier}.txt"
+                with open(single_txt_path, "w", encoding="utf-8") as f:
+                    f.write(format_single_txt(res))
+            return res
+
+        if args.workers > 1:
+            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                future_to_file = {executor.submit(handle_file, f): f for f in files_to_process}
+                iterator = as_completed(future_to_file)
+                if tqdm:
+                    iterator = tqdm(iterator, total=len(files_to_process), desc="Processando Novos PDFs", unit="doc")
+                for future in iterator:
+                    new_results.append(future.result())
+        else:
+            iterator = files_to_process
             if tqdm:
-                iterator = tqdm(iterator, total=len(pdf_files), desc="Processando PDFs", unit="doc")
-            for future in iterator:
-                results.append(future.result())
+                iterator = tqdm(files_to_process, desc="Processando Novos PDFs", unit="doc")
+            for f in iterator:
+                res = handle_file(f)
+                new_results.append(res)
     else:
-        iterator = pdf_files
-        if tqdm:
-            iterator = tqdm(pdf_files, desc="Processando PDFs", unit="doc")
-        for f in iterator:
-            res = handle_file(f)
-            results.append(res)
+        print("[*] Todos os documentos já estão atualizados no banco de dados!")
 
+    # Combina existentes + novos (sem duplicatas por MD5)
+    all_dict = {item["md5"]: item for item in already_done_results}
+    for item in new_results:
+        all_dict[item["md5"]] = item
+
+    results = list(all_dict.values())
     results.sort(key=lambda x: x["md5"])
 
     # 1. Salva arquivo consolidado JSON
-    consolidated_json_path = out_dir / "classificacao_diplomas.json"
     with open(consolidated_json_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
