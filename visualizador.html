@@ -26,17 +26,17 @@
   </script>
   <style>
     /* Custom scrollbars */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
-    .split-pane { height: calc(100vh - 65px); }
+    .split-pane { height: calc(100vh - 61px); }
   </style>
 </head>
 <body class="h-full flex flex-col overflow-hidden select-none">
 
   <!-- TOPO: Barra de Ações & Navegação -->
-  <header class="bg-slate-950 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between z-20 shrink-0">
+  <header class="bg-slate-950 border-b border-slate-800 px-4 py-2 flex items-center justify-between z-20 shrink-0">
     <div class="flex items-center gap-3">
       <div class="bg-emerald-500/10 text-emerald-400 p-2 rounded-lg border border-emerald-500/20">
         <i class="fa-solid fa-graduation-cap text-lg"></i>
@@ -44,7 +44,7 @@
       <div>
         <h1 class="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
           Conferência de Diplomas & Certificados
-          <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700 font-mono">v2.0</span>
+          <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 font-mono">v2.1</span>
         </h1>
         <p class="text-xs text-slate-400">Verificação do JSON extraído frente ao PDF original</p>
       </div>
@@ -90,19 +90,56 @@
   <!-- CORPO PRINCIPAL: Lista Lateral + Divisão Lado a Lado -->
   <main class="flex-1 flex overflow-hidden split-pane">
 
-    <!-- 1. BARRA LATERAL ESQUERDA: LISTA DE DOCUMENTOS -->
-    <aside id="sidebar" class="w-80 bg-slate-950/60 border-r border-slate-800 flex flex-col shrink-0">
-      <div class="p-3 border-b border-slate-800 space-y-2">
+    <!-- 1. BARRA LATERAL ESQUERDA: LISTA DE DOCUMENTOS E FILTROS -->
+    <aside id="sidebar" class="w-84 sm:w-96 bg-slate-950/70 border-r border-slate-800 flex flex-col shrink-0">
+      
+      <div class="p-3 border-b border-slate-800 space-y-2.5">
+        <!-- Campo de Busca -->
         <div class="relative">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-500"></i>
-          <input type="text" id="searchInput" oninput="filterDocuments()" placeholder="Buscar por Nome, CPF, MD5..."
-                 class="w-full bg-slate-900 border border-slate-800 rounded pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+          <input type="text" id="searchInput" oninput="onSearchInput()" placeholder="Buscar por Nome, CPF, MD5, Curso..."
+                 class="w-full bg-slate-900 border border-slate-800 rounded pl-8 pr-7 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+          <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2.5 top-2 text-xs text-slate-500 hover:text-slate-300">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
+
+        <!-- Filtro por Status da Conferência -->
         <div class="flex gap-1 text-[11px]">
-          <button onclick="setFilter('todos')" id="filter-todos" class="flex-1 py-1 rounded bg-slate-800 text-slate-200 font-medium text-center transition">Todos (<span id="count-todos">0</span>)</button>
-          <button onclick="setFilter('pendente')" id="filter-pendente" class="flex-1 py-1 rounded bg-slate-900 text-amber-400/80 hover:bg-slate-800 text-center transition">Pendentes (<span id="count-pendente">0</span>)</button>
-          <button onclick="setFilter('aprovado')" id="filter-aprovado" class="flex-1 py-1 rounded bg-slate-900 text-emerald-400/80 hover:bg-slate-800 text-center transition">Aprovados (<span id="count-aprovado">0</span>)</button>
+          <button onclick="setStatusFilter('todos')" id="filter-todos" class="flex-1 py-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700">Todos (<span id="count-todos">0</span>)</button>
+          <button onclick="setStatusFilter('pendente')" id="filter-pendente" class="flex-1 py-1 rounded bg-slate-900 text-amber-400/80 hover:bg-slate-800 text-center transition">Pendentes (<span id="count-pendente">0</span>)</button>
+          <button onclick="setStatusFilter('aprovado')" id="filter-aprovado" class="flex-1 py-1 rounded bg-slate-900 text-emerald-400/80 hover:bg-slate-800 text-center transition">Aprovados (<span id="count-aprovado">0</span>)</button>
         </div>
+
+        <!-- NOVO: FILTRO POR NATUREZA / NÍVEL DO CURSO -->
+        <div class="pt-2 border-t border-slate-800/80 space-y-1.5">
+          <div class="flex items-center justify-between text-[11px]">
+            <label class="text-slate-300 font-medium flex items-center gap-1.5">
+              <i class="fa-solid fa-award text-indigo-400"></i>
+              <span>Nível / Natureza do Curso:</span>
+            </label>
+            <button onclick="resetNaturezaFilter()" id="btnClearNatureza" class="hidden text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5">
+              <i class="fa-solid fa-rotate-left"></i> Limpar
+            </button>
+          </div>
+
+          <!-- Select Dropdown de Natureza -->
+          <select id="selectNaturezaFilter" onchange="onNaturezaSelectChange()"
+                  class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <option value="">Todas as Naturezas (0)</option>
+          </select>
+
+          <!-- Chips Rápidos de Filtragem por Natureza -->
+          <div id="naturezaChips" class="flex flex-wrap gap-1 pt-1 max-h-24 overflow-y-auto pr-0.5">
+            <!-- Chips gerados dinamicamente via JS com contadores -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Cabeçalho de Resultados Filtrados -->
+      <div class="px-3 py-1.5 bg-slate-900/50 border-b border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+        <span>Resultados: <strong id="filterResultCount" class="text-slate-200 font-mono">0</strong></span>
+        <span id="activeFilterLabel" class="text-[10px] text-slate-500 truncate max-w-[180px]"></span>
       </div>
 
       <!-- Lista Rolável de Documentos -->
@@ -141,7 +178,7 @@
     </section>
 
     <!-- 3. PAINEL CENTRAL DIREITO: DADOS EXTRAÍDOS & CONFERÊNCIA -->
-    <section class="w-[480px] lg:w-[540px] flex flex-col bg-slate-950 shrink-0 overflow-hidden">
+    <section class="w-[480px] lg:w-[530px] flex flex-col bg-slate-950 shrink-0 overflow-hidden">
       <!-- Abas superiores do formulário -->
       <div class="bg-slate-900/90 border-b border-slate-800 px-4 py-2 flex items-center justify-between shrink-0">
         <div class="flex gap-2">
@@ -343,9 +380,9 @@
     let filteredDocs = [];
     let currentIndex = 0;
     let isDirty = false;
-    let activeFilter = 'todos';
+    let activeStatusFilter = 'todos';
+    let activeNaturezaFilter = ''; // Vazio = todas
 
-    // Inicialização ao carregar a página
     window.addEventListener('DOMContentLoaded', () => {
       loadDocuments();
       setupKeyboardShortcuts();
@@ -356,7 +393,10 @@
         const response = await fetch('/api/documentos');
         if (!response.ok) throw new Error('Falha ao comunicar com o servidor');
         documents = await response.json();
+        
+        updateNaturezaFilterOptions();
         applyFilter();
+
         if (documents.length > 0) {
           selectDocument(0);
         }
@@ -365,30 +405,167 @@
       }
     }
 
-    function applyFilter() {
-      const search = (document.getElementById('searchInput').value || '').toLowerCase();
-      filteredDocs = documents.filter(doc => {
-        // Filtro por status
-        const status = (doc.status_conferencia || 'pendente').toLowerCase();
-        if (activeFilter === 'pendente' && status === 'aprovado') return false;
-        if (activeFilter === 'aprovado' && status !== 'aprovado') return false;
+    // Calcula e atualiza dinamicamente as opções e chips de natureza
+    function updateNaturezaFilterOptions() {
+      const counts = {};
+      documents.forEach(d => {
+        const nat = (d.natureza_curso || '').trim() || 'Não identificada';
+        counts[nat] = (counts[nat] || 0) + 1;
+      });
 
-        // Filtro de busca textual
+      // 1. Atualiza o Select Dropdown
+      const select = document.getElementById('selectNaturezaFilter');
+      const currentSelected = select.value;
+      select.innerHTML = `<option value="">Todas as Naturezas (${documents.length})</option>`;
+
+      // Ordena por maior quantidade
+      const sortedNats = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+
+      sortedNats.forEach(nat => {
+        const opt = document.createElement('option');
+        opt.value = nat;
+        opt.innerText = `${nat} (${counts[nat]})`;
+        select.appendChild(opt);
+      });
+      select.value = currentSelected;
+
+      // 2. Atualiza os Chips Rápidos
+      const chipsContainer = document.getElementById('naturezaChips');
+      chipsContainer.innerHTML = '';
+
+      // Chip "Todas"
+      const chipAll = document.createElement('button');
+      chipAll.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition ${
+        !activeNaturezaFilter 
+          ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm' 
+          : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+      }`;
+      chipAll.innerText = `Todas (${documents.length})`;
+      chipAll.onclick = () => setNaturezaFilter('');
+      chipsContainer.appendChild(chipAll);
+
+      // Chips para cada natureza encontrada
+      sortedNats.forEach(nat => {
+        const chip = document.createElement('button');
+        const isActive = activeNaturezaFilter === nat;
+        const colorClass = getChipColorClass(nat, isActive);
+        
+        chip.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition truncate max-w-[170px] ${colorClass}`;
+        chip.innerText = `${formatShortNature(nat)} (${counts[nat]})`;
+        chip.title = `${nat} (${counts[nat]})`;
+        chip.onclick = () => setNaturezaFilter(nat);
+        chipsContainer.appendChild(chip);
+      });
+    }
+
+    function formatShortNature(nat) {
+      if (nat.includes('Pós-Graduação Lato Sensu')) return 'Pós Lato Sensu';
+      if (nat.includes('Pós-Graduação Stricto Sensu')) return 'Pós Stricto Sensu';
+      if (nat.includes('Graduação')) return 'Graduação';
+      if (nat.includes('Técnico')) return 'Curso Técnico';
+      if (nat.includes('Extensão')) return 'Extensão';
+      return nat;
+    }
+
+    function getChipColorClass(nat, isActive) {
+      if (isActive) {
+        return 'bg-indigo-600 text-white border-indigo-500 shadow-sm font-semibold';
+      }
+      const n = nat.toLowerCase();
+      if (n.includes('graduação') || n.includes('superior')) {
+        return 'bg-purple-950/40 text-purple-300 border-purple-800/60 hover:bg-purple-900/50';
+      }
+      if (n.includes('lato sensu') || n.includes('especialização')) {
+        return 'bg-sky-950/40 text-sky-300 border-sky-800/60 hover:bg-sky-900/50';
+      }
+      if (n.includes('stricto sensu') || n.includes('mestrado')) {
+        return 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-900/50';
+      }
+      if (n.includes('técnico')) {
+        return 'bg-amber-950/40 text-amber-300 border-amber-800/60 hover:bg-amber-900/50';
+      }
+      return 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800';
+    }
+
+    function onNaturezaSelectChange() {
+      const val = document.getElementById('selectNaturezaFilter').value;
+      setNaturezaFilter(val);
+    }
+
+    function setNaturezaFilter(nat) {
+      activeNaturezaFilter = nat;
+      document.getElementById('selectNaturezaFilter').value = nat;
+      
+      const btnClear = document.getElementById('btnClearNatureza');
+      if (nat) {
+        btnClear.classList.remove('hidden');
+      } else {
+        btnClear.classList.add('hidden');
+      }
+
+      updateNaturezaFilterOptions();
+      applyFilter();
+
+      if (filteredDocs.length > 0) {
+        selectDocument(0);
+      }
+    }
+
+    function resetNaturezaFilter() {
+      setNaturezaFilter('');
+    }
+
+    function onSearchInput() {
+      const q = document.getElementById('searchInput').value;
+      const btnClear = document.getElementById('clearSearchBtn');
+      if (q) {
+        btnClear.classList.remove('hidden');
+      } else {
+        btnClear.classList.add('hidden');
+      }
+      applyFilter();
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('clearSearchBtn').classList.add('hidden');
+      applyFilter();
+    }
+
+    function applyFilter() {
+      const search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+      
+      filteredDocs = documents.filter(doc => {
+        // 1. Filtro por status de conferência
+        const status = (doc.status_conferencia || 'pendente').toLowerCase();
+        if (activeStatusFilter === 'pendente' && status === 'aprovado') return false;
+        if (activeStatusFilter === 'aprovado' && status !== 'aprovado') return false;
+
+        // 2. Filtro por Natureza do Curso
+        if (activeNaturezaFilter) {
+          const docNat = (doc.natureza_curso || '').trim() || 'Não identificada';
+          if (docNat !== activeNaturezaFilter) return false;
+        }
+
+        // 3. Filtro de busca textual
         if (!search) return true;
         const md5 = (doc.md5 || '').toLowerCase();
         const nome = (doc.beneficiario || '').toLowerCase();
         const cpf = (doc.cpf || '').toLowerCase();
         const curso = (doc.curso || '').toLowerCase();
         const facul = (doc.faculdade || '').toLowerCase();
-        return md5.includes(search) || nome.includes(search) || cpf.includes(search) || curso.includes(search) || facul.includes(search);
+        const natureza = (doc.natureza_curso || '').toLowerCase();
+        
+        return md5.includes(search) || nome.includes(search) || cpf.includes(search) 
+            || curso.includes(search) || facul.includes(search) || natureza.includes(search);
       });
 
       updateCounters();
       renderSidebar();
     }
 
-    function setFilter(filter) {
-      activeFilter = filter;
+    function setStatusFilter(filter) {
+      activeStatusFilter = filter;
       ['todos', 'pendente', 'aprovado'].forEach(f => {
         const btn = document.getElementById(`filter-${f}`);
         if (f === filter) {
@@ -403,10 +580,6 @@
       }
     }
 
-    function filterDocuments() {
-      applyFilter();
-    }
-
     function updateCounters() {
       const total = documents.length;
       const aprovados = documents.filter(d => (d.status_conferencia || 'pendente') === 'aprovado').length;
@@ -416,9 +589,37 @@
       document.getElementById('count-pendente').innerText = pendentes;
       document.getElementById('count-aprovado').innerText = aprovados;
 
+      document.getElementById('filterResultCount').innerText = `${filteredDocs.length} de ${total}`;
+      
+      const label = [];
+      if (activeStatusFilter !== 'todos') label.push(activeStatusFilter);
+      if (activeNaturezaFilter) label.push(formatShortNature(activeNaturezaFilter));
+      document.getElementById('activeFilterLabel').innerText = label.length > 0 ? `(${label.join(' • ')})` : '';
+
       const pct = total > 0 ? Math.round((aprovados / total) * 100) : 0;
       document.getElementById('progressText').innerText = `${aprovados} / ${total} (${pct}%)`;
       document.getElementById('progressBar').style.width = `${pct}%`;
+    }
+
+    // Retorna badge visual estilizado para o tipo de natureza
+    function getNaturezaBadge(natureza) {
+      if (!natureza) {
+        return `<span class="bg-slate-800 text-slate-400 border border-slate-700/80 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[180px] inline-flex items-center gap-1"><i class="fa-regular fa-circle-question text-[9px]"></i>Não identificada</span>`;
+      }
+      const n = natureza.toLowerCase();
+      if (n.includes('graduação') || n.includes('superior') || n.includes('bacharel')) {
+        return `<span class="bg-purple-500/10 text-purple-300 border border-purple-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-graduation-cap text-[9px] text-purple-400"></i>${natureza}</span>`;
+      }
+      if (n.includes('lato sensu') || n.includes('especialização') || n.includes('mba')) {
+        return `<span class="bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-certificate text-[9px] text-sky-400"></i>${natureza}</span>`;
+      }
+      if (n.includes('stricto sensu') || n.includes('mestrado') || n.includes('doutorado')) {
+        return `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-award text-[9px] text-emerald-400"></i>${natureza}</span>`;
+      }
+      if (n.includes('técnico') || n.includes('profissionalizante')) {
+        return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-wrench text-[9px] text-amber-400"></i>${natureza}</span>`;
+      }
+      return `<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-book-bookmark text-[9px] text-indigo-400"></i>${natureza}</span>`;
     }
 
     function renderSidebar() {
@@ -426,7 +627,13 @@
       listEl.innerHTML = '';
 
       if (filteredDocs.length === 0) {
-        listEl.innerHTML = '<div class="text-center py-8 text-xs text-slate-500">Nenhum documento encontrado.</div>';
+        listEl.innerHTML = `
+          <div class="text-center py-10 px-4 text-xs text-slate-500 space-y-2">
+            <i class="fa-solid fa-filter-circle-xmark text-2xl text-slate-600"></i>
+            <p>Nenhum documento encontrado com os filtros atuais.</p>
+            <button onclick="resetAllFilters()" class="text-indigo-400 hover:underline text-[11px]">Limpar todos os filtros</button>
+          </div>
+        `;
         return;
       }
 
@@ -435,28 +642,47 @@
         const isApproved = (doc.status_conferencia || 'pendente') === 'aprovado';
         
         const card = document.createElement('div');
-        card.className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1 ${
+        card.className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 ${
           isSelected 
-            ? 'bg-slate-800/90 border-emerald-500/50 shadow-md ring-1 ring-emerald-500/20' 
-            : 'bg-slate-900/40 hover:bg-slate-800/60 border-slate-800/80 text-slate-400'
+            ? 'bg-slate-800/95 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30' 
+            : 'bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400'
         }`;
 
         card.onclick = () => selectDocument(idx);
 
         const statusBadge = isApproved 
-          ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"><i class="fa-solid fa-check mr-0.5"></i> OK</span>`
+          ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1"><i class="fa-solid fa-check text-[9px]"></i> OK</span>`
           : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0">Pendente</span>`;
+
+        const naturezaBadge = getNaturezaBadge(doc.natureza_curso);
 
         card.innerHTML = `
           <div class="flex items-center justify-between gap-1">
             <span class="font-mono text-[11px] text-slate-300 truncate">${doc.md5.substring(0, 10)}...</span>
             ${statusBadge}
           </div>
-          <div class="font-medium text-slate-200 truncate">${doc.beneficiario || 'Sem nome'}</div>
-          <div class="text-[11px] text-slate-400 truncate">${doc.natureza_curso || doc.curso || 'Não identificado'}</div>
+          <div class="font-semibold text-slate-100 truncate">${doc.beneficiario || 'Sem nome informado'}</div>
+          <div class="flex items-center justify-between gap-1 pt-0.5">
+            ${naturezaBadge}
+            ${doc.cpf ? `<span class="font-mono text-[10px] text-slate-500 shrink-0">${doc.cpf}</span>` : ''}
+          </div>
+          <div class="text-[11px] text-slate-400 line-clamp-1">${doc.curso || 'Curso não informado'}</div>
         `;
         listEl.appendChild(card);
       });
+    }
+
+    function resetAllFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('clearSearchBtn').classList.add('hidden');
+      activeStatusFilter = 'todos';
+      activeNaturezaFilter = '';
+      document.getElementById('selectNaturezaFilter').value = '';
+      document.getElementById('btnClearNatureza').classList.add('hidden');
+      setStatusFilter('todos');
+      updateNaturezaFilterOptions();
+      applyFilter();
+      if (filteredDocs.length > 0) selectDocument(0);
     }
 
     function selectDocument(index) {
@@ -464,7 +690,6 @@
       currentIndex = index;
       const doc = filteredDocs[currentIndex];
 
-      // Atualiza navegação
       document.getElementById('navCounter').innerText = `${currentIndex + 1} de ${filteredDocs.length}`;
 
       // Atualiza visualizador do PDF
@@ -546,13 +771,13 @@
         });
         if (!resp.ok) throw new Error('Erro ao salvar no servidor');
 
-        // Atualiza na memória
         const mainIdx = documents.findIndex(d => d.md5 === updated.md5);
         if (mainIdx !== -1) documents[mainIdx] = updated;
         filteredDocs[currentIndex] = updated;
 
         isDirty = false;
         showToast('Documento salvo com sucesso!', 'success');
+        updateNaturezaFilterOptions();
         updateCounters();
         renderSidebar();
       } catch (err) {
@@ -579,7 +804,6 @@
         showToast('Documento conferido e aprovado!', 'success');
         updateCounters();
 
-        // Avança automaticamente para o próximo
         if (currentIndex < filteredDocs.length - 1) {
           selectDocument(currentIndex + 1);
         } else {
@@ -673,7 +897,6 @@
 
     function setupKeyboardShortcuts() {
       window.addEventListener('keydown', (e) => {
-        // Se estiver dentro de um input ou textarea, evita interceptar setas
         const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
 
         if (e.ctrlKey && e.key === 'Enter') {
