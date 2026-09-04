@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conferência Humana: Diplomas & Certificados</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .split-pane { height: calc(100vh - 65px); }
+  </style>
+</head>
+<body class="h-full flex flex-col overflow-hidden select-none">
+
+  <!-- TOPO: Barra de Ações & Navegação -->
+  <header class="bg-slate-950 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between z-20 shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="bg-emerald-500/10 text-emerald-400 p-2 rounded-lg border border-emerald-500/20">
+        <i class="fa-solid fa-graduation-cap text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
+          Conferência de Diplomas & Certificados
+          <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700 font-mono">v2.0</span>
+        </h1>
+        <p class="text-xs text-slate-400">Verificação do JSON extraído frente ao PDF original</p>
+      </div>
+    </div>
+
+    <!-- Progresso Geral -->
+    <div class="hidden md:flex items-center gap-4 bg-slate-900/80 px-4 py-1.5 rounded-lg border border-slate-800">
+      <div class="text-xs">
+        <span class="text-slate-400">Progresso:</span>
+        <span id="progressText" class="font-semibold text-emerald-400 ml-1">0 / 0 (0%)</span>
+      </div>
+      <div class="w-28 bg-slate-800 rounded-full h-2 overflow-hidden">
+        <div id="progressBar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Controles de Navegação -->
+    <div class="flex items-center gap-2">
+      <button id="btnPrev" onclick="navigateDoc(-1)" title="Documento Anterior (Seta Esquerda)"
+              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-chevron-left"></i>
+        <span class="hidden sm:inline">Anterior</span>
+      </button>
+
+      <span id="navCounter" class="text-xs font-mono text-slate-300 px-2">0 de 0</span>
+
+      <button id="btnNext" onclick="navigateDoc(1)" title="Próximo Documento (Seta Direita)"
+              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
+        <span class="hidden sm:inline">Próximo</span>
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+
+      <div class="h-4 w-px bg-slate-800 mx-1"></div>
+
+      <button onclick="exportJSON()" title="Exportar JSON Atualizado"
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-download text-emerald-400"></i>
+        <span class="hidden sm:inline">Exportar</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- CORPO PRINCIPAL: Lista Lateral + Divisão Lado a Lado -->
+  <main class="flex-1 flex overflow-hidden split-pane">
+
+    <!-- 1. BARRA LATERAL ESQUERDA: LISTA DE DOCUMENTOS -->
+    <aside id="sidebar" class="w-80 bg-slate-950/60 border-r border-slate-800 flex flex-col shrink-0">
+      <div class="p-3 border-b border-slate-800 space-y-2">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-500"></i>
+          <input type="text" id="searchInput" oninput="filterDocuments()" placeholder="Buscar por Nome, CPF, MD5..."
+                 class="w-full bg-slate-900 border border-slate-800 rounded pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+        </div>
+        <div class="flex gap-1 text-[11px]">
+          <button onclick="setFilter('todos')" id="filter-todos" class="flex-1 py-1 rounded bg-slate-800 text-slate-200 font-medium text-center transition">Todos (<span id="count-todos">0</span>)</button>
+          <button onclick="setFilter('pendente')" id="filter-pendente" class="flex-1 py-1 rounded bg-slate-900 text-amber-400/80 hover:bg-slate-800 text-center transition">Pendentes (<span id="count-pendente">0</span>)</button>
+          <button onclick="setFilter('aprovado')" id="filter-aprovado" class="flex-1 py-1 rounded bg-slate-900 text-emerald-400/80 hover:bg-slate-800 text-center transition">Aprovados (<span id="count-aprovado">0</span>)</button>
+        </div>
+      </div>
+
+      <!-- Lista Rolável de Documentos -->
+      <div id="docList" class="flex-1 overflow-y-auto p-2 space-y-1.5">
+        <!-- Injetado via JS -->
+      </div>
+    </aside>
+
+    <!-- 2. PAINEL CENTRAL ESQUERDO: VISUALIZADOR DE PDF -->
+    <section class="flex-1 flex flex-col border-r border-slate-800 bg-slate-950 overflow-hidden">
+      <div class="bg-slate-900/90 border-b border-slate-800 px-4 py-2 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2 overflow-hidden text-xs">
+          <i class="fa-regular fa-file-pdf text-rose-400"></i>
+          <span class="text-slate-400">Visualização do PDF:</span>
+          <span id="pdfMd5Title" class="font-mono text-emerald-400 truncate max-w-[200px] sm:max-w-md">Nenhum selecionado</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="reloadPdf()" title="Recarregar Visualizador de PDF" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-800">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+          <a id="openPdfNewTab" href="#" target="_blank" title="Abrir PDF em nova aba" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-800 flex items-center gap-1">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            <span class="hidden sm:inline">Nova Aba</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Iframe do PDF -->
+      <div class="flex-1 relative bg-slate-900">
+        <iframe id="pdfFrame" class="w-full h-full border-0" src="about:blank"></iframe>
+        <div id="pdfLoadingState" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-slate-500 space-y-3">
+          <i class="fa-solid fa-file-pdf text-4xl text-slate-700"></i>
+          <p class="text-xs">Carregando visualizador de documento...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. PAINEL CENTRAL DIREITO: DADOS EXTRAÍDOS & CONFERÊNCIA -->
+    <section class="w-[480px] lg:w-[540px] flex flex-col bg-slate-950 shrink-0 overflow-hidden">
+      <!-- Abas superiores do formulário -->
+      <div class="bg-slate-900/90 border-b border-slate-800 px-4 py-2 flex items-center justify-between shrink-0">
+        <div class="flex gap-2">
+          <button onclick="switchTab('form')" id="tab-form" class="px-3 py-1 rounded text-xs font-medium bg-slate-800 text-white transition flex items-center gap-1.5">
+            <i class="fa-solid fa-list-check text-emerald-400"></i>
+            Conferência
+          </button>
+          <button onclick="switchTab('json')" id="tab-json" class="px-3 py-1 rounded text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-code"></i>
+            JSON Bruto
+          </button>
+        </div>
+
+        <div id="currentStatusBadge" class="text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20">
+          Pendente
+        </div>
+      </div>
+
+      <!-- Conteúdo da Aba 1: Formulário de Conferência -->
+      <div id="viewForm" class="flex-1 overflow-y-auto p-4 space-y-4">
+        
+        <!-- Identificação Hash MD5 & Metadados de Sistema -->
+        <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-fingerprint text-emerald-400"></i>
+              Identificador MD5
+            </label>
+            <button onclick="copyMd5()" class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1">
+              <i class="fa-regular fa-copy"></i> Copiar
+            </button>
+          </div>
+          <div class="font-mono text-xs text-slate-200 bg-slate-950 p-2 rounded border border-slate-800 break-all select-all" id="field_md5">-</div>
+          
+          <div class="grid grid-cols-2 gap-2 text-[11px] pt-1 text-slate-400 border-t border-slate-800/80">
+            <div>
+              <span class="block text-[10px] text-slate-500">Data Criação:</span>
+              <span id="field_data_criacao" class="font-mono text-slate-300">-</span>
+            </div>
+            <div>
+              <span class="block text-[10px] text-slate-500">Data Modificação:</span>
+              <span id="field_data_modificacao" class="font-mono text-slate-300">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Campos Principais do Documento -->
+        <div class="space-y-3">
+          
+          <!-- Beneficiário -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <span>Nome do Beneficiário / Titular</span>
+              <span class="text-[10px] text-slate-500 font-mono">beneficiario</span>
+            </label>
+            <input type="text" id="input_beneficiario" oninput="markDirty()"
+                   class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+          </div>
+
+          <!-- CPF do Beneficiário -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <span>CPF do Beneficiário</span>
+              <span class="text-[10px] text-slate-500 font-mono">cpf</span>
+            </label>
+            <input type="text" id="input_cpf" oninput="markDirty()" placeholder="000.000.000-00"
+                   class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+          </div>
+
+          <!-- Natureza do Curso -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-award text-amber-400"></i>
+                Natureza / Nível do Curso
+              </span>
+              <span class="text-[10px] text-slate-500 font-mono">natureza_curso</span>
+            </label>
+            <select id="select_natureza_curso" onchange="markDirty()"
+                    class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+              <option value="">Não identificada / Não se aplica</option>
+              <option value="Graduação / Curso Superior">Graduação / Curso Superior (Bacharelado/Licenciatura/Tecnólogo)</option>
+              <option value="Pós-Graduação Lato Sensu (Especialização/MBA)">Pós-Graduação Lato Sensu (Especialização/MBA)</option>
+              <option value="Pós-Graduação Stricto Sensu (Mestrado/Doutorado)">Pós-Graduação Stricto Sensu (Mestrado/Doutorado)</option>
+              <option value="Curso Técnico / Profissionalizante">Curso Técnico / Profissionalizante</option>
+              <option value="Curso de Extensão / Aperfeiçoamento">Curso de Extensão / Aperfeiçoamento</option>
+              <option value="Educação Básica">Educação Básica (Fundamental / Médio)</option>
+            </select>
+          </div>
+
+          <!-- Nome do Curso -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <span>Nome do Curso</span>
+              <span class="text-[10px] text-slate-500 font-mono">curso</span>
+            </label>
+            <textarea id="input_curso" oninput="markDirty()" rows="2"
+                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
+          </div>
+
+          <!-- Carga Horária e Data do Documento lado a lado -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                <span>Carga Horária</span>
+                <span class="text-[10px] text-slate-500 font-mono">carga_horaria</span>
+              </label>
+              <input type="text" id="input_carga_horaria" oninput="markDirty()" placeholder="Ex: 750 h/aulas"
+                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                <span>Data do Documento</span>
+                <span class="text-[10px] text-slate-500 font-mono">data</span>
+              </label>
+              <input type="text" id="input_data" oninput="markDirty()" placeholder="Ex: 18 de dezembro de 2023"
+                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+            </div>
+          </div>
+
+          <!-- Instituição / Faculdade -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <span>Faculdade / Instituição Emissora</span>
+              <span class="text-[10px] text-slate-500 font-mono">faculdade</span>
+            </label>
+            <input type="text" id="input_faculdade" oninput="markDirty()"
+                   class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+          </div>
+
+          <!-- Tipo de Documento -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <span>Tipo de Documento</span>
+              <span class="text-[10px] text-slate-500 font-mono">tipo_documento</span>
+            </label>
+            <select id="select_tipo_documento" onchange="markDirty()"
+                    class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+              <option value="Certificado">Certificado</option>
+              <option value="Diploma">Diploma</option>
+              <option value="Histórico Escolar">Histórico Escolar</option>
+              <option value="Declaração">Declaração</option>
+              <option value="Currículo">Currículo</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+
+          <!-- Observações do Revisor Humano -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <span>Anotações / Observações da Conferência</span>
+              <span class="text-[10px] text-slate-500">opcional</span>
+            </label>
+            <textarea id="input_obs" oninput="markDirty()" rows="2" placeholder="Observações manuais sobre o documento..."
+                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Conteúdo da Aba 2: JSON Bruto -->
+      <div id="viewJson" class="hidden flex-1 overflow-y-auto p-4">
+        <pre id="jsonViewer" class="bg-slate-900 text-emerald-400 p-3 rounded-lg border border-slate-800 text-xs font-mono overflow-x-auto whitespace-pre-wrap select-all"></pre>
+      </div>
+
+      <!-- RODAPÉ FIXO DE AÇÕES -->
+      <div class="bg-slate-900 border-t border-slate-800 p-3 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2">
+          <button id="btnSalvar" onclick="saveCurrentDoc()"
+                  class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
+            <i class="fa-solid fa-floppy-disk"></i>
+            Salvar (Ctrl+S)
+          </button>
+          <button onclick="resetDocChanges()" title="Reverter alterações deste documento"
+                  class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition border border-slate-700">
+            Reverter
+          </button>
+        </div>
+
+        <button id="btnAprovar" onclick="approveAndNext()"
+                class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
+          <i class="fa-solid fa-circle-check"></i>
+          Aprovar & Próximo (Ctrl+Enter)
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 text-slate-100 border border-slate-700 px-4 py-2.5 rounded-lg shadow-xl text-xs flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+    <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+    <span id="toastMsg">Mensagem</span>
+  </div>
+
+  <!-- SCRIPT FRONTEND -->
+  <script>
+    let documents = [];
+    let filteredDocs = [];
+    let currentIndex = 0;
+    let isDirty = false;
+    let activeFilter = 'todos';
+
+    // Inicialização ao carregar a página
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDocuments();
+      setupKeyboardShortcuts();
+    });
+
+    async function loadDocuments() {
+      try {
+        const response = await fetch('/api/documentos');
+        if (!response.ok) throw new Error('Falha ao comunicar com o servidor');
+        documents = await response.json();
+        applyFilter();
+        if (documents.length > 0) {
+          selectDocument(0);
+        }
+      } catch (err) {
+        showToast('Erro ao carregar documentos: ' + err.message, 'error');
+      }
+    }
+
+    function applyFilter() {
+      const search = (document.getElementById('searchInput').value || '').toLowerCase();
+      filteredDocs = documents.filter(doc => {
+        // Filtro por status
+        const status = (doc.status_conferencia || 'pendente').toLowerCase();
+        if (activeFilter === 'pendente' && status === 'aprovado') return false;
+        if (activeFilter === 'aprovado' && status !== 'aprovado') return false;
+
+        // Filtro de busca textual
+        if (!search) return true;
+        const md5 = (doc.md5 || '').toLowerCase();
+        const nome = (doc.beneficiario || '').toLowerCase();
+        const cpf = (doc.cpf || '').toLowerCase();
+        const curso = (doc.curso || '').toLowerCase();
+        const facul = (doc.faculdade || '').toLowerCase();
+        return md5.includes(search) || nome.includes(search) || cpf.includes(search) || curso.includes(search) || facul.includes(search);
+      });
+
+      updateCounters();
+      renderSidebar();
+    }
+
+    function setFilter(filter) {
+      activeFilter = filter;
+      ['todos', 'pendente', 'aprovado'].forEach(f => {
+        const btn = document.getElementById(`filter-${f}`);
+        if (f === filter) {
+          btn.className = "flex-1 py-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700";
+        } else {
+          btn.className = "flex-1 py-1 rounded bg-slate-900 text-slate-400 hover:bg-slate-800 text-center transition";
+        }
+      });
+      applyFilter();
+      if (filteredDocs.length > 0) {
+        selectDocument(0);
+      }
+    }
+
+    function filterDocuments() {
+      applyFilter();
+    }
+
+    function updateCounters() {
+      const total = documents.length;
+      const aprovados = documents.filter(d => (d.status_conferencia || 'pendente') === 'aprovado').length;
+      const pendentes = total - aprovados;
+
+      document.getElementById('count-todos').innerText = total;
+      document.getElementById('count-pendente').innerText = pendentes;
+      document.getElementById('count-aprovado').innerText = aprovados;
+
+      const pct = total > 0 ? Math.round((aprovados / total) * 100) : 0;
+      document.getElementById('progressText').innerText = `${aprovados} / ${total} (${pct}%)`;
+      document.getElementById('progressBar').style.width = `${pct}%`;
+    }
+
+    function renderSidebar() {
+      const listEl = document.getElementById('docList');
+      listEl.innerHTML = '';
+
+      if (filteredDocs.length === 0) {
+        listEl.innerHTML = '<div class="text-center py-8 text-xs text-slate-500">Nenhum documento encontrado.</div>';
+        return;
+      }
+
+      filteredDocs.forEach((doc, idx) => {
+        const isSelected = idx === currentIndex;
+        const isApproved = (doc.status_conferencia || 'pendente') === 'aprovado';
+        
+        const card = document.createElement('div');
+        card.className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1 ${
+          isSelected 
+            ? 'bg-slate-800/90 border-emerald-500/50 shadow-md ring-1 ring-emerald-500/20' 
+            : 'bg-slate-900/40 hover:bg-slate-800/60 border-slate-800/80 text-slate-400'
+        }`;
+
+        card.onclick = () => selectDocument(idx);
+
+        const statusBadge = isApproved 
+          ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"><i class="fa-solid fa-check mr-0.5"></i> OK</span>`
+          : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0">Pendente</span>`;
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-1">
+            <span class="font-mono text-[11px] text-slate-300 truncate">${doc.md5.substring(0, 10)}...</span>
+            ${statusBadge}
+          </div>
+          <div class="font-medium text-slate-200 truncate">${doc.beneficiario || 'Sem nome'}</div>
+          <div class="text-[11px] text-slate-400 truncate">${doc.natureza_curso || doc.curso || 'Não identificado'}</div>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    function selectDocument(index) {
+      if (index < 0 || index >= filteredDocs.length) return;
+      currentIndex = index;
+      const doc = filteredDocs[currentIndex];
+
+      // Atualiza navegação
+      document.getElementById('navCounter').innerText = `${currentIndex + 1} de ${filteredDocs.length}`;
+
+      // Atualiza visualizador do PDF
+      const pdfUrl = `/api/pdf/${doc.md5}#toolbar=1&navpanes=0`;
+      const pdfFrame = document.getElementById('pdfFrame');
+      const pdfLoading = document.getElementById('pdfLoadingState');
+      
+      pdfLoading.style.display = 'flex';
+      pdfFrame.src = pdfUrl;
+      pdfFrame.onload = () => { pdfLoading.style.display = 'none'; };
+
+      document.getElementById('pdfMd5Title').innerText = doc.md5;
+      document.getElementById('openPdfNewTab').href = `/api/pdf/${doc.md5}`;
+
+      // Preenche campos do formulário
+      document.getElementById('field_md5').innerText = doc.md5;
+      document.getElementById('field_data_criacao').innerText = doc.data_criacao || '-';
+      document.getElementById('field_data_modificacao').innerText = doc.data_modificacao || '-';
+
+      document.getElementById('input_beneficiario').value = doc.beneficiario || '';
+      document.getElementById('input_cpf').value = doc.cpf || '';
+      document.getElementById('select_natureza_curso').value = doc.natureza_curso || '';
+      document.getElementById('input_curso').value = doc.curso || '';
+      document.getElementById('input_carga_horaria').value = doc.carga_horaria || '';
+      document.getElementById('input_data').value = doc.data || '';
+      document.getElementById('input_faculdade').value = doc.faculdade || '';
+      document.getElementById('select_tipo_documento').value = doc.tipo_documento || 'Certificado';
+      document.getElementById('input_obs').value = doc.observacoes_conferencia || '';
+
+      // Atualiza badge de status
+      const isApproved = (doc.status_conferencia || 'pendente') === 'aprovado';
+      const badge = document.getElementById('currentStatusBadge');
+      if (isApproved) {
+        badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+        badge.innerText = "Aprovado / Conferido";
+      } else {
+        badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20";
+        badge.innerText = "Pendente de Conferência";
+      }
+
+      updateJsonView();
+      renderSidebar();
+      isDirty = false;
+    }
+
+    function markDirty() {
+      isDirty = true;
+      updateJsonView();
+    }
+
+    function getCurrentFormValues() {
+      const doc = filteredDocs[currentIndex];
+      return {
+        ...doc,
+        beneficiario: document.getElementById('input_beneficiario').value.trim() || null,
+        cpf: document.getElementById('input_cpf').value.trim() || null,
+        natureza_curso: document.getElementById('select_natureza_curso').value || null,
+        curso: document.getElementById('input_curso').value.trim() || null,
+        carga_horaria: document.getElementById('input_carga_horaria').value.trim() || null,
+        data: document.getElementById('input_data').value.trim() || null,
+        faculdade: document.getElementById('input_faculdade').value.trim() || null,
+        tipo_documento: document.getElementById('select_tipo_documento').value || null,
+        observacoes_conferencia: document.getElementById('input_obs').value.trim() || null
+      };
+    }
+
+    function updateJsonView() {
+      const current = getCurrentFormValues();
+      document.getElementById('jsonViewer').innerText = JSON.stringify(current, null, 2);
+    }
+
+    async function saveCurrentDoc() {
+      const updated = getCurrentFormValues();
+      try {
+        const resp = await fetch('/api/salvar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item: updated })
+        });
+        if (!resp.ok) throw new Error('Erro ao salvar no servidor');
+
+        // Atualiza na memória
+        const mainIdx = documents.findIndex(d => d.md5 === updated.md5);
+        if (mainIdx !== -1) documents[mainIdx] = updated;
+        filteredDocs[currentIndex] = updated;
+
+        isDirty = false;
+        showToast('Documento salvo com sucesso!', 'success');
+        updateCounters();
+        renderSidebar();
+      } catch (err) {
+        showToast('Falha ao salvar: ' + err.message, 'error');
+      }
+    }
+
+    async function approveAndNext() {
+      const updated = getCurrentFormValues();
+      updated.status_conferencia = 'aprovado';
+      
+      try {
+        const resp = await fetch('/api/salvar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item: updated })
+        });
+        if (!resp.ok) throw new Error('Erro ao salvar aprovação');
+
+        const mainIdx = documents.findIndex(d => d.md5 === updated.md5);
+        if (mainIdx !== -1) documents[mainIdx] = updated;
+        filteredDocs[currentIndex] = updated;
+
+        showToast('Documento conferido e aprovado!', 'success');
+        updateCounters();
+
+        // Avança automaticamente para o próximo
+        if (currentIndex < filteredDocs.length - 1) {
+          selectDocument(currentIndex + 1);
+        } else {
+          renderSidebar();
+          selectDocument(currentIndex);
+        }
+      } catch (err) {
+        showToast('Falha ao aprovar: ' + err.message, 'error');
+      }
+    }
+
+    function resetDocChanges() {
+      selectDocument(currentIndex);
+      showToast('Alterações descartadas.', 'info');
+    }
+
+    function navigateDoc(direction) {
+      const target = currentIndex + direction;
+      if (target >= 0 && target < filteredDocs.length) {
+        selectDocument(target);
+      }
+    }
+
+    function reloadPdf() {
+      const doc = filteredDocs[currentIndex];
+      if (!doc) return;
+      const pdfFrame = document.getElementById('pdfFrame');
+      pdfFrame.src = `/api/pdf/${doc.md5}?t=${Date.now()}#toolbar=1`;
+      showToast('Visualizador recarregado.', 'info');
+    }
+
+    function switchTab(tab) {
+      const btnForm = document.getElementById('tab-form');
+      const btnJson = document.getElementById('tab-json');
+      const viewForm = document.getElementById('viewForm');
+      const viewJson = document.getElementById('viewJson');
+
+      if (tab === 'form') {
+        btnForm.className = "px-3 py-1 rounded text-xs font-medium bg-slate-800 text-white transition flex items-center gap-1.5";
+        btnJson.className = "px-3 py-1 rounded text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5";
+        viewForm.classList.remove('hidden');
+        viewJson.classList.add('hidden');
+      } else {
+        btnJson.className = "px-3 py-1 rounded text-xs font-medium bg-slate-800 text-white transition flex items-center gap-1.5";
+        btnForm.className = "px-3 py-1 rounded text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5";
+        viewJson.classList.remove('hidden');
+        viewForm.classList.add('hidden');
+        updateJsonView();
+      }
+    }
+
+    function copyMd5() {
+      const md5 = document.getElementById('field_md5').innerText;
+      navigator.clipboard.writeText(md5);
+      showToast('Hash MD5 copiado!', 'info');
+    }
+
+    function exportJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(documents, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `classificacao_diplomas_revisado_${Date.now()}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast('Download do JSON iniciado!', 'success');
+    }
+
+    function showToast(msg, type = 'success') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.innerText = msg;
+      if (type === 'error') {
+        toastIcon.className = "fa-solid fa-triangle-exclamation text-rose-400 text-sm";
+      } else if (type === 'info') {
+        toastIcon.className = "fa-solid fa-circle-info text-blue-400 text-sm";
+      } else {
+        toastIcon.className = "fa-solid fa-circle-check text-emerald-400 text-sm";
+      }
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3000);
+    }
+
+    function setupKeyboardShortcuts() {
+      window.addEventListener('keydown', (e) => {
+        // Se estiver dentro de um input ou textarea, evita interceptar setas
+        const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+
+        if (e.ctrlKey && e.key === 'Enter') {
+          e.preventDefault();
+          approveAndNext();
+        } else if (e.ctrlKey && e.key === 's') {
+          e.preventDefault();
+          saveCurrentDoc();
+        } else if (!isInput) {
+          if (e.key === 'ArrowLeft' || e.key === '[') {
+            navigateDoc(-1);
+          } else if (e.key === 'ArrowRight' || e.key === ']') {
+            navigateDoc(1);
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>

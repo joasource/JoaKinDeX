@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# CLI executável joaclassificador-pdf
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+
+PYTHON_EXEC="python3"
+if [ -n "$CONDA_PREFIX" ] && [ -f "$CONDA_PREFIX/bin/python" ]; then
+    PYTHON_EXEC="$CONDA_PREFIX/bin/python"
+elif [ -f "$DIR/.venv/bin/python" ]; then
+    PYTHON_EXEC="$DIR/.venv/bin/python"
+fi
+
+"$PYTHON_EXEC" "$DIR/joaclassificador-pdf.py" "$@"

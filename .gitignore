@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# Resultados e arquivos locais
+saida/
+teste_saida/
+pdf/
+*.pdf
+*.PDF
+
+# Logs e configurações locais
+*.log
+.DS_Store
+.idea/
+.vscode/
