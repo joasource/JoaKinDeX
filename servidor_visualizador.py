@@ -15,6 +15,23 @@ import urllib.parse
 from datetime import datetime
 
 
+def resolve_pdf_dir(specified_dir: str = None) -> Path:
+    if specified_dir and specified_dir != "./pdf":
+        p = Path(specified_dir).expanduser().resolve()
+        if p.exists() and p.is_dir():
+            return p
+
+    candidates = [
+        Path("./pdf"),
+        Path("../pdf"),
+        Path.home() / "pdf",
+    ]
+    for c in candidates:
+        if c.exists() and c.is_dir():
+            return c.resolve()
+
+    return Path("./pdf").resolve()
+
 def calculate_md5(file_path: Path) -> str:
     hasher = hashlib.md5()
     with open(file_path, "rb") as f:
@@ -283,7 +300,8 @@ def main():
 
     args = parser.parse_args()
 
-    ctx = ConferenciaServer(json_path=args.json, pdf_dir=args.pdf_dir, html_path=args.html)
+    pdf_dir_resolved = resolve_pdf_dir(args.pdf_dir)
+    ctx = ConferenciaServer(json_path=args.json, pdf_dir=str(pdf_dir_resolved), html_path=args.html)
     handler = create_handler(ctx)
 
     server_address = ("0.0.0.0", args.port)
