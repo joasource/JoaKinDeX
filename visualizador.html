@@ -130,7 +130,31 @@
           </select>
 
           <!-- Chips Rápidos de Filtragem por Natureza -->
-          <div id="naturezaChips" class="flex flex-wrap gap-1 pt-1 max-h-24 overflow-y-auto pr-0.5">
+          <div id="naturezaChips" class="flex flex-wrap gap-1 pt-1 max-h-20 overflow-y-auto pr-0.5">
+            <!-- Chips gerados dinamicamente via JS com contadores -->
+          </div>
+        </div>
+
+        <!-- FILTRO POR TIPO DE DOCUMENTO -->
+        <div class="pt-2 border-t border-slate-800/80 space-y-1.5">
+          <div class="flex items-center justify-between text-[11px]">
+            <label class="text-slate-300 font-medium flex items-center gap-1.5">
+              <i class="fa-solid fa-file-contract text-teal-400"></i>
+              <span>Tipo de Documento:</span>
+            </label>
+            <button onclick="resetTipoFilter()" id="btnClearTipo" class="hidden text-[10px] text-teal-400 hover:underline flex items-center gap-0.5">
+              <i class="fa-solid fa-rotate-left"></i> Limpar
+            </button>
+          </div>
+
+          <!-- Select Dropdown de Tipo de Documento -->
+          <select id="selectTipoFilter" onchange="onTipoSelectChange()"
+                  class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
+            <option value="">Todos os Tipos (0)</option>
+          </select>
+
+          <!-- Chips Rápidos de Filtragem por Tipo de Documento -->
+          <div id="tipoChips" class="flex flex-wrap gap-1 pt-1 max-h-16 overflow-y-auto pr-0.5">
             <!-- Chips gerados dinamicamente via JS com contadores -->
           </div>
         </div>
@@ -383,6 +407,7 @@
     let isDirty = false;
     let activeStatusFilter = 'todos';
     let activeNaturezaFilter = ''; // Vazio = todas
+    let activeTipoFilter = ''; // Vazio = todos
 
     // --- Funções Utilitárias de Sanitização e Normalização ---
     function safeString(val) {
@@ -420,6 +445,7 @@
         documents = await response.json();
         
         updateNaturezaFilterOptions();
+        updateTipoFilterOptions();
         applyFilter(false);
       } catch (err) {
         showToast('Erro ao carregar documentos: ' + err.message, 'error');
@@ -533,6 +559,108 @@
       setNaturezaFilter('');
     }
 
+    // Calcula e atualiza dinamicamente as opções e chips de Tipo de Documento
+    function updateTipoFilterOptions() {
+      const counts = {};
+      documents.forEach(d => {
+        const tipo = safeString(d.tipo_documento).trim() || 'Não identificado';
+        counts[tipo] = (counts[tipo] || 0) + 1;
+      });
+
+      // 1. Atualiza o Select Dropdown
+      const select = document.getElementById('selectTipoFilter');
+      if (!select) return;
+      const currentSelected = select.value;
+      select.innerHTML = `<option value="">Todos os Tipos (${documents.length})</option>`;
+
+      // Ordena por maior quantidade
+      const sortedTipos = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+
+      sortedTipos.forEach(tipo => {
+        const opt = document.createElement('option');
+        opt.value = tipo;
+        opt.innerText = `${tipo} (${counts[tipo]})`;
+        select.appendChild(opt);
+      });
+      select.value = currentSelected;
+
+      // 2. Atualiza os Chips Rápidos
+      const chipsContainer = document.getElementById('tipoChips');
+      if (!chipsContainer) return;
+      chipsContainer.innerHTML = '';
+
+      // Chip "Todos"
+      const chipAll = document.createElement('button');
+      chipAll.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition ${
+        !activeTipoFilter 
+          ? 'bg-teal-600 text-white border-teal-500 shadow-sm' 
+          : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+      }`;
+      chipAll.innerText = `Todos (${documents.length})`;
+      chipAll.onclick = () => setTipoFilter('');
+      chipsContainer.appendChild(chipAll);
+
+      // Chips para os principais tipos (até 6 mais frequentes)
+      sortedTipos.slice(0, 6).forEach(tipo => {
+        const chip = document.createElement('button');
+        const isActive = activeTipoFilter === tipo;
+        const colorClass = getTipoChipColorClass(tipo, isActive);
+        
+        chip.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition truncate max-w-[170px] ${colorClass}`;
+        chip.innerText = `${tipo} (${counts[tipo]})`;
+        chip.title = `${tipo} (${counts[tipo]})`;
+        chip.onclick = () => setTipoFilter(tipo);
+        chipsContainer.appendChild(chip);
+      });
+    }
+
+    function getTipoChipColorClass(tipo, isActive) {
+      if (isActive) {
+        return 'bg-teal-600 text-white border-teal-500 shadow-sm font-semibold';
+      }
+      const n = normalizeText(tipo);
+      if (n.includes('diploma')) {
+        return 'bg-teal-950/40 text-teal-300 border-teal-800/60 hover:bg-teal-900/50';
+      }
+      if (n.includes('certificado')) {
+        return 'bg-cyan-950/40 text-cyan-300 border-cyan-800/60 hover:bg-cyan-900/50';
+      }
+      if (n.includes('historico')) {
+        return 'bg-violet-950/40 text-violet-300 border-violet-800/60 hover:bg-violet-900/50';
+      }
+      if (n.includes('declaracao')) {
+        return 'bg-amber-950/40 text-amber-300 border-amber-800/60 hover:bg-amber-900/50';
+      }
+      return 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800';
+    }
+
+    function onTipoSelectChange() {
+      const val = document.getElementById('selectTipoFilter').value;
+      setTipoFilter(val);
+    }
+
+    function setTipoFilter(tipo) {
+      activeTipoFilter = tipo;
+      const select = document.getElementById('selectTipoFilter');
+      if (select) select.value = tipo;
+      
+      const btnClear = document.getElementById('btnClearTipo');
+      if (btnClear) {
+        if (tipo) {
+          btnClear.classList.remove('hidden');
+        } else {
+          btnClear.classList.add('hidden');
+        }
+      }
+
+      updateTipoFilterOptions();
+      applyFilter(false);
+    }
+
+    function resetTipoFilter() {
+      setTipoFilter('');
+    }
+
     // --- Busca Inteligente Multi-Campos e Insensível a Acentos/Pontuação ---
     function matchDocumentSearch(doc, rawQuery) {
       if (!rawQuery) return true;
@@ -600,8 +728,11 @@
     function resetFiltersKeepSearch() {
       activeStatusFilter = 'todos';
       activeNaturezaFilter = '';
+      activeTipoFilter = '';
       document.getElementById('selectNaturezaFilter').value = '';
       document.getElementById('btnClearNatureza').classList.add('hidden');
+      document.getElementById('selectTipoFilter').value = '';
+      document.getElementById('btnClearTipo').classList.add('hidden');
       ['todos', 'pendente', 'aprovado'].forEach(f => {
         const btn = document.getElementById(`filter-${f}`);
         if (f === 'todos') {
@@ -611,6 +742,7 @@
         }
       });
       updateNaturezaFilterOptions();
+      updateTipoFilterOptions();
       applyFilter(false);
     }
 
@@ -629,7 +761,13 @@
           if (docNat !== activeNaturezaFilter) return false;
         }
 
-        // 3. Filtro de busca textual
+        // 3. Filtro por Tipo de Documento
+        if (activeTipoFilter) {
+          const docTipo = safeString(doc.tipo_documento).trim() || 'Não identificado';
+          if (docTipo !== activeTipoFilter) return false;
+        }
+
+        // 4. Filtro de busca textual
         return matchDocumentSearch(doc, rawSearch);
       });
 
@@ -682,6 +820,7 @@
       }
       if (activeStatusFilter !== 'todos') label.push(activeStatusFilter);
       if (activeNaturezaFilter) label.push(formatShortNature(activeNaturezaFilter));
+      if (activeTipoFilter) label.push(activeTipoFilter);
       document.getElementById('activeFilterLabel').innerText = label.length > 0 ? `(${label.join(' • ')})` : '';
 
       const pct = total > 0 ? Math.round((aprovados / total) * 100) : 0;
@@ -711,25 +850,49 @@
       return `<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-book-bookmark text-[9px] text-indigo-400"></i>${natStr}</span>`;
     }
 
+    // Retorna badge visual estilizado para o Tipo de Documento
+    function getTipoBadge(tipo) {
+      const t = safeString(tipo).trim() || 'Não identificado';
+      const norm = normalizeText(t);
+      if (norm.includes('diploma')) {
+        return `<span class="bg-teal-500/10 text-teal-300 border border-teal-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-graduation-cap text-[9px] text-teal-400"></i>${t}</span>`;
+      }
+      if (norm.includes('certificado')) {
+        return `<span class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-certificate text-[9px] text-cyan-400"></i>${t}</span>`;
+      }
+      if (norm.includes('historico')) {
+        return `<span class="bg-violet-500/10 text-violet-300 border border-violet-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-book-bookmark text-[9px] text-violet-400"></i>${t}</span>`;
+      }
+      if (norm.includes('declaracao')) {
+        return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-file-lines text-[9px] text-amber-400"></i>${t}</span>`;
+      }
+      return `<span class="bg-slate-800 text-slate-400 border border-slate-700/80 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-regular fa-file text-[9px]"></i>${t}</span>`;
+    }
+
     function renderSidebar() {
       const listEl = document.getElementById('docList');
       listEl.innerHTML = '';
 
       if (filteredDocs.length === 0) {
         const rawSearch = (document.getElementById('searchInput').value || '').trim();
-        const hasActiveFilters = activeStatusFilter !== 'todos' || Boolean(activeNaturezaFilter);
+        const hasActiveFilters = activeStatusFilter !== 'todos' || Boolean(activeNaturezaFilter) || Boolean(activeTipoFilter);
         
         let extraMsg = '';
         if (rawSearch && hasActiveFilters) {
           const globalMatches = documents.filter(doc => matchDocumentSearch(doc, rawSearch)).length;
           if (globalMatches > 0) {
+            const activeLabels = [];
+            if (activeStatusFilter !== 'todos') activeLabels.push(activeStatusFilter);
+            if (activeNaturezaFilter) activeLabels.push(formatShortNature(activeNaturezaFilter));
+            if (activeTipoFilter) activeLabels.push(activeTipoFilter);
+
             extraMsg = `
               <div class="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-300 text-left space-y-1.5 mt-2">
                 <p class="font-medium flex items-center gap-1.5 text-[11px]">
                   <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
                   ${globalMatches} resultado(s) em outras categorias!
                 </p>
-                <p class="text-[10px] text-slate-400">Filtros ativos ("${activeStatusFilter}"${activeNaturezaFilter ? ` • ${formatShortNature(activeNaturezaFilter)}` : ''}) ocultam esses registros.</p>
+                <p class="text-[10px] text-slate-400">Filtros ativos (${activeLabels.join(' • ')}) ocultam esses registros.</p>
                 <button onclick="resetFiltersKeepSearch()" class="w-full py-1 px-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[11px] font-medium transition flex items-center justify-center gap-1">
                   <i class="fa-solid fa-filter-circle-xmark text-[10px]"></i> Ver todos os ${globalMatches} resultados
                 </button>
@@ -769,6 +932,7 @@
           : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0">Pendente</span>`;
 
         const naturezaBadge = getNaturezaBadge(doc.natureza_curso);
+        const tipoBadge = getTipoBadge(doc.tipo_documento);
         const md5Short = safeString(doc.md5).substring(0, 10);
         const nome = safeString(doc.beneficiario) || 'Sem nome informado';
         const cpf = safeString(doc.cpf);
@@ -776,7 +940,10 @@
 
         card.innerHTML = `
           <div class="flex items-center justify-between gap-1">
-            <span class="font-mono text-[11px] text-slate-300 truncate">${md5Short}...</span>
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
+              ${tipoBadge}
+            </div>
             ${statusBadge}
           </div>
           <div class="font-semibold text-slate-100 truncate">${nome}</div>
@@ -795,10 +962,14 @@
       document.getElementById('clearSearchBtn').classList.add('hidden');
       activeStatusFilter = 'todos';
       activeNaturezaFilter = '';
+      activeTipoFilter = '';
       document.getElementById('selectNaturezaFilter').value = '';
       document.getElementById('btnClearNatureza').classList.add('hidden');
+      document.getElementById('selectTipoFilter').value = '';
+      document.getElementById('btnClearTipo').classList.add('hidden');
       setStatusFilter('todos');
       updateNaturezaFilterOptions();
+      updateTipoFilterOptions();
       applyFilter(false);
     }
 
@@ -978,6 +1149,7 @@
         isDirty = false;
         showToast('Documento salvo com sucesso!', 'success');
         updateNaturezaFilterOptions();
+        updateTipoFilterOptions();
         updateCounters();
         renderSidebar();
       } catch (err) {
