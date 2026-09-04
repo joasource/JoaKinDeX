@@ -97,9 +97,9 @@
         <!-- Campo de Busca -->
         <div class="relative">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-500"></i>
-          <input type="text" id="searchInput" oninput="onSearchInput()" placeholder="Buscar por Nome, CPF, MD5, Curso..."
+          <input type="text" id="searchInput" oninput="onSearchInput()" onkeydown="onSearchKeyDown(event)" placeholder="Buscar por Nome, CPF, MD5, Curso..."
                  class="w-full bg-slate-900 border border-slate-800 rounded pl-8 pr-7 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-          <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2.5 top-2 text-xs text-slate-500 hover:text-slate-300">
+          <button id="clearSearchBtn" onclick="clearSearch()" title="Limpar busca (Esc)" class="hidden absolute right-2.5 top-2 text-xs text-slate-500 hover:text-slate-300">
             <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
@@ -379,9 +379,34 @@
     let documents = [];
     let filteredDocs = [];
     let currentIndex = 0;
+    let currentSelectedMd5 = null;
     let isDirty = false;
     let activeStatusFilter = 'todos';
     let activeNaturezaFilter = ''; // Vazio = todas
+
+    // --- Funções Utilitárias de Sanitização e Normalização ---
+    function safeString(val) {
+      if (val === null || val === undefined) return '';
+      if (Array.isArray(val)) return val.map(safeString).filter(Boolean).join(', ');
+      if (typeof val === 'object') return JSON.stringify(val);
+      return String(val);
+    }
+
+    function normalizeText(val) {
+      const str = safeString(val);
+      if (!str) return '';
+      return str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+    }
+
+    function extractDigits(val) {
+      const str = safeString(val);
+      if (!str) return '';
+      return str.replace(/\D/g, '');
+    }
 
     window.addEventListener('DOMContentLoaded', () => {
       loadDocuments();
@@ -395,11 +420,7 @@
         documents = await response.json();
         
         updateNaturezaFilterOptions();
-        applyFilter();
-
-        if (documents.length > 0) {
-          selectDocument(0);
-        }
+        applyFilter(false);
       } catch (err) {
         showToast('Erro ao carregar documentos: ' + err.message, 'error');
       }
@@ -409,7 +430,7 @@
     function updateNaturezaFilterOptions() {
       const counts = {};
       documents.forEach(d => {
-        const nat = (d.natureza_curso || '').trim() || 'Não identificada';
+        const nat = safeString(d.natureza_curso).trim() || 'Não identificada';
         counts[nat] = (counts[nat] || 0) + 1;
       });
 
@@ -459,29 +480,30 @@
     }
 
     function formatShortNature(nat) {
-      if (nat.includes('Pós-Graduação Lato Sensu')) return 'Pós Lato Sensu';
-      if (nat.includes('Pós-Graduação Stricto Sensu')) return 'Pós Stricto Sensu';
-      if (nat.includes('Graduação')) return 'Graduação';
-      if (nat.includes('Técnico')) return 'Curso Técnico';
-      if (nat.includes('Extensão')) return 'Extensão';
-      return nat;
+      const s = safeString(nat);
+      if (s.includes('Pós-Graduação Lato Sensu')) return 'Pós Lato Sensu';
+      if (s.includes('Pós-Graduação Stricto Sensu')) return 'Pós Stricto Sensu';
+      if (s.includes('Graduação')) return 'Graduação';
+      if (s.includes('Técnico')) return 'Curso Técnico';
+      if (s.includes('Extensão')) return 'Extensão';
+      return s || 'Não identificada';
     }
 
     function getChipColorClass(nat, isActive) {
       if (isActive) {
         return 'bg-indigo-600 text-white border-indigo-500 shadow-sm font-semibold';
       }
-      const n = nat.toLowerCase();
-      if (n.includes('graduação') || n.includes('superior')) {
+      const n = normalizeText(nat);
+      if (n.includes('graduacao') || n.includes('superior')) {
         return 'bg-purple-950/40 text-purple-300 border-purple-800/60 hover:bg-purple-900/50';
       }
-      if (n.includes('lato sensu') || n.includes('especialização')) {
+      if (n.includes('lato sensu') || n.includes('especializacao')) {
         return 'bg-sky-950/40 text-sky-300 border-sky-800/60 hover:bg-sky-900/50';
       }
       if (n.includes('stricto sensu') || n.includes('mestrado')) {
         return 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-900/50';
       }
-      if (n.includes('técnico')) {
+      if (n.includes('tecnico')) {
         return 'bg-amber-950/40 text-amber-300 border-amber-800/60 hover:bg-amber-900/50';
       }
       return 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800';
@@ -504,15 +526,48 @@
       }
 
       updateNaturezaFilterOptions();
-      applyFilter();
-
-      if (filteredDocs.length > 0) {
-        selectDocument(0);
-      }
+      applyFilter(false);
     }
 
     function resetNaturezaFilter() {
       setNaturezaFilter('');
+    }
+
+    // --- Busca Inteligente Multi-Campos e Insensível a Acentos/Pontuação ---
+    function matchDocumentSearch(doc, rawQuery) {
+      if (!rawQuery) return true;
+      const normQuery = normalizeText(rawQuery);
+      if (!normQuery) return true;
+
+      const tokens = normQuery.split(/\s+/).filter(t => t.length > 0);
+      if (tokens.length === 0) return true;
+
+      const md5 = normalizeText(doc.md5);
+      const beneficiario = normalizeText(doc.beneficiario);
+      const cpf = normalizeText(doc.cpf);
+      const cpfDigits = extractDigits(doc.cpf);
+      const curso = normalizeText(doc.curso);
+      const faculdade = normalizeText(doc.faculdade);
+      const natureza = normalizeText(doc.natureza_curso);
+      const tipo = normalizeText(doc.tipo_documento);
+      const obs = normalizeText(doc.observacoes_conferencia);
+      const data = normalizeText(doc.data);
+      const carga = normalizeText(doc.carga_horaria);
+
+      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${curso} ${faculdade} ${natureza} ${tipo} ${data} ${carga} ${obs}`;
+
+      return tokens.every(token => {
+        // 1. Busca textual direta na junção de todos os campos
+        if (fullBlob.includes(token)) return true;
+
+        // 2. Busca por dígitos de CPF (sem traço ou pontos)
+        const tokenDigits = extractDigits(token);
+        if (tokenDigits.length >= 2 && cpfDigits.includes(tokenDigits)) {
+          return true;
+        }
+
+        return false;
+      });
     }
 
     function onSearchInput() {
@@ -523,45 +578,76 @@
       } else {
         btnClear.classList.add('hidden');
       }
-      applyFilter();
+      applyFilter(false);
+    }
+
+    function onSearchKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearSearch();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        e.target.blur();
+      }
     }
 
     function clearSearch() {
       document.getElementById('searchInput').value = '';
       document.getElementById('clearSearchBtn').classList.add('hidden');
-      applyFilter();
+      applyFilter(true);
     }
 
-    function applyFilter() {
-      const search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+    function resetFiltersKeepSearch() {
+      activeStatusFilter = 'todos';
+      activeNaturezaFilter = '';
+      document.getElementById('selectNaturezaFilter').value = '';
+      document.getElementById('btnClearNatureza').classList.add('hidden');
+      ['todos', 'pendente', 'aprovado'].forEach(f => {
+        const btn = document.getElementById(`filter-${f}`);
+        if (f === 'todos') {
+          btn.className = "flex-1 py-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700";
+        } else {
+          btn.className = "flex-1 py-1 rounded bg-slate-900 text-slate-400 hover:bg-slate-800 text-center transition";
+        }
+      });
+      updateNaturezaFilterOptions();
+      applyFilter(false);
+    }
+
+    function applyFilter(preserveCurrentDoc = true) {
+      const rawSearch = (document.getElementById('searchInput').value || '').trim();
       
       filteredDocs = documents.filter(doc => {
         // 1. Filtro por status de conferência
-        const status = (doc.status_conferencia || 'pendente').toLowerCase();
+        const status = safeString(doc.status_conferencia || 'pendente').toLowerCase();
         if (activeStatusFilter === 'pendente' && status === 'aprovado') return false;
         if (activeStatusFilter === 'aprovado' && status !== 'aprovado') return false;
 
         // 2. Filtro por Natureza do Curso
         if (activeNaturezaFilter) {
-          const docNat = (doc.natureza_curso || '').trim() || 'Não identificada';
+          const docNat = safeString(doc.natureza_curso).trim() || 'Não identificada';
           if (docNat !== activeNaturezaFilter) return false;
         }
 
         // 3. Filtro de busca textual
-        if (!search) return true;
-        const md5 = (doc.md5 || '').toLowerCase();
-        const nome = (doc.beneficiario || '').toLowerCase();
-        const cpf = (doc.cpf || '').toLowerCase();
-        const curso = (doc.curso || '').toLowerCase();
-        const facul = (doc.faculdade || '').toLowerCase();
-        const natureza = (doc.natureza_curso || '').toLowerCase();
-        
-        return md5.includes(search) || nome.includes(search) || cpf.includes(search) 
-            || curso.includes(search) || facul.includes(search) || natureza.includes(search);
+        return matchDocumentSearch(doc, rawSearch);
       });
 
       updateCounters();
       renderSidebar();
+
+      if (filteredDocs.length > 0) {
+        let targetIndex = 0;
+        if (preserveCurrentDoc && currentSelectedMd5) {
+          const foundIdx = filteredDocs.findIndex(d => d.md5 === currentSelectedMd5);
+          if (foundIdx !== -1) {
+            targetIndex = foundIdx;
+          }
+        }
+        selectDocument(targetIndex, true);
+      } else {
+        clearSelectionView();
+      }
     }
 
     function setStatusFilter(filter) {
@@ -574,15 +660,12 @@
           btn.className = "flex-1 py-1 rounded bg-slate-900 text-slate-400 hover:bg-slate-800 text-center transition";
         }
       });
-      applyFilter();
-      if (filteredDocs.length > 0) {
-        selectDocument(0);
-      }
+      applyFilter(false);
     }
 
     function updateCounters() {
       const total = documents.length;
-      const aprovados = documents.filter(d => (d.status_conferencia || 'pendente') === 'aprovado').length;
+      const aprovados = documents.filter(d => safeString(d.status_conferencia || 'pendente').toLowerCase() === 'aprovado').length;
       const pendentes = total - aprovados;
 
       document.getElementById('count-todos').innerText = total;
@@ -592,6 +675,11 @@
       document.getElementById('filterResultCount').innerText = `${filteredDocs.length} de ${total}`;
       
       const label = [];
+      const rawSearch = (document.getElementById('searchInput').value || '').trim();
+      if (rawSearch) {
+        const shortQ = rawSearch.length > 15 ? rawSearch.substring(0, 15) + '...' : rawSearch;
+        label.push(`"${shortQ}"`);
+      }
       if (activeStatusFilter !== 'todos') label.push(activeStatusFilter);
       if (activeNaturezaFilter) label.push(formatShortNature(activeNaturezaFilter));
       document.getElementById('activeFilterLabel').innerText = label.length > 0 ? `(${label.join(' • ')})` : '';
@@ -603,23 +691,24 @@
 
     // Retorna badge visual estilizado para o tipo de natureza
     function getNaturezaBadge(natureza) {
-      if (!natureza) {
+      const natStr = safeString(natureza).trim();
+      if (!natStr) {
         return `<span class="bg-slate-800 text-slate-400 border border-slate-700/80 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[180px] inline-flex items-center gap-1"><i class="fa-regular fa-circle-question text-[9px]"></i>Não identificada</span>`;
       }
-      const n = natureza.toLowerCase();
-      if (n.includes('graduação') || n.includes('superior') || n.includes('bacharel')) {
-        return `<span class="bg-purple-500/10 text-purple-300 border border-purple-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-graduation-cap text-[9px] text-purple-400"></i>${natureza}</span>`;
+      const n = normalizeText(natStr);
+      if (n.includes('graduacao') || n.includes('superior') || n.includes('bacharel')) {
+        return `<span class="bg-purple-500/10 text-purple-300 border border-purple-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-graduation-cap text-[9px] text-purple-400"></i>${natStr}</span>`;
       }
-      if (n.includes('lato sensu') || n.includes('especialização') || n.includes('mba')) {
-        return `<span class="bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-certificate text-[9px] text-sky-400"></i>${natureza}</span>`;
+      if (n.includes('lato sensu') || n.includes('especializacao') || n.includes('mba')) {
+        return `<span class="bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-certificate text-[9px] text-sky-400"></i>${natStr}</span>`;
       }
       if (n.includes('stricto sensu') || n.includes('mestrado') || n.includes('doutorado')) {
-        return `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-award text-[9px] text-emerald-400"></i>${natureza}</span>`;
+        return `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-award text-[9px] text-emerald-400"></i>${natStr}</span>`;
       }
-      if (n.includes('técnico') || n.includes('profissionalizante')) {
-        return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-wrench text-[9px] text-amber-400"></i>${natureza}</span>`;
+      if (n.includes('tecnico') || n.includes('profissionalizante')) {
+        return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-wrench text-[9px] text-amber-400"></i>${natStr}</span>`;
       }
-      return `<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-book-bookmark text-[9px] text-indigo-400"></i>${natureza}</span>`;
+      return `<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-book-bookmark text-[9px] text-indigo-400"></i>${natStr}</span>`;
     }
 
     function renderSidebar() {
@@ -627,11 +716,36 @@
       listEl.innerHTML = '';
 
       if (filteredDocs.length === 0) {
+        const rawSearch = (document.getElementById('searchInput').value || '').trim();
+        const hasActiveFilters = activeStatusFilter !== 'todos' || Boolean(activeNaturezaFilter);
+        
+        let extraMsg = '';
+        if (rawSearch && hasActiveFilters) {
+          const globalMatches = documents.filter(doc => matchDocumentSearch(doc, rawSearch)).length;
+          if (globalMatches > 0) {
+            extraMsg = `
+              <div class="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-300 text-left space-y-1.5 mt-2">
+                <p class="font-medium flex items-center gap-1.5 text-[11px]">
+                  <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+                  ${globalMatches} resultado(s) em outras categorias!
+                </p>
+                <p class="text-[10px] text-slate-400">Filtros ativos ("${activeStatusFilter}"${activeNaturezaFilter ? ` • ${formatShortNature(activeNaturezaFilter)}` : ''}) ocultam esses registros.</p>
+                <button onclick="resetFiltersKeepSearch()" class="w-full py-1 px-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[11px] font-medium transition flex items-center justify-center gap-1">
+                  <i class="fa-solid fa-filter-circle-xmark text-[10px]"></i> Ver todos os ${globalMatches} resultados
+                </button>
+              </div>
+            `;
+          }
+        }
+
         listEl.innerHTML = `
           <div class="text-center py-10 px-4 text-xs text-slate-500 space-y-2">
             <i class="fa-solid fa-filter-circle-xmark text-2xl text-slate-600"></i>
             <p>Nenhum documento encontrado com os filtros atuais.</p>
-            <button onclick="resetAllFilters()" class="text-indigo-400 hover:underline text-[11px]">Limpar todos os filtros</button>
+            ${extraMsg}
+            <div class="pt-2">
+              <button onclick="resetAllFilters()" class="text-indigo-400 hover:underline text-[11px]">Limpar todos os filtros e busca</button>
+            </div>
           </div>
         `;
         return;
@@ -639,7 +753,7 @@
 
       filteredDocs.forEach((doc, idx) => {
         const isSelected = idx === currentIndex;
-        const isApproved = (doc.status_conferencia || 'pendente') === 'aprovado';
+        const isApproved = safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
         
         const card = document.createElement('div');
         card.className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 ${
@@ -655,18 +769,22 @@
           : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0">Pendente</span>`;
 
         const naturezaBadge = getNaturezaBadge(doc.natureza_curso);
+        const md5Short = safeString(doc.md5).substring(0, 10);
+        const nome = safeString(doc.beneficiario) || 'Sem nome informado';
+        const cpf = safeString(doc.cpf);
+        const curso = safeString(doc.curso) || 'Curso não informado';
 
         card.innerHTML = `
           <div class="flex items-center justify-between gap-1">
-            <span class="font-mono text-[11px] text-slate-300 truncate">${doc.md5.substring(0, 10)}...</span>
+            <span class="font-mono text-[11px] text-slate-300 truncate">${md5Short}...</span>
             ${statusBadge}
           </div>
-          <div class="font-semibold text-slate-100 truncate">${doc.beneficiario || 'Sem nome informado'}</div>
+          <div class="font-semibold text-slate-100 truncate">${nome}</div>
           <div class="flex items-center justify-between gap-1 pt-0.5">
             ${naturezaBadge}
-            ${doc.cpf ? `<span class="font-mono text-[10px] text-slate-500 shrink-0">${doc.cpf}</span>` : ''}
+            ${cpf ? `<span class="font-mono text-[10px] text-slate-500 shrink-0">${cpf}</span>` : ''}
           </div>
-          <div class="text-[11px] text-slate-400 line-clamp-1">${doc.curso || 'Curso não informado'}</div>
+          <div class="text-[11px] text-slate-400 line-clamp-1">${curso}</div>
         `;
         listEl.appendChild(card);
       });
@@ -681,14 +799,67 @@
       document.getElementById('btnClearNatureza').classList.add('hidden');
       setStatusFilter('todos');
       updateNaturezaFilterOptions();
-      applyFilter();
-      if (filteredDocs.length > 0) selectDocument(0);
+      applyFilter(false);
     }
 
-    function selectDocument(index) {
-      if (index < 0 || index >= filteredDocs.length) return;
+    function updateSidebarSelection() {
+      const listEl = document.getElementById('docList');
+      if (!listEl) return;
+      const cards = listEl.children;
+      for (let i = 0; i < cards.length; i++) {
+        if (!cards[i].classList || !cards[i].classList.contains('cursor-pointer')) continue;
+        if (i === currentIndex) {
+          cards[i].className = 'p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 bg-slate-800/95 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30';
+          cards[i].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+          cards[i].className = 'p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400';
+        }
+      }
+    }
+
+    function clearSelectionView() {
+      currentIndex = -1;
+      currentSelectedMd5 = null;
+      document.getElementById('navCounter').innerText = '0 de 0';
+
+      const pdfFrame = document.getElementById('pdfFrame');
+      const pdfLoading = document.getElementById('pdfLoadingState');
+      pdfLoading.style.display = 'none';
+      pdfFrame.src = 'about:blank';
+
+      document.getElementById('pdfMd5Title').innerText = 'Nenhum documento selecionado';
+      document.getElementById('openPdfNewTab').href = '#';
+
+      document.getElementById('field_md5').innerText = '-';
+      document.getElementById('field_data_criacao').innerText = '-';
+      document.getElementById('field_data_modificacao').innerText = '-';
+
+      document.getElementById('input_beneficiario').value = '';
+      document.getElementById('input_cpf').value = '';
+      document.getElementById('select_natureza_curso').value = '';
+      document.getElementById('input_curso').value = '';
+      document.getElementById('input_carga_horaria').value = '';
+      document.getElementById('input_data').value = '';
+      document.getElementById('input_faculdade').value = '';
+      document.getElementById('select_tipo_documento').value = 'Certificado';
+      document.getElementById('input_obs').value = '';
+
+      const badge = document.getElementById('currentStatusBadge');
+      badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-slate-800 text-slate-400 border-slate-700";
+      badge.innerText = "Nenhum documento";
+
+      document.getElementById('jsonViewer').innerText = '{}';
+      isDirty = false;
+    }
+
+    function selectDocument(index, skipSidebarUpdate = false) {
+      if (!filteredDocs || filteredDocs.length === 0 || index < 0 || index >= filteredDocs.length) {
+        clearSelectionView();
+        return;
+      }
       currentIndex = index;
       const doc = filteredDocs[currentIndex];
+      currentSelectedMd5 = doc.md5;
 
       document.getElementById('navCounter').innerText = `${currentIndex + 1} de ${filteredDocs.length}`;
 
@@ -701,26 +872,46 @@
       pdfFrame.src = pdfUrl;
       pdfFrame.onload = () => { pdfLoading.style.display = 'none'; };
 
-      document.getElementById('pdfMd5Title').innerText = doc.md5;
+      document.getElementById('pdfMd5Title').innerText = safeString(doc.md5);
       document.getElementById('openPdfNewTab').href = `/api/pdf/${doc.md5}`;
 
-      // Preenche campos do formulário
-      document.getElementById('field_md5').innerText = doc.md5;
-      document.getElementById('field_data_criacao').innerText = doc.data_criacao || '-';
-      document.getElementById('field_data_modificacao').innerText = doc.data_modificacao || '-';
+      // Preenche campos do formulário de forma segura
+      document.getElementById('field_md5').innerText = safeString(doc.md5);
+      document.getElementById('field_data_criacao').innerText = safeString(doc.data_criacao) || '-';
+      document.getElementById('field_data_modificacao').innerText = safeString(doc.data_modificacao) || '-';
 
-      document.getElementById('input_beneficiario').value = doc.beneficiario || '';
-      document.getElementById('input_cpf').value = doc.cpf || '';
-      document.getElementById('select_natureza_curso').value = doc.natureza_curso || '';
-      document.getElementById('input_curso').value = doc.curso || '';
-      document.getElementById('input_carga_horaria').value = doc.carga_horaria || '';
-      document.getElementById('input_data').value = doc.data || '';
-      document.getElementById('input_faculdade').value = doc.faculdade || '';
-      document.getElementById('select_tipo_documento').value = doc.tipo_documento || 'Certificado';
-      document.getElementById('input_obs').value = doc.observacoes_conferencia || '';
+      document.getElementById('input_beneficiario').value = safeString(doc.beneficiario);
+      document.getElementById('input_cpf').value = safeString(doc.cpf);
+      
+      // Natureza do Curso: seleciona ou insere opção dinamicamente se necessário
+      const selectNat = document.getElementById('select_natureza_curso');
+      const docNat = safeString(doc.natureza_curso).trim();
+      if (docNat) {
+        let exists = false;
+        for (let i = 0; i < selectNat.options.length; i++) {
+          if (selectNat.options[i].value === docNat) {
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          const opt = document.createElement('option');
+          opt.value = docNat;
+          opt.innerText = docNat;
+          selectNat.appendChild(opt);
+        }
+      }
+      selectNat.value = docNat;
+
+      document.getElementById('input_curso').value = safeString(doc.curso);
+      document.getElementById('input_carga_horaria').value = safeString(doc.carga_horaria);
+      document.getElementById('input_data').value = safeString(doc.data);
+      document.getElementById('input_faculdade').value = safeString(doc.faculdade);
+      document.getElementById('select_tipo_documento').value = safeString(doc.tipo_documento) || 'Certificado';
+      document.getElementById('input_obs').value = safeString(doc.observacoes_conferencia);
 
       // Atualiza badge de status
-      const isApproved = (doc.status_conferencia || 'pendente') === 'aprovado';
+      const isApproved = safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
       const badge = document.getElementById('currentStatusBadge');
       if (isApproved) {
         badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
@@ -731,7 +922,9 @@
       }
 
       updateJsonView();
-      renderSidebar();
+      if (!skipSidebarUpdate) {
+        updateSidebarSelection();
+      }
       isDirty = false;
     }
 
@@ -741,6 +934,9 @@
     }
 
     function getCurrentFormValues() {
+      if (currentIndex < 0 || !filteredDocs || currentIndex >= filteredDocs.length) {
+        return null;
+      }
       const doc = filteredDocs[currentIndex];
       return {
         ...doc,
@@ -763,6 +959,10 @@
 
     async function saveCurrentDoc() {
       const updated = getCurrentFormValues();
+      if (!updated) {
+        showToast('Nenhum documento selecionado para salvar.', 'info');
+        return;
+      }
       try {
         const resp = await fetch('/api/salvar', {
           method: 'POST',
@@ -787,6 +987,10 @@
 
     async function approveAndNext() {
       const updated = getCurrentFormValues();
+      if (!updated) {
+        showToast('Nenhum documento selecionado para aprovar.', 'info');
+        return;
+      }
       updated.status_conferencia = 'aprovado';
       
       try {
@@ -816,11 +1020,14 @@
     }
 
     function resetDocChanges() {
-      selectDocument(currentIndex);
-      showToast('Alterações descartadas.', 'info');
+      if (currentIndex >= 0 && currentIndex < filteredDocs.length) {
+        selectDocument(currentIndex);
+        showToast('Alterações descartadas.', 'info');
+      }
     }
 
     function navigateDoc(direction) {
+      if (!filteredDocs || filteredDocs.length === 0) return;
       const target = currentIndex + direction;
       if (target >= 0 && target < filteredDocs.length) {
         selectDocument(target);

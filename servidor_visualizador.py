@@ -189,6 +189,10 @@ def create_handler(server_ctx: ConferenciaServer):
                 for item in dados:
                     if "status_conferencia" not in item:
                         item["status_conferencia"] = "pendente"
+                    for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "data"]:
+                        v = item.get(k)
+                        if isinstance(v, list):
+                            item[k] = ", ".join(str(x) for x in v if x)
                 body = json.dumps(dados, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")

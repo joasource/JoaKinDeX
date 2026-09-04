@@ -399,9 +399,16 @@ def process_single_pdf(
         prompt = build_prompt(text)
         extracted_data = client.generate_json(prompt)
 
-        # Atualiza os campos com o retorno do LLM
-        res_dict["data"] = extracted_data.get("data")
-        res_dict["beneficiario"] = extracted_data.get("beneficiario")
+        # Atualiza os campos com o retorno do LLM com sanitização
+        def _clean_str(v):
+            if isinstance(v, list):
+                return ", ".join(str(x) for x in v if x).strip() or None
+            if isinstance(v, str):
+                return v.strip() or None
+            return v
+
+        res_dict["data"] = _clean_str(extracted_data.get("data"))
+        res_dict["beneficiario"] = _clean_str(extracted_data.get("beneficiario"))
 
         # Tratamento e fallback para CPF
         cpf_val = extracted_data.get("cpf")
@@ -410,11 +417,11 @@ def process_single_pdf(
             formatted_cpf = extract_cpf_fallback(text)
         res_dict["cpf"] = formatted_cpf
 
-        res_dict["curso"] = extracted_data.get("curso")
-        res_dict["natureza_curso"] = extracted_data.get("natureza_curso")
-        res_dict["carga_horaria"] = extracted_data.get("carga_horaria")
-        res_dict["faculdade"] = extracted_data.get("faculdade")
-        res_dict["tipo_documento"] = extracted_data.get("tipo_documento")
+        res_dict["curso"] = _clean_str(extracted_data.get("curso"))
+        res_dict["natureza_curso"] = _clean_str(extracted_data.get("natureza_curso"))
+        res_dict["carga_horaria"] = _clean_str(extracted_data.get("carga_horaria"))
+        res_dict["faculdade"] = _clean_str(extracted_data.get("faculdade"))
+        res_dict["tipo_documento"] = _clean_str(extracted_data.get("tipo_documento"))
         res_dict["status"] = "sucesso"
 
     except Exception as e:
