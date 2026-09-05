@@ -44,9 +44,15 @@
       <div>
         <h1 class="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
           Conferência de Diplomas & Certificados
-          <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 font-mono">v2.1</span>
+          <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 font-mono">v2.2</span>
         </h1>
-        <p class="text-xs text-slate-400">Verificação do JSON extraído frente ao PDF original</p>
+        <div class="flex items-center gap-2">
+          <p class="text-xs text-slate-400">Verificação do JSON extraído frente ao PDF original</p>
+          <span id="serverInfoBadge" class="hidden lg:inline-flex items-center gap-1.5 text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono truncate max-w-[320px]">
+            <i class="fa-solid fa-folder-open text-amber-400/80"></i>
+            <span id="serverInfoText" class="truncate">Carregando pastas...</span>
+          </span>
+        </div>
       </div>
     </div>
 
@@ -458,6 +464,21 @@
 
     async function loadDocuments() {
       try {
+        // Carrega metadados de pastas do servidor
+        fetch('/api/info')
+          .then(r => r.ok ? r.json() : null)
+          .then(info => {
+            if (!info) return;
+            const badgeEl = document.getElementById('serverInfoBadge');
+            const textEl = document.getElementById('serverInfoText');
+            if (badgeEl && textEl) {
+              const shortPdf = info.pdf_dir.length > 24 ? '...' + info.pdf_dir.slice(-21) : info.pdf_dir;
+              textEl.innerText = `${shortPdf} (${info.pdf_count} PDFs) • ${info.json_name}`;
+              badgeEl.title = `PDFs: ${info.pdf_dir} (${info.pdf_count} indexados)\nJSON: ${info.json_path}`;
+            }
+          })
+          .catch(() => {});
+
         const response = await fetch('/api/documentos');
         if (!response.ok) throw new Error('Falha ao comunicar com o servidor');
         documents = await response.json();

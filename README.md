@@ -17,6 +17,7 @@ O projeto é focado em privacidade, conformidade e auditoria: identifica os arqu
 - **Extração Completa de Metadados**:
   - Nome do Beneficiário / Titular
   - CPF do Beneficiário (validado e formatado `000.000.000-00`)
+  - Cédula de Identidade / RG / Registro Geral (com órgão emissor e UF)
   - Nome Oficial do Curso
   - **Natureza do Curso**: *Graduação / Curso Superior*, *Pós-Graduação Lato Sensu (Especialização/MBA)*, *Pós-Graduação Stricto Sensu (Mestrado/Doutorado)*, *Curso Técnico / Profissionalizante*, *Extensão*, etc.
   - Carga Horária Total (horas ou h/aulas)
@@ -189,8 +190,32 @@ Para revisar visualmente o PDF original contra os dados extraídos pelo modelo:
 ./iniciar_visualizador.sh
 ```
 
+### 📁 Escolha de Pastas no Ato da Execução:
+
+1. **Modo Interativo (Console)**:
+   Ao executar `./iniciar_visualizador.sh` no terminal sem parâmetros, o console solicita interativamente:
+   - **Pasta dos PDFs**: pressione `ENTER` para aceitar a pasta padrão sugerida (ex: `/home/joaquim/pdf` ou `./pdf`) ou digite o caminho desejado.
+   - **Pasta de saída ou arquivo JSON**: pressione `ENTER` para manter a saída padrão (`./saida/classificacao_diplomas.json`) ou informe outro arquivo/pasta.
+   - **Porta HTTP**: pressione `ENTER` para manter a porta padrão (`8088`) ou informe outra porta.
+
+2. **Direto por Linha de Comando (CLI)**:
+   Você também pode definir as pastas diretamente por parâmetros:
+   ```bash
+   # Indicando pasta de PDFs e pasta/arquivo de saída JSON:
+   ./iniciar_visualizador.sh -i /caminho/meus_pdfs -o /caminho/minha_saida
+
+   # Ou com os aliases completos:
+   ./iniciar_visualizador.sh --pdf-dir /caminho/meus_pdfs --json ./saida/outro_lote.json --port 8089
+
+   # Para forçar o menu interativo mesmo com parâmetros:
+   ./iniciar_visualizador.sh --prompt
+
+   # Para execução direta sem perguntas (batch):
+   ./iniciar_visualizador.sh -y
+   ```
+
 Acesse no seu navegador:
-👉 **`http://localhost:8088`**
+👉 **`http://localhost:8088`** (ou a porta escolhida)
 
 ### Atalhos na Interface:
 - `Seta Esquerda` (`[`): Documento anterior
