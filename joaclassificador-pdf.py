@@ -93,6 +93,33 @@ def extract_cpf_fallback(text: str) -> Optional[str]:
     return None
 
 
+def extract_rg_fallback(text: str) -> Optional[str]:
+    """Busca padrão de Cédula de Identidade / RG diretamente no texto como contingência."""
+    if not text:
+        return None
+
+    pattern = re.compile(
+        r"\b(?:Carteira\s+de\s+Identidade|C[eé]dula\s+de\s+Identidade|Registro\s+Geral|R\.?\s*G\.?|Doc(?:\.|\s+de)?\s+Identidade|Documento\s+de\s+Identidade|Identidade|C\.?I\.?)\b"
+        r"(?:\s*(?:n[°ºo\.]*|número|sob\s+o\s+n[°ºo\.]*))?"
+        r"\s*[:\s-]*"
+        r"([A-Z0-9\.\-\/]+(?:\s*(?:(?:SSP|SPTC|PCMG|DGPC|PC|DETRAN|IFP|PM|POL[IÍ]CIA|MAE|MEX|MD|DPF|SESP|[A-Z]{2,4})\b)?(?:\s*[\/\-]?\s*[A-Z]{2})?)?)",
+        re.IGNORECASE
+    )
+
+    for match in pattern.finditer(text):
+        val = match.group(1).strip()
+        val = re.split(r"\s+(?:e\s+)?(?:CPF|C\.P\.F|Data|Nascido|Nasc|Expedi[cç]|Filia[cç])\b", val, flags=re.IGNORECASE)[0].strip()
+        val = val.rstrip(".,;:- ")
+        digits = re.sub(r"\D", "", val)
+        if 5 <= len(digits) <= 14 and len(val) <= 35:
+            if len(digits) == 11 and re.match(r"^\d{3}\.\d{3}\.\d{3}-\d{2}$", val):
+                continue
+            if ("/" in val or "-" in val) and len(digits) == 8 and re.match(r"^\d{2}/\d{2}/\d{4}$|^\d{4}-\d{2}-\d{2}$", val):
+                continue
+            return val
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Extração de texto de PDF
 # ---------------------------------------------------------------------------
@@ -340,6 +367,7 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "data": Data principal do documento (data de emissão do diploma, conclusão do curso ou colação de grau, ex: "18 de dezembro de 2023" ou "18/12/2023"). Se não encontrar, retorne null.
 - "beneficiario": Nome completo do aluno / diplomado / titular do certificado. Se não encontrar, retorne null.
 - "cpf": CPF do beneficiário / titular identificado no texto (ex: "000.000.000-00" ou números). Se não houver menção ao CPF, retorne null.
+- "rg": Número da Cédula de Identidade / RG / Registro Geral do titular (incluindo órgão emissor e UF se constar, ex: "12.345.678-9 SSP/SP" ou "MG-12.345.678"). Se não houver menção ao RG, retorne null.
 - "curso": Nome completo e oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Bacharelado em Administração"). Se não encontrar, retorne null.
 - "natureza_curso": Nível ou natureza acadêmica do curso identificado no documento. Classifique em uma das opções:
     * "Graduação / Curso Superior" (para Bacharelado, Licenciatura, Tecnólogo)
@@ -377,6 +405,7 @@ def process_single_pdf(
         "data": None,
         "beneficiario": None,
         "cpf": None,
+        "rg": None,
         "curso": None,
         "natureza_curso": None,
         "carga_horaria": None,
@@ -417,6 +446,12 @@ def process_single_pdf(
             formatted_cpf = extract_cpf_fallback(text)
         res_dict["cpf"] = formatted_cpf
 
+        # Tratamento e fallback para RG / Identidade
+        rg_val = _clean_str(extracted_data.get("rg"))
+        if not rg_val:
+            rg_val = extract_rg_fallback(text)
+        res_dict["rg"] = rg_val
+
         res_dict["curso"] = _clean_str(extracted_data.get("curso"))
         res_dict["natureza_curso"] = _clean_str(extracted_data.get("natureza_curso"))
         res_dict["carga_horaria"] = _clean_str(extracted_data.get("carga_horaria"))
@@ -443,6 +478,7 @@ Data de Modificação : {item.get('data_modificacao')}
 Tipo Documento      : {item.get('tipo_documento') or 'Não identificado'}
 Beneficiário        : {item.get('beneficiario') or 'Não informado'}
 CPF                 : {item.get('cpf') or 'Não informado'}
+RG / Identidade     : {item.get('rg') or 'Não informado'}
 Curso               : {item.get('curso') or 'Não informado'}
 Natureza do Curso   : {item.get('natureza_curso') or 'Não identificada'}
 Carga Horária       : {item.get('carga_horaria') or 'Não informada'}
@@ -484,6 +520,7 @@ def generate_consolidated_txt(
         lines.append(f"  • Tipo Documento     : {item.get('tipo_documento') or 'Não identificado'}")
         lines.append(f"  • Beneficiário       : {item.get('beneficiario') or 'Não informado'}")
         lines.append(f"  • CPF                : {item.get('cpf') or 'Não informado'}")
+        lines.append(f"  • RG / Identidade    : {item.get('rg') or 'Não informado'}")
         lines.append(f"  • Curso              : {item.get('curso') or 'Não informado'}")
         lines.append(f"  • Natureza do Curso  : {item.get('natureza_curso') or 'Não identificada'}")
         lines.append(f"  • Carga Horária      : {item.get('carga_horaria') or 'Não informada'}")

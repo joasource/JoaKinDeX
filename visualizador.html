@@ -97,7 +97,7 @@
         <!-- Campo de Busca -->
         <div class="relative">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-500"></i>
-          <input type="text" id="searchInput" oninput="onSearchInput()" onkeydown="onSearchKeyDown(event)" placeholder="Buscar por Nome, CPF, MD5, Curso..."
+          <input type="text" id="searchInput" oninput="onSearchInput()" onkeydown="onSearchKeyDown(event)" placeholder="Buscar por Nome, CPF, RG, MD5, Curso..."
                  class="w-full bg-slate-900 border border-slate-800 rounded pl-8 pr-7 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
           <button id="clearSearchBtn" onclick="clearSearch()" title="Limpar busca (Esc)" class="hidden absolute right-2.5 top-2 text-xs text-slate-500 hover:text-slate-300">
             <i class="fa-solid fa-xmark"></i>
@@ -270,14 +270,24 @@
                    class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
           </div>
 
-          <!-- CPF do Beneficiário -->
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-              <span>CPF do Beneficiário</span>
-              <span class="text-[10px] text-slate-500 font-mono">cpf</span>
-            </label>
-            <input type="text" id="input_cpf" oninput="markDirty()" placeholder="000.000.000-00"
-                   class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+          <!-- CPF e RG do Beneficiário lado a lado -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                <span>CPF</span>
+                <span class="text-[10px] text-slate-500 font-mono">cpf</span>
+              </label>
+              <input type="text" id="input_cpf" oninput="markDirty()" placeholder="000.000.000-00"
+                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                <span>RG / Identidade</span>
+                <span class="text-[10px] text-slate-500 font-mono">rg</span>
+              </label>
+              <input type="text" id="input_rg" oninput="markDirty()" placeholder="Ex: 2030359 SSP-ES"
+                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+            </div>
           </div>
 
           <!-- Natureza do Curso -->
@@ -682,6 +692,8 @@
       const beneficiario = normalizeText(doc.beneficiario);
       const cpf = normalizeText(doc.cpf);
       const cpfDigits = extractDigits(doc.cpf);
+      const rg = normalizeText(doc.rg);
+      const rgDigits = extractDigits(doc.rg);
       const curso = normalizeText(doc.curso);
       const faculdade = normalizeText(doc.faculdade);
       const natureza = normalizeText(doc.natureza_curso);
@@ -690,16 +702,17 @@
       const data = normalizeText(doc.data);
       const carga = normalizeText(doc.carga_horaria);
 
-      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${curso} ${faculdade} ${natureza} ${tipo} ${data} ${carga} ${obs}`;
+      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${curso} ${faculdade} ${natureza} ${tipo} ${data} ${carga} ${obs}`;
 
       return tokens.every(token => {
         // 1. Busca textual direta na junção de todos os campos
         if (fullBlob.includes(token)) return true;
 
-        // 2. Busca por dígitos de CPF (sem traço ou pontos)
+        // 2. Busca por dígitos de CPF ou RG (sem traço ou pontos)
         const tokenDigits = extractDigits(token);
-        if (tokenDigits.length >= 2 && cpfDigits.includes(tokenDigits)) {
-          return true;
+        if (tokenDigits.length >= 2) {
+          if (cpfDigits && cpfDigits.includes(tokenDigits)) return true;
+          if (rgDigits && rgDigits.includes(tokenDigits)) return true;
         }
 
         return false;
@@ -944,6 +957,7 @@
         const md5Short = safeString(doc.md5).substring(0, 10);
         const nome = safeString(doc.beneficiario) || 'Sem nome informado';
         const cpf = safeString(doc.cpf);
+        const rg = safeString(doc.rg);
         const curso = safeString(doc.curso) || 'Curso não informado';
 
         card.innerHTML = `
@@ -957,7 +971,10 @@
           <div class="font-semibold text-slate-100 truncate">${nome}</div>
           <div class="flex items-center justify-between gap-1 pt-0.5">
             ${naturezaBadge}
-            ${cpf ? `<span class="font-mono text-[10px] text-slate-500 shrink-0">${cpf}</span>` : ''}
+            <div class="flex items-center gap-1.5 shrink-0">
+              ${rg ? `<span class="font-mono text-[10px] text-slate-400 bg-slate-800/80 px-1 rounded" title="RG / Identidade">${rg}</span>` : ''}
+              ${cpf ? `<span class="font-mono text-[10px] text-slate-500 shrink-0" title="CPF">${cpf}</span>` : ''}
+            </div>
           </div>
           <div class="text-[11px] text-slate-400 line-clamp-1">${curso}</div>
         `;
@@ -1078,6 +1095,7 @@
 
       document.getElementById('input_beneficiario').value = '';
       document.getElementById('input_cpf').value = '';
+      document.getElementById('input_rg').value = '';
       document.getElementById('select_natureza_curso').value = '';
       document.getElementById('input_curso').value = '';
       document.getElementById('input_carga_horaria').value = '';
@@ -1118,6 +1136,7 @@
 
       document.getElementById('input_beneficiario').value = safeString(doc.beneficiario);
       document.getElementById('input_cpf').value = safeString(doc.cpf);
+      document.getElementById('input_rg').value = safeString(doc.rg);
       
       // Natureza do Curso: seleciona ou insere opção dinamicamente se necessário
       const selectNat = document.getElementById('select_natureza_curso');
@@ -1178,6 +1197,7 @@
         ...doc,
         beneficiario: document.getElementById('input_beneficiario').value.trim() || null,
         cpf: document.getElementById('input_cpf').value.trim() || null,
+        rg: document.getElementById('input_rg').value.trim() || null,
         natureza_curso: document.getElementById('select_natureza_curso').value || null,
         curso: document.getElementById('input_curso').value.trim() || null,
         carga_horaria: document.getElementById('input_carga_horaria').value.trim() || null,

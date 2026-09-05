@@ -110,6 +110,7 @@ class ConferenciaServer:
             lines.append(f"  • Tipo Documento     : {item.get('tipo_documento') or 'Não identificado'}")
             lines.append(f"  • Beneficiário       : {item.get('beneficiario') or 'Não informado'}")
             lines.append(f"  • CPF                : {item.get('cpf') or 'Não informado'}")
+            lines.append(f"  • RG / Identidade    : {item.get('rg') or 'Não informado'}")
             lines.append(f"  • Curso              : {item.get('curso') or 'Não informado'}")
             lines.append(f"  • Natureza do Curso  : {item.get('natureza_curso') or 'Não identificada'}")
             lines.append(f"  • Carga Horária      : {item.get('carga_horaria') or 'Não informada'}")
@@ -189,7 +190,7 @@ def create_handler(server_ctx: ConferenciaServer):
                 for item in dados:
                     if "status_conferencia" not in item:
                         item["status_conferencia"] = "pendente"
-                    for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "data"]:
+                    for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "rg", "data"]:
                         v = item.get(k)
                         if isinstance(v, list):
                             item[k] = ", ".join(str(x) for x in v if x)
