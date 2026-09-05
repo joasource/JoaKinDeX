@@ -15,6 +15,8 @@ import hashlib
 import argparse
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="pypdf")
+import base64
+import io
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -40,6 +42,11 @@ try:
     import pdfplumber
 except ImportError:
     pdfplumber = None
+
+try:
+    import pypdfium2 as pdfium
+except ImportError:
+    pdfium = None
 
 try:
     from openai import OpenAI
@@ -161,6 +168,51 @@ def extract_pdf_text(pdf_path: str, max_pages: int = 4) -> str:
     return extracted_text.strip()
 
 
+def render_pdf_pages_to_base64(
+    pdf_path: str,
+    max_pages: int = 2,
+    scale: float = 1.5,
+    quality: int = 80
+) -> List[str]:
+    """
+    Renderiza páginas do PDF em imagens JPEG codificadas em base64 para leitura visual (OCR) via LLM.
+    Utiliza pypdfium2 com fallback para pdfplumber.
+    """
+    images_b64: List[str] = []
+
+    # Tentativa 1: pypdfium2 (rápido e alta fidelidade)
+    if pdfium is not None:
+        try:
+            pdf = pdfium.PdfDocument(str(pdf_path))
+            num_pages = min(len(pdf), max_pages)
+            for i in range(num_pages):
+                page = pdf[i]
+                img = page.render(scale=scale).to_pil()
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=quality)
+                images_b64.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+            if images_b64:
+                return images_b64
+        except Exception:
+            images_b64 = []
+
+    # Tentativa 2: pdfplumber (fallback)
+    if pdfplumber is not None:
+        try:
+            with pdfplumber.open(str(pdf_path)) as pdf:
+                num_pages = min(len(pdf.pages), max_pages)
+                for i in range(num_pages):
+                    page = pdf.pages[i]
+                    pimg = page.to_image(resolution=int(72 * scale))
+                    buf = io.BytesIO()
+                    pimg.original.save(buf, format="JPEG", quality=quality)
+                    images_b64.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+        except Exception:
+            pass
+
+    return images_b64
+
+
 # ---------------------------------------------------------------------------
 # Tratamento de JSON retornado pelo LLM
 # ---------------------------------------------------------------------------
@@ -190,6 +242,9 @@ def clean_and_parse_json(raw_text: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 class BaseLLMClient:
     def generate_json(self, prompt: str) -> Dict[str, Any]:
+        raise NotImplementedError
+
+    def generate_json_with_images(self, prompt: str, images: List[str]) -> Dict[str, Any]:
         raise NotImplementedError
 
 
@@ -311,6 +366,45 @@ class OllamaClient(BaseLLMClient):
 
         return clean_and_parse_json(raw_response)
 
+    def generate_json_with_images(self, prompt: str, images: List[str]) -> Dict[str, Any]:
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "images": images,
+            "format": "json",
+            "stream": False,
+            "options": {
+                "temperature": 0.0
+            }
+        }
+        payload_str = json.dumps(payload)
+
+        if self.use_docker:
+            cmd = [
+                "docker", "exec", "-i", self.docker_container,
+                "curl", "-s", "-X", "POST", "http://localhost:11434/api/generate",
+                "-d", "@-"
+            ]
+            proc = subprocess.run(
+                cmd,
+                input=payload_str,
+                text=True,
+                capture_output=True,
+                timeout=self.timeout
+            )
+            if proc.returncode != 0:
+                raise RuntimeError(f"Erro no docker exec: {proc.stderr}")
+            response_json = json.loads(proc.stdout)
+            raw_response = response_json.get("response", "")
+        else:
+            url = f"{self.base_url}/api/generate"
+            r = requests.post(url, json=payload, timeout=self.timeout)
+            r.raise_for_status()
+            response_json = r.json()
+            raw_response = response_json.get("response", "")
+
+        return clean_and_parse_json(raw_response)
+
 
 class OpenAIClient(BaseLLMClient):
     """
@@ -351,10 +445,76 @@ class OpenAIClient(BaseLLMClient):
         raw_response = response.choices[0].message.content or "{}"
         return clean_and_parse_json(raw_response)
 
+    def generate_json_with_images(self, prompt: str, images: List[str]) -> Dict[str, Any]:
+        content: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for img_b64 in images:
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{img_b64}"
+                }
+            })
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Você é um assistente especialista em analisar visualmente e extrair dados "
+                        "estruturados de documentos acadêmicos e diplomas via OCR. "
+                        "Responda estritamente em formato JSON válido."
+                    )
+                },
+                {"role": "user", "content": content}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0
+        )
+        raw_response = response.choices[0].message.content or "{}"
+        return clean_and_parse_json(raw_response)
+
 
 # ---------------------------------------------------------------------------
-# Prompt de Extração (Incluindo Natureza do Curso e CPF)
+# Prompts de Extração (Texto e Visão / OCR)
 # ---------------------------------------------------------------------------
+def build_vision_prompt(extra_context: str = "") -> str:
+    ctx_note = ""
+    if extra_context:
+        ctx_note = f"""
+OBSERVAÇÃO DA LEITURA TEXTUAL PRÉVIA:
+\"\"\"
+{extra_context[:1200]}
+\"\"\"
+Atenção: Na leitura da camada de texto digital, o 'tipo_documento' NÃO pôde ser determinado com precisão ou ficou não identificado. Analise os elementos visuais das páginas do documento (título principal, cabeçalho, carimbos, assinaturas, selos, brasões e formatação) para classificar o tipo_documento corretamente (ex: Diploma, Certificado, Histórico Escolar, Declaração, etc.).
+"""
+
+    return f"""Analise visualmente as imagens deste documento acadêmico e extraia as informações com a máxima precisão via OCR.
+{ctx_note}
+Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as chaves exatas abaixo:
+- "data": Data principal do documento (data de emissão do diploma, conclusão do curso ou colação de grau, ex: "18 de dezembro de 2023" ou "18/12/2023"). Se não encontrar, retorne null.
+- "beneficiario": Nome completo do aluno / diplomado / titular do documento. Se não encontrar, retorne null.
+- "cpf": CPF do beneficiário / titular identificado no documento (ex: "000.000.000-00" ou apenas números). Se não houver menção ao CPF, retorne null.
+- "rg": Número da Cédula de Identidade / RG / Registro Geral do titular (incluindo órgão emissor e UF se constar, ex: "12.345.678-9 SSP/SP" ou "MG-12.345.678"). Se não houver menção ao RG, retorne null.
+- "curso": Nome completo e oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Licenciatura em Pedagogia", "Bacharelado em Administração"). Se não encontrar, retorne null.
+- "natureza_curso": Nível ou natureza acadêmica do curso identificado no documento. Classifique em uma das opções:
+    * "Graduação / Curso Superior" (para Bacharelado, Licenciatura, Tecnólogo)
+    * "Pós-Graduação Lato Sensu (Especialização/MBA)"
+    * "Pós-Graduação Stricto Sensu (Mestrado/Doutorado)"
+    * "Curso Técnico / Profissionalizante"
+    * "Curso de Extensão / Aperfeiçoamento"
+    * "Educação Básica" (Fundamental / Médio)
+    * Ou null se não for possível determinar ou não for curso.
+- "carga_horaria": Carga horária total do curso (ex: "750 h/aulas", "360 horas", "750h"). Se não encontrar, retorne null.
+- "faculdade": Nome completo da faculdade, universidade ou instituição de ensino emissora. Se não encontrar, retorne null.
+- "tipo_documento": Classificação do documento (ex: "Diploma", "Certificado", "Histórico Escolar", "Declaração", "Currículo", "Outro"). Se mesmo após análise visual não for possível classificar, informe "Não identificado".
+
+REGRAS:
+1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação fora do JSON.
+2. Não invente nenhuma informação. Se não estiver visível na imagem, preencha o valor como null.
+"""
+
+
 def build_prompt(document_text: str) -> str:
     return f"""Analise o seguinte texto extraído de um documento acadêmico (diploma, certificado, histórico escolar, declaração, currículo, etc.) e extraia as informações com a máxima precisão.
 
@@ -393,7 +553,9 @@ REGRAS:
 def process_single_pdf(
     pdf_path: Path,
     client: BaseLLMClient,
-    max_pages: int = 4
+    max_pages: int = 4,
+    force_ocr: bool = False,
+    skip_ocr: bool = False
 ) -> Dict[str, Any]:
     # Metadados do arquivo (MD5, data de criação e modificação)
     meta = get_file_metadata(pdf_path)
@@ -413,22 +575,17 @@ def process_single_pdf(
         "tipo_documento": None,
         "status": "pendente",
         "erro": None,
+        "metodo_leitura": "texto_digital",
+        "tentativa_ocr_llm": False,
         "processado_em": datetime.now().isoformat()
     }
 
     try:
-        # Extração de texto
-        text = extract_pdf_text(str(pdf_path), max_pages=max_pages)
-        if not text or len(text.strip()) < 15:
-            res_dict["status"] = "erro"
-            res_dict["erro"] = "Documento sem texto legível digitalmente (provavelmente imagem digitalizada/requer OCR)."
-            return res_dict
+        # Extração de texto da camada digital nativa
+        text = extract_pdf_text(str(pdf_path), max_pages=max_pages) if not force_ocr else ""
+        has_text = bool(text and len(text.strip()) >= 15)
 
-        # Chamada ao LLM
-        prompt = build_prompt(text)
-        extracted_data = client.generate_json(prompt)
-
-        # Atualiza os campos com o retorno do LLM com sanitização
+        # Helper para sanitização de strings e listas
         def _clean_str(v):
             if isinstance(v, list):
                 return ", ".join(str(x) for x in v if x).strip() or None
@@ -436,19 +593,51 @@ def process_single_pdf(
                 return v.strip() or None
             return v
 
+        # ---------------------------------------------------------------------
+        # CASO 1: Arquivo sem texto legível digitalmente -> OCR usando a LLM
+        # ---------------------------------------------------------------------
+        if not has_text:
+            if skip_ocr:
+                res_dict["status"] = "erro"
+                res_dict["erro"] = "Documento sem texto legível digitalmente (requer OCR, mas --skip-ocr está ativo)."
+                return res_dict
+
+            images = render_pdf_pages_to_base64(str(pdf_path), max_pages=min(max_pages, 2))
+            if not images:
+                res_dict["status"] = "erro"
+                res_dict["erro"] = "Documento sem texto legível digitalmente e falha ao renderizar páginas para OCR."
+                return res_dict
+
+            try:
+                vision_prompt = build_vision_prompt()
+                extracted_data = client.generate_json_with_images(vision_prompt, images)
+                res_dict["metodo_leitura"] = "ocr_llm"
+                res_dict["tentativa_ocr_llm"] = True
+            except Exception as e:
+                res_dict["status"] = "erro"
+                res_dict["erro"] = f"Falha no OCR via LLM: {e}"
+                res_dict["tentativa_ocr_llm"] = True
+                return res_dict
+        else:
+            # Leitura normal da camada de texto digital via LLM
+            prompt = build_prompt(text)
+            extracted_data = client.generate_json(prompt)
+            res_dict["metodo_leitura"] = "texto_digital"
+
+        # Preenchimento e sanitização dos campos extraídos
         res_dict["data"] = _clean_str(extracted_data.get("data"))
         res_dict["beneficiario"] = _clean_str(extracted_data.get("beneficiario"))
 
         # Tratamento e fallback para CPF
         cpf_val = extracted_data.get("cpf")
         formatted_cpf = format_cpf(cpf_val)
-        if not formatted_cpf:
+        if not formatted_cpf and has_text:
             formatted_cpf = extract_cpf_fallback(text)
         res_dict["cpf"] = formatted_cpf
 
         # Tratamento e fallback para RG / Identidade
         rg_val = _clean_str(extracted_data.get("rg"))
-        if not rg_val:
+        if not rg_val and has_text:
             rg_val = extract_rg_fallback(text)
         res_dict["rg"] = rg_val
 
@@ -457,7 +646,68 @@ def process_single_pdf(
         res_dict["carga_horaria"] = _clean_str(extracted_data.get("carga_horaria"))
         res_dict["faculdade"] = _clean_str(extracted_data.get("faculdade"))
         res_dict["tipo_documento"] = _clean_str(extracted_data.get("tipo_documento"))
-        res_dict["status"] = "sucesso"
+
+        # ---------------------------------------------------------------------
+        # CASO 2: Tinha camada de leitura, mas tipo_documento ficou "Não identificado" / "Outro" / None
+        # Tenta OCR via LLM uma única vez ("Caso não seja identificado novamente, não insista mais").
+        # ---------------------------------------------------------------------
+        tipo_atual = (res_dict.get("tipo_documento") or "").strip().lower()
+        is_tipo_unidentified = (not tipo_atual) or tipo_atual in [
+            "não identificado", "nao identificado", "outro", "não informado", "nao informado"
+        ]
+
+        if has_text and is_tipo_unidentified and not res_dict.get("tentativa_ocr_llm") and not skip_ocr:
+            res_dict["tentativa_ocr_llm"] = True
+            try:
+                images = render_pdf_pages_to_base64(str(pdf_path), max_pages=min(max_pages, 2))
+                if images:
+                    vision_prompt = build_vision_prompt(extra_context=text)
+                    ocr_data = client.generate_json_with_images(vision_prompt, images)
+                    new_tipo = _clean_str(ocr_data.get("tipo_documento"))
+
+                    # Se a nova leitura visual classificou um tipo válido, atualiza
+                    if new_tipo and new_tipo.lower() not in [
+                        "não identificado", "nao identificado", "outro", "não informado", "nao informado"
+                    ]:
+                        res_dict["tipo_documento"] = new_tipo
+                        res_dict["metodo_leitura"] = "hibrido_texto_e_ocr_llm"
+
+                    # Aproveita outros dados que o OCR possa ter localizado e que estavam vazios
+                    if not res_dict["beneficiario"] and ocr_data.get("beneficiario"):
+                        res_dict["beneficiario"] = _clean_str(ocr_data.get("beneficiario"))
+                    if not res_dict["cpf"] and ocr_data.get("cpf"):
+                        res_dict["cpf"] = format_cpf(ocr_data.get("cpf"))
+                    if not res_dict["rg"] and ocr_data.get("rg"):
+                        res_dict["rg"] = _clean_str(ocr_data.get("rg"))
+                    if not res_dict["curso"] and ocr_data.get("curso"):
+                        res_dict["curso"] = _clean_str(ocr_data.get("curso"))
+                    if not res_dict["natureza_curso"] and ocr_data.get("natureza_curso"):
+                        res_dict["natureza_curso"] = _clean_str(ocr_data.get("natureza_curso"))
+                    if not res_dict["carga_horaria"] and ocr_data.get("carga_horaria"):
+                        res_dict["carga_horaria"] = _clean_str(ocr_data.get("carga_horaria"))
+                    if not res_dict["faculdade"] and ocr_data.get("faculdade"):
+                        res_dict["faculdade"] = _clean_str(ocr_data.get("faculdade"))
+                    if not res_dict["data"] and ocr_data.get("data"):
+                        res_dict["data"] = _clean_str(ocr_data.get("data"))
+            except Exception:
+                # Se falhar a tentativa de OCR ou continuar não identificado, não insiste mais
+                pass
+
+        # Validação de sucesso: pelo menos algum campo relevante identificado
+        campos_uteis = [
+            res_dict["beneficiario"],
+            res_dict["curso"],
+            res_dict["cpf"],
+            res_dict["rg"],
+            res_dict["faculdade"],
+            res_dict["tipo_documento"]
+        ]
+        if any(campos_uteis):
+            res_dict["status"] = "sucesso"
+            res_dict["erro"] = None
+        else:
+            res_dict["status"] = "erro"
+            res_dict["erro"] = "Documento sem informações identificáveis após análise."
 
     except Exception as e:
         res_dict["status"] = "erro"
@@ -470,9 +720,13 @@ def process_single_pdf(
 # Formatação de Saídas (JSON e TXT)
 # ---------------------------------------------------------------------------
 def format_single_txt(item: Dict[str, Any]) -> str:
+    metodo = item.get("metodo_leitura", "texto_digital")
+    if item.get("tentativa_ocr_llm"):
+        metodo += " (OCR LLM acionado)"
     return f"""--------------------------------------------------------------------------------
 MD5                 : {item.get('md5')}
 Status              : {item.get('status', '').upper()}
+Método de Leitura   : {metodo}
 Data de Criação     : {item.get('data_criacao')}
 Data de Modificação : {item.get('data_modificacao')}
 Tipo Documento      : {item.get('tipo_documento') or 'Não identificado'}
@@ -611,6 +865,16 @@ def main():
         help="Força o reprocessamento de todos os PDFs, ignorando os já processados com sucesso."
     )
     parser.add_argument(
+        "--skip-ocr",
+        action="store_true",
+        help="Desativa tentativas de OCR via LLM para documentos escaneados ou não identificados."
+    )
+    parser.add_argument(
+        "--reprocess-ocr",
+        action="store_true",
+        help="Força o reprocessamento de documentos que necessitam de OCR (erros de leitura e tipos não identificados)."
+    )
+    parser.add_argument(
         "--no-individual",
         action="store_true",
         help="Desativa a criação de arquivos JSON e TXT individuais por PDF (nomeados por MD5)."
@@ -687,22 +951,64 @@ def main():
     already_done_results = []
 
     print("[*] Verificando documentos já processados anteriormente...")
+    ocr_candidate_count = 0
     for pdf in pdf_files:
         meta = get_file_metadata(pdf)
         h = meta["md5"]
         if h in existing_by_md5 and not args.force:
-            already_done_results.append(existing_by_md5[h])
+            item = existing_by_md5[h]
+            # Respeita sempre aprovação manual humana
+            if item.get("status_conferencia") == "aprovado":
+                already_done_results.append(item)
+                continue
+
+            tipo_atual = (item.get("tipo_documento") or "").strip().lower()
+            tipo_nao_identificado = (not tipo_atual) or tipo_atual in [
+                "não identificado", "nao identificado", "outro", "não informado", "nao informado"
+            ]
+            teve_tentativa_ocr = item.get("tentativa_ocr_llm", False)
+            teve_erro_ocr = (item.get("status") == "erro") and ("OCR" in (item.get("erro") or ""))
+
+            precisa_ocr = (teve_erro_ocr or (tipo_nao_identificado and not teve_tentativa_ocr))
+
+            if (precisa_ocr or args.reprocess_ocr) and not args.skip_ocr and not teve_tentativa_ocr:
+                files_to_process.append(pdf)
+                ocr_candidate_count += 1
+            else:
+                already_done_results.append(item)
         else:
             files_to_process.append(pdf)
 
-    print(f"[*] Total de PDFs: {len(pdf_files)} | Já processados: {len(already_done_results)} | Novos a processar: {len(files_to_process)}")
+    if ocr_candidate_count > 0:
+        print(f"[*] Identificados {ocr_candidate_count} documento(s) elegíveis para OCR via LLM (erros de leitura ou tipo não identificado).")
+
+    print(f"[*] Total de PDFs: {len(pdf_files)} | Já processados: {len(already_done_results)} | A processar: {len(files_to_process)}")
 
     new_results = []
     if files_to_process:
-        print(f"[*] Iniciando classificação de {len(files_to_process)} novo(s) documento(s) com {args.workers} worker(s)...")
+        print(f"[*] Iniciando classificação de {len(files_to_process)} documento(s) com {args.workers} worker(s)...")
 
         def handle_file(pdf: Path):
-            res = process_single_pdf(pdf, client, max_pages=args.max_pages)
+            meta = get_file_metadata(pdf)
+            h = meta["md5"]
+            old_item = existing_by_md5.get(h)
+
+            res = process_single_pdf(
+                pdf,
+                client,
+                max_pages=args.max_pages,
+                skip_ocr=args.skip_ocr
+            )
+
+            # Preserva metadados de conferência humana caso já existissem
+            if old_item:
+                if "status_conferencia" in old_item:
+                    res["status_conferencia"] = old_item["status_conferencia"]
+                if "observacoes_conferencia" in old_item:
+                    res["observacoes_conferencia"] = old_item["observacoes_conferencia"]
+                if "conferido_em" in old_item:
+                    res["conferido_em"] = old_item["conferido_em"]
+
             if not args.no_individual:
                 file_identifier = res["md5"]
                 single_json_path = indiv_dir / f"{file_identifier}.json"
