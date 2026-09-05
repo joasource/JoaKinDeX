@@ -192,11 +192,19 @@
       </div>
 
       <!-- Iframe do PDF -->
-      <div class="flex-1 relative bg-slate-900">
+      <div class="flex-1 relative bg-slate-900 overflow-hidden">
         <iframe id="pdfFrame" class="w-full h-full border-0" src="about:blank"></iframe>
-        <div id="pdfLoadingState" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-slate-500 space-y-3">
-          <i class="fa-solid fa-file-pdf text-4xl text-slate-700"></i>
-          <p class="text-xs">Carregando visualizador de documento...</p>
+        
+        <!-- Indicador de Carregamento Flutuante (Não Bloqueante) -->
+        <div id="pdfLoadingState" class="hidden absolute top-3 right-3 bg-slate-900/90 backdrop-blur border border-slate-700/80 text-emerald-400 px-3 py-1.5 rounded-full shadow-lg text-xs flex items-center gap-2 pointer-events-none z-20 transition-opacity duration-300">
+          <i class="fa-solid fa-circle-notch fa-spin text-xs text-emerald-400"></i>
+          <span class="text-[11px] font-medium text-slate-200">Carregando PDF...</span>
+        </div>
+
+        <!-- Tela de Estado Vazio (quando nenhum documento selecionado) -->
+        <div id="pdfEmptyState" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center text-slate-500 space-y-3 z-10">
+          <i class="fa-regular fa-file-pdf text-4xl text-slate-700"></i>
+          <p class="text-xs text-slate-400">Nenhum documento selecionado</p>
         </div>
       </div>
     </section>
@@ -988,15 +996,78 @@
       }
     }
 
+    let currentLoadedPdfMd5 = null;
+    let pdfLoadTimeout = null;
+
+    function loadPdfInFrame(md5, force = false) {
+      if (!md5) return;
+      const pdfFrame = document.getElementById('pdfFrame');
+      const pdfLoading = document.getElementById('pdfLoadingState');
+      const pdfEmpty = document.getElementById('pdfEmptyState');
+
+      if (pdfEmpty) pdfEmpty.classList.add('hidden');
+
+      // Se já está exibindo esse mesmo documento e não é force, não recarrega o iframe
+      if (!force && currentLoadedPdfMd5 === md5) {
+        if (pdfLoading) pdfLoading.classList.add('hidden');
+        return;
+      }
+
+      currentLoadedPdfMd5 = md5;
+
+      if (pdfLoadTimeout) {
+        clearTimeout(pdfLoadTimeout);
+        pdfLoadTimeout = null;
+      }
+
+      if (pdfLoading) {
+        pdfLoading.classList.remove('hidden');
+        pdfLoading.style.opacity = '1';
+      }
+
+      const hideLoading = () => {
+        if (pdfLoading) {
+          pdfLoading.style.opacity = '0';
+          setTimeout(() => {
+            if (pdfLoading) pdfLoading.classList.add('hidden');
+          }, 200);
+        }
+        if (pdfLoadTimeout) {
+          clearTimeout(pdfLoadTimeout);
+          pdfLoadTimeout = null;
+        }
+      };
+
+      // 1. Escuta eventos normais de carregamento do iframe
+      pdfFrame.onload = hideLoading;
+      pdfFrame.onerror = hideLoading;
+
+      // 2. Timeout de segurança: no Chrome/Chromium, o visualizador de PDF interno
+      // frequentemente não dispara o evento DOM iframe.onload.
+      // O timeout garante que o indicador nunca fique travado na tela!
+      pdfLoadTimeout = setTimeout(hideLoading, 500);
+
+      // 3. Atualiza o src do iframe
+      pdfFrame.src = `/api/pdf/${md5}#toolbar=1&navpanes=0`;
+    }
+
     function clearSelectionView() {
       currentIndex = -1;
       currentSelectedMd5 = null;
+      currentLoadedPdfMd5 = null;
+      if (pdfLoadTimeout) {
+        clearTimeout(pdfLoadTimeout);
+        pdfLoadTimeout = null;
+      }
       document.getElementById('navCounter').innerText = '0 de 0';
 
       const pdfFrame = document.getElementById('pdfFrame');
       const pdfLoading = document.getElementById('pdfLoadingState');
-      pdfLoading.style.display = 'none';
-      pdfFrame.src = 'about:blank';
+      const pdfEmpty = document.getElementById('pdfEmptyState');
+
+      if (pdfLoading) pdfLoading.classList.add('hidden');
+      if (pdfEmpty) pdfEmpty.classList.remove('hidden');
+      if (pdfFrame) pdfFrame.src = 'about:blank';
 
       document.getElementById('pdfMd5Title').innerText = 'Nenhum documento selecionado';
       document.getElementById('openPdfNewTab').href = '#';
@@ -1034,14 +1105,8 @@
 
       document.getElementById('navCounter').innerText = `${currentIndex + 1} de ${filteredDocs.length}`;
 
-      // Atualiza visualizador do PDF
-      const pdfUrl = `/api/pdf/${doc.md5}#toolbar=1&navpanes=0`;
-      const pdfFrame = document.getElementById('pdfFrame');
-      const pdfLoading = document.getElementById('pdfLoadingState');
-      
-      pdfLoading.style.display = 'flex';
-      pdfFrame.src = pdfUrl;
-      pdfFrame.onload = () => { pdfLoading.style.display = 'none'; };
+      // Atualiza visualizador do PDF de forma inteligente e segura
+      loadPdfInFrame(doc.md5);
 
       document.getElementById('pdfMd5Title').innerText = safeString(doc.md5);
       document.getElementById('openPdfNewTab').href = `/api/pdf/${doc.md5}`;
@@ -1209,8 +1274,7 @@
     function reloadPdf() {
       const doc = filteredDocs[currentIndex];
       if (!doc) return;
-      const pdfFrame = document.getElementById('pdfFrame');
-      pdfFrame.src = `/api/pdf/${doc.md5}?t=${Date.now()}#toolbar=1`;
+      loadPdfInFrame(`${doc.md5}?t=${Date.now()}`, true);
       showToast('Visualizador recarregado.', 'info');
     }
 
