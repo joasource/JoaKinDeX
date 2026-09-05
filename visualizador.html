@@ -483,65 +483,121 @@
         if (!response.ok) throw new Error('Falha ao comunicar com o servidor');
         documents = await response.json();
         
-        updateNaturezaFilterOptions();
-        updateTipoFilterOptions();
+        initMasterFilterLists();
         applyFilter(false);
       } catch (err) {
         showToast('Erro ao carregar documentos: ' + err.message, 'error');
       }
     }
 
-    // Calcula e atualiza dinamicamente as opções e chips de natureza
-    function updateNaturezaFilterOptions() {
-      const counts = {};
+    // Listas mestres com todas as opções presentes no dataset
+    let allUniqueNaturezas = [];
+    let allUniqueTipos = [];
+
+    function initMasterFilterLists() {
+      const natSet = new Set();
+      const tipoSet = new Set();
+
       documents.forEach(d => {
+        const nat = safeString(d.natureza_curso).trim();
+        natSet.add(nat || 'Não identificada');
+        const tipo = safeString(d.tipo_documento).trim();
+        tipoSet.add(tipo || 'Não identificado');
+      });
+
+      allUniqueNaturezas = Array.from(natSet);
+      allUniqueTipos = Array.from(tipoSet);
+    }
+
+    function updateFacetFilters() {
+      updateNaturezaFilterOptions();
+      updateTipoFilterOptions();
+    }
+
+    // Calcula e atualiza dinamicamente as opções e tags de Natureza do Curso
+    // Baseado no Tipo de Documento ativo, busca textual e status de conferência
+    function updateNaturezaFilterOptions() {
+      const rawSearch = (document.getElementById('searchInput').value || '').trim();
+
+      // Documentos considerados para a contagem de Natureza:
+      // Devem respeitar: Status Filter + Search Query + Tipo Filter (NÃO o activeNaturezaFilter)
+      const baseDocs = documents.filter(doc => {
+        const status = safeString(doc.status_conferencia || 'pendente').toLowerCase();
+        if (activeStatusFilter === 'pendente' && status === 'aprovado') return false;
+        if (activeStatusFilter === 'aprovado' && status !== 'aprovado') return false;
+
+        if (activeTipoFilter) {
+          const docTipo = safeString(doc.tipo_documento).trim() || 'Não identificado';
+          if (docTipo !== activeTipoFilter) return false;
+        }
+
+        return matchDocumentSearch(doc, rawSearch);
+      });
+
+      const counts = {};
+      baseDocs.forEach(d => {
         const nat = safeString(d.natureza_curso).trim() || 'Não identificada';
         counts[nat] = (counts[nat] || 0) + 1;
       });
 
+      const totalMatching = baseDocs.length;
+
       // 1. Atualiza o Select Dropdown
       const select = document.getElementById('selectNaturezaFilter');
-      const currentSelected = select.value;
-      select.innerHTML = `<option value="">Todas as Naturezas (${documents.length})</option>`;
+      if (select) {
+        select.innerHTML = `<option value="">Todas as Naturezas (${totalMatching})</option>`;
 
-      // Ordena por maior quantidade
-      const sortedNats = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+        const sortedNats = [...allUniqueNaturezas].sort((a, b) => {
+          const diff = (counts[b] || 0) - (counts[a] || 0);
+          if (diff !== 0) return diff;
+          return a.localeCompare(b);
+        });
 
-      sortedNats.forEach(nat => {
-        const opt = document.createElement('option');
-        opt.value = nat;
-        opt.innerText = `${nat} (${counts[nat]})`;
-        select.appendChild(opt);
-      });
-      select.value = currentSelected;
+        sortedNats.forEach(nat => {
+          const count = counts[nat] || 0;
+          const opt = document.createElement('option');
+          opt.value = nat;
+          opt.innerText = `${nat} (${count})`;
+          select.appendChild(opt);
+        });
+        select.value = activeNaturezaFilter;
+      }
 
       // 2. Atualiza os Chips Rápidos
       const chipsContainer = document.getElementById('naturezaChips');
-      chipsContainer.innerHTML = '';
+      if (chipsContainer) {
+        chipsContainer.innerHTML = '';
 
-      // Chip "Todas"
-      const chipAll = document.createElement('button');
-      chipAll.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition ${
-        !activeNaturezaFilter 
-          ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm' 
-          : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
-      }`;
-      chipAll.innerText = `Todas (${documents.length})`;
-      chipAll.onclick = () => setNaturezaFilter('');
-      chipsContainer.appendChild(chipAll);
+        // Chip "Todas"
+        const chipAll = document.createElement('button');
+        chipAll.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition ${
+          !activeNaturezaFilter 
+            ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm font-semibold' 
+            : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+        }`;
+        chipAll.innerText = `Todas (${totalMatching})`;
+        chipAll.onclick = () => setNaturezaFilter('');
+        chipsContainer.appendChild(chipAll);
 
-      // Chips para cada natureza encontrada
-      sortedNats.forEach(nat => {
-        const chip = document.createElement('button');
-        const isActive = activeNaturezaFilter === nat;
-        const colorClass = getChipColorClass(nat, isActive);
-        
-        chip.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition truncate max-w-[170px] ${colorClass}`;
-        chip.innerText = `${formatShortNature(nat)} (${counts[nat]})`;
-        chip.title = `${nat} (${counts[nat]})`;
-        chip.onclick = () => setNaturezaFilter(nat);
-        chipsContainer.appendChild(chip);
-      });
+        const sortedNats = [...allUniqueNaturezas].sort((a, b) => {
+          const diff = (counts[b] || 0) - (counts[a] || 0);
+          if (diff !== 0) return diff;
+          return a.localeCompare(b);
+        });
+
+        sortedNats.forEach(nat => {
+          const count = counts[nat] || 0;
+          const isActive = activeNaturezaFilter === nat;
+          const chip = document.createElement('button');
+          const colorClass = getChipColorClass(nat, isActive, count);
+          
+          chip.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition truncate max-w-[180px] ${colorClass}`;
+          chip.innerText = `${formatShortNature(nat)} (${count})`;
+          chip.title = `${nat} (${count} documentos)`;
+          chip.onclick = () => setNaturezaFilter(isActive ? '' : nat);
+          chipsContainer.appendChild(chip);
+        });
+      }
     }
 
     function formatShortNature(nat) {
@@ -554,9 +610,12 @@
       return s || 'Não identificada';
     }
 
-    function getChipColorClass(nat, isActive) {
+    function getChipColorClass(nat, isActive, count = 1) {
       if (isActive) {
-        return 'bg-indigo-600 text-white border-indigo-500 shadow-sm font-semibold';
+        return 'bg-indigo-600 text-white border-indigo-500 shadow-sm font-semibold ring-1 ring-indigo-400/50';
+      }
+      if (count === 0) {
+        return 'bg-slate-950/40 text-slate-500 border-slate-900/60 opacity-50 hover:opacity-90 hover:text-slate-300';
       }
       const n = normalizeText(nat);
       if (n.includes('graduacao') || n.includes('superior')) {
@@ -571,7 +630,7 @@
       if (n.includes('tecnico')) {
         return 'bg-amber-950/40 text-amber-300 border-amber-800/60 hover:bg-amber-900/50';
       }
-      return 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800';
+      return 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800';
     }
 
     function onNaturezaSelectChange() {
@@ -581,16 +640,18 @@
 
     function setNaturezaFilter(nat) {
       activeNaturezaFilter = nat;
-      document.getElementById('selectNaturezaFilter').value = nat;
+      const select = document.getElementById('selectNaturezaFilter');
+      if (select) select.value = nat;
       
       const btnClear = document.getElementById('btnClearNatureza');
-      if (nat) {
-        btnClear.classList.remove('hidden');
-      } else {
-        btnClear.classList.add('hidden');
+      if (btnClear) {
+        if (nat) {
+          btnClear.classList.remove('hidden');
+        } else {
+          btnClear.classList.add('hidden');
+        }
       }
 
-      updateNaturezaFilterOptions();
       applyFilter(false);
     }
 
@@ -598,64 +659,98 @@
       setNaturezaFilter('');
     }
 
-    // Calcula e atualiza dinamicamente as opções e chips de Tipo de Documento
+    // Calcula e atualiza dinamicamente as opções e tags de Tipo de Documento
+    // Baseado na Natureza do Curso ativa, busca textual e status de conferência
     function updateTipoFilterOptions() {
+      const rawSearch = (document.getElementById('searchInput').value || '').trim();
+
+      // Documentos considerados para a contagem de Tipo:
+      // Devem respeitar: Status Filter + Search Query + Natureza Filter (NÃO o activeTipoFilter)
+      const baseDocs = documents.filter(doc => {
+        const status = safeString(doc.status_conferencia || 'pendente').toLowerCase();
+        if (activeStatusFilter === 'pendente' && status === 'aprovado') return false;
+        if (activeStatusFilter === 'aprovado' && status !== 'aprovado') return false;
+
+        if (activeNaturezaFilter) {
+          const docNat = safeString(doc.natureza_curso).trim() || 'Não identificada';
+          if (docNat !== activeNaturezaFilter) return false;
+        }
+
+        return matchDocumentSearch(doc, rawSearch);
+      });
+
       const counts = {};
-      documents.forEach(d => {
+      baseDocs.forEach(d => {
         const tipo = safeString(d.tipo_documento).trim() || 'Não identificado';
         counts[tipo] = (counts[tipo] || 0) + 1;
       });
 
+      const totalMatching = baseDocs.length;
+
       // 1. Atualiza o Select Dropdown
       const select = document.getElementById('selectTipoFilter');
-      if (!select) return;
-      const currentSelected = select.value;
-      select.innerHTML = `<option value="">Todos os Tipos (${documents.length})</option>`;
+      if (select) {
+        select.innerHTML = `<option value="">Todos os Tipos (${totalMatching})</option>`;
 
-      // Ordena por maior quantidade
-      const sortedTipos = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+        const sortedTipos = [...allUniqueTipos].sort((a, b) => {
+          const diff = (counts[b] || 0) - (counts[a] || 0);
+          if (diff !== 0) return diff;
+          return a.localeCompare(b);
+        });
 
-      sortedTipos.forEach(tipo => {
-        const opt = document.createElement('option');
-        opt.value = tipo;
-        opt.innerText = `${tipo} (${counts[tipo]})`;
-        select.appendChild(opt);
-      });
-      select.value = currentSelected;
+        sortedTipos.forEach(tipo => {
+          const count = counts[tipo] || 0;
+          const opt = document.createElement('option');
+          opt.value = tipo;
+          opt.innerText = `${tipo} (${count})`;
+          select.appendChild(opt);
+        });
+        select.value = activeTipoFilter;
+      }
 
       // 2. Atualiza os Chips Rápidos
       const chipsContainer = document.getElementById('tipoChips');
-      if (!chipsContainer) return;
-      chipsContainer.innerHTML = '';
+      if (chipsContainer) {
+        chipsContainer.innerHTML = '';
 
-      // Chip "Todos"
-      const chipAll = document.createElement('button');
-      chipAll.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition ${
-        !activeTipoFilter 
-          ? 'bg-teal-600 text-white border-teal-500 shadow-sm' 
-          : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
-      }`;
-      chipAll.innerText = `Todos (${documents.length})`;
-      chipAll.onclick = () => setTipoFilter('');
-      chipsContainer.appendChild(chipAll);
+        // Chip "Todos"
+        const chipAll = document.createElement('button');
+        chipAll.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition ${
+          !activeTipoFilter 
+            ? 'bg-teal-600 text-white border-teal-500 shadow-sm font-semibold' 
+            : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+        }`;
+        chipAll.innerText = `Todos (${totalMatching})`;
+        chipAll.onclick = () => setTipoFilter('');
+        chipsContainer.appendChild(chipAll);
 
-      // Chips para os principais tipos (até 6 mais frequentes)
-      sortedTipos.slice(0, 6).forEach(tipo => {
-        const chip = document.createElement('button');
-        const isActive = activeTipoFilter === tipo;
-        const colorClass = getTipoChipColorClass(tipo, isActive);
-        
-        chip.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition truncate max-w-[170px] ${colorClass}`;
-        chip.innerText = `${tipo} (${counts[tipo]})`;
-        chip.title = `${tipo} (${counts[tipo]})`;
-        chip.onclick = () => setTipoFilter(tipo);
-        chipsContainer.appendChild(chip);
-      });
+        const sortedTipos = [...allUniqueTipos].sort((a, b) => {
+          const diff = (counts[b] || 0) - (counts[a] || 0);
+          if (diff !== 0) return diff;
+          return a.localeCompare(b);
+        });
+
+        sortedTipos.forEach(tipo => {
+          const count = counts[tipo] || 0;
+          const isActive = activeTipoFilter === tipo;
+          const chip = document.createElement('button');
+          const colorClass = getTipoChipColorClass(tipo, isActive, count);
+          
+          chip.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition truncate max-w-[180px] ${colorClass}`;
+          chip.innerText = `${tipo} (${count})`;
+          chip.title = `${tipo} (${count} documentos)`;
+          chip.onclick = () => setTipoFilter(isActive ? '' : tipo);
+          chipsContainer.appendChild(chip);
+        });
+      }
     }
 
-    function getTipoChipColorClass(tipo, isActive) {
+    function getTipoChipColorClass(tipo, isActive, count = 1) {
       if (isActive) {
-        return 'bg-teal-600 text-white border-teal-500 shadow-sm font-semibold';
+        return 'bg-teal-600 text-white border-teal-500 shadow-sm font-semibold ring-1 ring-teal-400/50';
+      }
+      if (count === 0) {
+        return 'bg-slate-950/40 text-slate-500 border-slate-900/60 opacity-50 hover:opacity-90 hover:text-slate-300';
       }
       const n = normalizeText(tipo);
       if (n.includes('diploma')) {
@@ -670,7 +765,7 @@
       if (n.includes('declaracao')) {
         return 'bg-amber-950/40 text-amber-300 border-amber-800/60 hover:bg-amber-900/50';
       }
-      return 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800';
+      return 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800';
     }
 
     function onTipoSelectChange() {
@@ -692,7 +787,6 @@
         }
       }
 
-      updateTipoFilterOptions();
       applyFilter(false);
     }
 
@@ -783,8 +877,6 @@
           btn.className = "flex-1 py-1 rounded bg-slate-900 text-slate-400 hover:bg-slate-800 text-center transition";
         }
       });
-      updateNaturezaFilterOptions();
-      updateTipoFilterOptions();
       applyFilter(false);
     }
 
@@ -813,6 +905,7 @@
         return matchDocumentSearch(doc, rawSearch);
       });
 
+      updateFacetFilters();
       updateCounters();
       renderSidebar();
 
@@ -845,10 +938,26 @@
 
     function updateCounters() {
       const total = documents.length;
-      const aprovados = documents.filter(d => safeString(d.status_conferencia || 'pendente').toLowerCase() === 'aprovado').length;
-      const pendentes = total - aprovados;
 
-      document.getElementById('count-todos').innerText = total;
+      // Contagem de status cruzada com os filtros ativos de Natureza, Tipo e Busca
+      const rawSearch = (document.getElementById('searchInput').value || '').trim();
+      const scopeDocs = documents.filter(doc => {
+        if (activeNaturezaFilter) {
+          const docNat = safeString(doc.natureza_curso).trim() || 'Não identificada';
+          if (docNat !== activeNaturezaFilter) return false;
+        }
+        if (activeTipoFilter) {
+          const docTipo = safeString(doc.tipo_documento).trim() || 'Não identificado';
+          if (docTipo !== activeTipoFilter) return false;
+        }
+        return matchDocumentSearch(doc, rawSearch);
+      });
+
+      const scopeTotal = scopeDocs.length;
+      const aprovados = scopeDocs.filter(d => safeString(d.status_conferencia || 'pendente').toLowerCase() === 'aprovado').length;
+      const pendentes = scopeTotal - aprovados;
+
+      document.getElementById('count-todos').innerText = scopeTotal;
       document.getElementById('count-pendente').innerText = pendentes;
       document.getElementById('count-aprovado').innerText = aprovados;
 
@@ -1014,9 +1123,6 @@
       document.getElementById('selectTipoFilter').value = '';
       document.getElementById('btnClearTipo').classList.add('hidden');
       setStatusFilter('todos');
-      updateNaturezaFilterOptions();
-      updateTipoFilterOptions();
-      applyFilter(false);
     }
 
     function updateSidebarSelection() {
@@ -1254,8 +1360,8 @@
 
         isDirty = false;
         showToast('Documento salvo com sucesso!', 'success');
-        updateNaturezaFilterOptions();
-        updateTipoFilterOptions();
+        initMasterFilterLists();
+        updateFacetFilters();
         updateCounters();
         renderSidebar();
       } catch (err) {
