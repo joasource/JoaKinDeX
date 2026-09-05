@@ -466,7 +466,10 @@
       try {
         // Carrega metadados de pastas do servidor
         fetch('/api/info')
-          .then(r => r.ok ? r.json() : null)
+          .then(r => {
+            if (!r.ok) throw new Error(`Status ${r.status}`);
+            return r.json();
+          })
           .then(info => {
             if (!info) return;
             const badgeEl = document.getElementById('serverInfoBadge');
@@ -477,16 +480,39 @@
               badgeEl.title = `PDFs: ${info.pdf_dir} (${info.pdf_count} indexados)\nJSON: ${info.json_path}`;
             }
           })
-          .catch(() => {});
+          .catch(err => {
+            console.warn('Metadados /api/info não puderam ser carregados:', err);
+            const textEl = document.getElementById('serverInfoText');
+            if (textEl) textEl.innerText = 'Servidor Local Conectado';
+          });
 
         const response = await fetch('/api/documentos');
-        if (!response.ok) throw new Error('Falha ao comunicar com o servidor');
+        if (!response.ok) throw new Error(`Falha ao comunicar com o servidor (HTTP ${response.status})`);
         documents = await response.json();
         
         initMasterFilterLists();
         applyFilter(false);
       } catch (err) {
+        console.error('Erro ao carregar documentos:', err);
         showToast('Erro ao carregar documentos: ' + err.message, 'error');
+        const textEl = document.getElementById('serverInfoText');
+        if (textEl) textEl.innerText = 'Falha ao conectar ao servidor';
+
+        const listEl = document.getElementById('docList');
+        if (listEl) {
+          listEl.innerHTML = `
+            <div class="text-center py-10 px-4 text-xs text-rose-400 space-y-2">
+              <i class="fa-solid fa-triangle-exclamation text-2xl text-rose-500"></i>
+              <p class="font-semibold text-slate-200">Erro ao carregar os documentos</p>
+              <p class="text-[11px] text-slate-400">${err.message}</p>
+              <div class="pt-2">
+                <button onclick="loadDocuments()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs transition">
+                  Tentar novamente
+                </button>
+              </div>
+            </div>
+          `;
+        }
       }
     }
 
@@ -964,7 +990,6 @@
       document.getElementById('filterResultCount').innerText = `${filteredDocs.length} de ${total}`;
       
       const label = [];
-      const rawSearch = (document.getElementById('searchInput').value || '').trim();
       if (rawSearch) {
         const shortQ = rawSearch.length > 15 ? rawSearch.substring(0, 15) + '...' : rawSearch;
         label.push(`"${shortQ}"`);
