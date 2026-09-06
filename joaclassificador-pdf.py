@@ -22,7 +22,7 @@ import subprocess
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union, Callable, Set
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
@@ -1500,6 +1500,500 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
     print("\n" + "=" * 70 + "\n")
     return args
 
+# ---------------------------------------------------------------------------
+# Pipeline de Processamento em Lote (Compartilhado entre CLI e Web)
+# ---------------------------------------------------------------------------
+def run_batch_classification(
+    input_path: Union[str, Path],
+    output_dir: Union[str, Path],
+    provider: str = "ollama",
+    model: Optional[str] = None,
+    ollama_url: str = "http://localhost:11434",
+    docker: Optional[str] = None,
+    openai_key: Optional[str] = None,
+    openai_base_url: Optional[str] = None,
+    workers: int = 1,
+    max_pages: int = 4,
+    skip_ocr: bool = False,
+    reprocess_ocr: bool = False,
+    force: bool = False,
+    no_individual: bool = False,
+    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    stop_checker: Optional[Callable[[], bool]] = None,
+    use_tqdm: bool = True,
+    client: Optional[Any] = None
+) -> Dict[str, Any]:
+    """
+    Executa a classificação em lote de documentos PDF com suporte a:
+    - Execução concorrente (workers)
+    - Modo incremental inteligente (recuperação contínua de individuais/ e JSON consolidado)
+    - Preservação estrita de aprovações de conferência humana prévia
+    - Callbacks de progresso em tempo real (compatível com visualizador web e CLI)
+    - Cancelamento seguro e gracioso via stop_checker()
+    """
+    def notify(event: Dict[str, Any]):
+        if progress_callback:
+            try:
+                progress_callback(event)
+            except Exception as ex_cb:
+                print(f"[Aviso Callback] Erro ao notificar: {ex_cb}")
+
+    in_p = Path(input_path).expanduser().resolve()
+    if not in_p.exists():
+        err_msg = f"Caminho de entrada não encontrado: {in_p}"
+        print(f"[ERRO] {err_msg}")
+        notify({"event": "error", "error": err_msg})
+        return {"status": "erro", "mensagem": err_msg, "total": 0, "results": []}
+
+    pdf_files = []
+    if in_p.is_file():
+        if in_p.suffix.lower() == ".pdf":
+            pdf_files.append(in_p)
+        else:
+            err_msg = f"O arquivo indicado não é um PDF: {in_p}"
+            print(f"[ERRO] {err_msg}")
+            notify({"event": "error", "error": err_msg})
+            return {"status": "erro", "mensagem": err_msg, "total": 0, "results": []}
+    else:
+        pdf_set = set(in_p.glob("*.pdf")) | set(in_p.glob("*.PDF"))
+        if not pdf_set:
+            pdf_set = set(in_p.rglob("*.pdf")) | set(in_p.rglob("*.PDF"))
+        pdf_files = sorted(list(pdf_set))
+
+    if not pdf_files:
+        msg = f"Nenhum arquivo PDF encontrado em: {in_p}"
+        print(f"[AVISO] {msg}")
+        notify({"event": "warning", "message": msg})
+        return {"status": "aviso", "mensagem": msg, "total": 0, "results": []}
+
+    print(f"[*] Total de PDFs identificados: {len(pdf_files)}")
+    notify({"event": "init", "total_files": len(pdf_files), "message": f"{len(pdf_files)} PDFs identificados."})
+
+    # Inicialização do Cliente LLM
+    if client is None:
+        if provider == "ollama":
+            model_name = model or "gemma4:e4b"
+            print(f"[*] Inicializando cliente Ollama (Modelo: {model_name})...")
+            client = OllamaClient(
+                model=model_name,
+                base_url=ollama_url or "http://localhost:11434",
+                docker_container=docker
+            )
+            if client.use_docker:
+                c_name_lower = client.docker_container.lower()
+                c_label = "Open-WebUI" if "open-webui" in c_name_lower else ("Oficial Puro" if "ollama" in c_name_lower else "Docker")
+                print(f"[*] Modo de conexão: Docker exec [{c_label}] (container: '{client.docker_container}')")
+            else:
+                print(f"[*] Modo de conexão: Ollama Nativo / HTTP direto ({client.base_url})")
+        else:
+            model_name = model or "gpt-4o-mini"
+            print(f"[*] Inicializando cliente OpenAI (Modelo: {model_name})...")
+            client = OpenAIClient(
+                model=model_name,
+                api_key=openai_key,
+                base_url=openai_base_url
+            )
+    else:
+        model_name = getattr(client, "model", model or "llm")
+
+    out_dir = Path(output_dir).expanduser().resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    indiv_dir = out_dir / "individuais"
+    if not no_individual:
+        indiv_dir.mkdir(parents=True, exist_ok=True)
+
+    consolidated_json_path = out_dir / "classificacao_diplomas.json"
+    consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
+    existing_by_md5 = {}
+
+    # 1. Carrega processamentos anteriores do JSON consolidado (se existir e não for --force)
+    count_from_consolidated = 0
+    if consolidated_json_path.exists() and not force:
+        try:
+            with open(consolidated_json_path, "r", encoding="utf-8") as f:
+                old_data = json.load(f)
+                if isinstance(old_data, list):
+                    for item in old_data:
+                        if isinstance(item, dict) and "md5" in item:
+                            existing_by_md5[item["md5"]] = item
+                            count_from_consolidated += 1
+        except Exception as e:
+            print(f"[Aviso] Não foi possível ler {consolidated_json_path.name}: {e}")
+
+    # 2. Carrega / reconcilia arquivos da pasta 'individuais'
+    count_from_indiv = 0
+    if indiv_dir.exists() and not force:
+        try:
+            for entry in os.scandir(indiv_dir):
+                if entry.is_file() and entry.name.endswith(".json") and not entry.name.startswith("."):
+                    h = entry.name[:-5].lower()
+                    if h not in existing_by_md5:
+                        try:
+                            with open(entry.path, "r", encoding="utf-8") as f:
+                                item = json.load(f)
+                                if isinstance(item, dict) and item.get("md5"):
+                                    existing_by_md5[item["md5"]] = item
+                                    count_from_indiv += 1
+                        except Exception:
+                            continue
+        except Exception as e:
+            print(f"[Aviso] Erro ao ler pasta de arquivos individuais: {e}")
+
+    effective_model_name = getattr(client, "model", model_name)
+
+    if existing_by_md5:
+        details = []
+        if count_from_consolidated > 0:
+            details.append(f"{count_from_consolidated} do JSON consolidado")
+        if count_from_indiv > 0:
+            details.append(f"{count_from_indiv} recuperados da pasta individuais/")
+        det_str = f" ({', '.join(details)})" if details else ""
+        print(f"[*] Histórico carregado: {len(existing_by_md5)} documento(s) já classificados{det_str}.")
+
+        if count_from_indiv > 0:
+            save_consolidated_reports(existing_by_md5, out_dir, provider, effective_model_name)
+            print(f"[*] Relatório consolidado sincronizado com sucesso ({len(existing_by_md5)} documentos salvos).")
+
+    # 3. Indexa hashes MD5 dos PDFs de entrada
+    if stop_checker and stop_checker():
+        return {
+            "status": "interrompido",
+            "total": len(pdf_files),
+            "processed": 0,
+            "already_done": len(existing_by_md5),
+            "new_processed": 0,
+            "sucessos": sum(1 for r in existing_by_md5.values() if r.get("status") == "sucesso"),
+            "erros": sum(1 for r in existing_by_md5.values() if r.get("status") != "sucesso"),
+            "results": list(existing_by_md5.values()),
+            "json_path": str(consolidated_json_path),
+            "txt_path": str(consolidated_txt_path),
+            "mensagem": "Interrompido antes da indexação."
+        }
+
+    print(f"[*] Indexando e verificando integridade de {len(pdf_files)} PDF(s)...")
+    notify({"event": "indexing", "total_files": len(pdf_files), "message": f"Indexando integridade de {len(pdf_files)} PDFs..."})
+
+    pdf_meta_map = {}
+    if len(pdf_files) > 20:
+        workers_idx = min(16, (os.cpu_count() or 4) * 2)
+        with ThreadPoolExecutor(max_workers=workers_idx) as executor:
+            future_to_pdf = {executor.submit(get_file_metadata, p): p for p in pdf_files}
+            iterator = as_completed(future_to_pdf)
+            if use_tqdm and tqdm:
+                iterator = tqdm(iterator, total=len(pdf_files), desc="Indexando PDFs (MD5)", unit="doc")
+            for idx_i, fut in enumerate(iterator, 1):
+                if stop_checker and stop_checker():
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    return {
+                        "status": "interrompido",
+                        "total": len(pdf_files),
+                        "processed": 0,
+                        "already_done": len(existing_by_md5),
+                        "new_processed": 0,
+                        "sucessos": sum(1 for r in existing_by_md5.values() if r.get("status") == "sucesso"),
+                        "erros": sum(1 for r in existing_by_md5.values() if r.get("status") != "sucesso"),
+                        "results": list(existing_by_md5.values()),
+                        "json_path": str(consolidated_json_path),
+                        "txt_path": str(consolidated_txt_path),
+                        "mensagem": "Interrompido durante a indexação."
+                    }
+                p = future_to_pdf[fut]
+                try:
+                    pdf_meta_map[p] = fut.result()
+                except Exception:
+                    pdf_meta_map[p] = {"md5": "", "data_criacao": "", "data_modificacao": ""}
+                if idx_i % 25 == 0:
+                    notify({"event": "indexing_progress", "indexed": idx_i, "total": len(pdf_files)})
+    else:
+        for p in pdf_files:
+            try:
+                pdf_meta_map[p] = get_file_metadata(p)
+            except Exception:
+                pdf_meta_map[p] = {"md5": "", "data_criacao": "", "data_modificacao": ""}
+
+    # 4. Separa os arquivos entre já processados e novos/pendentes
+    files_to_process = []
+    already_done_results = []
+    ocr_candidate_count = 0
+    seen_md5_to_process = set()
+
+    for pdf in pdf_files:
+        meta = pdf_meta_map.get(pdf) or get_file_metadata(pdf)
+        h = meta.get("md5", "")
+        if not h:
+            files_to_process.append(pdf)
+            continue
+
+        if h in existing_by_md5 and not force:
+            item = existing_by_md5[h]
+            # Respeita sempre aprovação manual humana
+            if item.get("status_conferencia") == "aprovado":
+                already_done_results.append(item)
+                continue
+
+            # Se o usuário solicitou reprocessamento de OCR (--reprocess-ocr / Opção 2)
+            if reprocess_ocr:
+                tipo_atual = (item.get("tipo_documento") or "").strip().lower()
+                tipo_nao_identificado = (not tipo_atual) or tipo_atual in [
+                    "não identificado", "nao identificado", "outro", "não informado", "nao informado"
+                ]
+                cpf_item = item.get("cpf")
+                cpf_invalido = bool(cpf_item and not is_valid_cpf_syntax(cpf_item))
+                teve_tentativa_ocr = item.get("tentativa_ocr_llm", False)
+                teve_erro_ocr = (item.get("status") == "erro") and ("OCR" in (item.get("erro") or ""))
+
+                precisa_ocr = (teve_erro_ocr or ((tipo_nao_identificado or cpf_invalido) and not teve_tentativa_ocr))
+
+                if not skip_ocr and precisa_ocr:
+                    if h not in seen_md5_to_process:
+                        files_to_process.append(pdf)
+                        seen_md5_to_process.add(h)
+                    ocr_candidate_count += 1
+                else:
+                    already_done_results.append(item)
+            else:
+                # Modo Incremental padrão
+                if item.get("status") == "sucesso":
+                    already_done_results.append(item)
+                else:
+                    if h not in seen_md5_to_process:
+                        files_to_process.append(pdf)
+                        seen_md5_to_process.add(h)
+        else:
+            if h not in seen_md5_to_process:
+                files_to_process.append(pdf)
+                seen_md5_to_process.add(h)
+
+    if ocr_candidate_count > 0:
+        print(f"[*] Identificados {ocr_candidate_count} documento(s) elegíveis para OCR via LLM (erros de leitura, tipo não identificado ou CPF com sintaxe errada).")
+
+    print(f"[*] Total de PDFs: {len(pdf_files)} | Já concluídos: {len(already_done_results)} | A processar: {len(files_to_process)}")
+    notify({
+        "event": "ready",
+        "total_files": len(pdf_files),
+        "already_done": len(already_done_results),
+        "to_process": len(files_to_process),
+        "ocr_candidates": ocr_candidate_count,
+        "message": f"Pronto. {len(files_to_process)} a processar, {len(already_done_results)} já concluídos."
+    })
+
+    # Mantém um dicionário global unificado com todo o histórico acumulado
+    active_results = dict(existing_by_md5)
+    new_results = []
+    processed_count = 0
+    success_count = 0
+    error_count = 0
+    save_interval = 10
+    was_stopped = False
+
+    if files_to_process:
+        print(f"[*] Iniciando classificação de {len(files_to_process)} documento(s) com {workers} worker(s)...")
+        notify({"event": "start_batch", "to_process": len(files_to_process), "workers": workers})
+
+        def handle_file(pdf: Path):
+            meta = pdf_meta_map.get(pdf) or get_file_metadata(pdf)
+            h = meta.get("md5")
+            old_item = existing_by_md5.get(h)
+
+            res = process_single_pdf(
+                pdf,
+                client,
+                max_pages=max_pages,
+                skip_ocr=skip_ocr,
+                metadata=meta
+            )
+
+            # Preserva metadados de conferência humana caso já existissem
+            if old_item:
+                if "status_conferencia" in old_item:
+                    res["status_conferencia"] = old_item["status_conferencia"]
+                if "observacoes_conferencia" in old_item:
+                    res["observacoes_conferencia"] = old_item["observacoes_conferencia"]
+                if "conferido_em" in old_item:
+                    res["conferido_em"] = old_item["conferido_em"]
+
+            if not no_individual:
+                file_identifier = res["md5"]
+                single_json_path = indiv_dir / f"{file_identifier}.json"
+                tmp_single_json = indiv_dir / f".{file_identifier}.json.tmp"
+                try:
+                    with open(tmp_single_json, "w", encoding="utf-8") as f:
+                        json.dump(res, f, ensure_ascii=False, indent=2)
+                    tmp_single_json.replace(single_json_path)
+                except Exception as e:
+                    print(f"[Aviso] Falha ao gravar {single_json_path.name}: {e}")
+
+                single_txt_path = indiv_dir / f"{file_identifier}.txt"
+                tmp_single_txt = indiv_dir / f".{file_identifier}.txt.tmp"
+                try:
+                    with open(tmp_single_txt, "w", encoding="utf-8") as f:
+                        f.write(format_single_txt(res))
+                    tmp_single_txt.replace(single_txt_path)
+                except Exception as e:
+                    print(f"[Aviso] Falha ao gravar {single_txt_path.name}: {e}")
+
+            return res
+
+        if workers > 1:
+            executor = ThreadPoolExecutor(max_workers=workers)
+            try:
+                future_to_file = {executor.submit(handle_file, f): f for f in files_to_process}
+                iterator = as_completed(future_to_file)
+                if use_tqdm and tqdm:
+                    iterator = tqdm(iterator, total=len(files_to_process), desc="Processando Novos PDFs", unit="doc")
+                for future in iterator:
+                    if stop_checker and stop_checker():
+                        print("\n[!] Interrupção solicitada pelo usuário. Encerrando lote...")
+                        was_stopped = True
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        break
+
+                    try:
+                        res = future.result()
+                        new_results.append(res)
+                        active_results[res["md5"]] = res
+                        processed_count += 1
+                        if res.get("status") == "sucesso":
+                            success_count += 1
+                        else:
+                            error_count += 1
+
+                        cur_file = future_to_file[future].name
+                        notify({
+                            "event": "file_done",
+                            "current_file": cur_file,
+                            "processed_count": processed_count,
+                            "to_process_count": len(files_to_process),
+                            "total_files": len(pdf_files),
+                            "success_count": success_count,
+                            "error_count": error_count,
+                            "item": res
+                        })
+
+                        if processed_count % save_interval == 0:
+                            save_consolidated_reports(active_results, out_dir, provider, effective_model_name)
+                            notify({"event": "periodic_save", "total_saved": len(active_results)})
+                    except Exception as e:
+                        error_count += 1
+                        print(f"[Erro no processamento de arquivo] {e}")
+            except KeyboardInterrupt:
+                print("\n\n[!] Interrupção solicitada pelo usuário (Ctrl+C). Cancelando fila e salvando dados...")
+                executor.shutdown(wait=False, cancel_futures=True)
+                was_stopped = True
+            finally:
+                executor.shutdown(wait=False)
+        else:
+            iterator = files_to_process
+            if use_tqdm and tqdm:
+                iterator = tqdm(files_to_process, desc="Processando Novos PDFs", unit="doc")
+            try:
+                for f in iterator:
+                    if stop_checker and stop_checker():
+                        print("\n[!] Interrupção solicitada pelo usuário. Encerrando lote...")
+                        was_stopped = True
+                        break
+
+                    try:
+                        notify({"event": "file_start", "current_file": f.name})
+                        res = handle_file(f)
+                        new_results.append(res)
+                        active_results[res["md5"]] = res
+                        processed_count += 1
+                        if res.get("status") == "sucesso":
+                            success_count += 1
+                        else:
+                            error_count += 1
+
+                        notify({
+                            "event": "file_done",
+                            "current_file": f.name,
+                            "processed_count": processed_count,
+                            "to_process_count": len(files_to_process),
+                            "total_files": len(pdf_files),
+                            "success_count": success_count,
+                            "error_count": error_count,
+                            "item": res
+                        })
+
+                        if processed_count % save_interval == 0:
+                            save_consolidated_reports(active_results, out_dir, provider, effective_model_name)
+                            notify({"event": "periodic_save", "total_saved": len(active_results)})
+                    except Exception as e:
+                        error_count += 1
+                        print(f"[Erro no processamento do arquivo {f.name}] {e}")
+            except KeyboardInterrupt:
+                print("\n\n[!] Interrupção solicitada pelo usuário (Ctrl+C). Salvando dados...")
+                was_stopped = True
+    else:
+        print("[*] Todos os documentos já estão atualizados no banco de dados!")
+        notify({"event": "up_to_date", "message": "Todos os documentos já estão atualizados."})
+
+    # Gravação final consolidada
+    save_consolidated_reports(active_results, out_dir, provider, effective_model_name)
+    results = sorted(list(active_results.values()), key=lambda x: str(x.get("md5", "")))
+    sucessos_totais = sum(1 for r in results if r.get("status") == "sucesso")
+    erros_totais = len(results) - sucessos_totais
+
+    if was_stopped:
+        print(f"[✓] Progresso salvo com sucesso! ({len(active_results)} documentos totais no consolidado e individuais)")
+        print("[*] Você pode retomar a qualquer momento escolhendo a Opção 1 (Incremental).")
+        notify({
+            "event": "stopped",
+            "message": f"Processamento interrompido. {processed_count} novos processados. Total consolidado: {len(active_results)}.",
+            "processed_count": processed_count,
+            "total_files": len(pdf_files),
+            "sucessos": sucessos_totais,
+            "erros": erros_totais
+        })
+        return {
+            "status": "interrompido",
+            "total": len(pdf_files),
+            "processed": processed_count,
+            "already_done": len(already_done_results),
+            "new_processed": len(new_results),
+            "sucessos": sucessos_totais,
+            "erros": erros_totais,
+            "results": results,
+            "json_path": str(consolidated_json_path),
+            "txt_path": str(consolidated_txt_path),
+            "mensagem": "Processamento interrompido pelo usuário."
+        }
+
+    print("\n" + "=" * 60)
+    print("PROCESSAMENTO CONCLUÍDO COM SUCESSO!")
+    print(f"Total processados : {len(results)}")
+    print(f"Classificados OK  : {sucessos_totais}")
+    print(f"Erros             : {erros_totais}")
+    print("-" * 60)
+    print(f"Relatório JSON consolidado : {consolidated_json_path}")
+    print(f"Relatório TXT consolidado  : {consolidated_txt_path}")
+    if not no_individual:
+        print(f"Arquivos individuais (MD5) : {indiv_dir}/")
+    print("=" * 60 + "\n")
+
+    notify({
+        "event": "completed",
+        "message": f"Processamento concluído com sucesso! {len(results)} documentos consolidados.",
+        "total_files": len(pdf_files),
+        "processed_count": processed_count,
+        "sucessos": sucessos_totais,
+        "erros": erros_totais
+    })
+
+    return {
+        "status": "sucesso",
+        "total": len(pdf_files),
+        "processed": processed_count,
+        "already_done": len(already_done_results),
+        "new_processed": len(new_results),
+        "sucessos": sucessos_totais,
+        "erros": erros_totais,
+        "results": results,
+        "json_path": str(consolidated_json_path),
+        "txt_path": str(consolidated_txt_path),
+        "mensagem": "Processamento concluído com sucesso!"
+    }
+
 
 # ---------------------------------------------------------------------------
 # Execução Principal (CLI)
@@ -1669,312 +2163,32 @@ def main():
             "no_individual": args.no_individual
         })
 
-    input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"[ERRO] Caminho de entrada não encontrado: {input_path}")
-        sys.exit(1)
-
-    pdf_files = []
-    if input_path.is_file():
-        if input_path.suffix.lower() == ".pdf":
-            pdf_files.append(input_path)
-        else:
-            print(f"[ERRO] O arquivo indicado não é um PDF: {input_path}")
+    try:
+        summary = run_batch_classification(
+            input_path=args.input,
+            output_dir=args.output_dir,
+            provider=args.provider,
+            model=args.model,
+            ollama_url=args.ollama_url,
+            docker=args.docker,
+            openai_key=args.openai_key,
+            openai_base_url=args.openai_base_url,
+            workers=args.workers,
+            max_pages=args.max_pages,
+            skip_ocr=args.skip_ocr,
+            reprocess_ocr=args.reprocess_ocr,
+            force=args.force,
+            no_individual=args.no_individual,
+            use_tqdm=True
+        )
+        if summary.get("status") == "erro":
             sys.exit(1)
-    else:
-        pdf_files = sorted(list(input_path.glob("*.pdf")) + list(input_path.glob("*.PDF")))
+        elif summary.get("status") == "interrompido":
+            sys.exit(130)
+    except KeyboardInterrupt:
+        print("\n\n[!] Execução encerrada pelo usuário.")
+        sys.exit(130)
 
-    if not pdf_files:
-        print(f"[AVISO] Nenhum arquivo PDF encontrado em: {input_path}")
-        sys.exit(0)
-
-    print(f"[*] Total de PDFs identificados: {len(pdf_files)}")
-
-    # Configuração do Cliente LLM
-    if args.provider == "ollama":
-        model_name = args.model or "gemma4:e4b"
-        print(f"[*] Inicializando cliente Ollama (Modelo: {model_name})...")
-        client = OllamaClient(
-            model=model_name,
-            base_url=args.ollama_url,
-            docker_container=args.docker
-        )
-        if client.use_docker:
-            c_name_lower = client.docker_container.lower()
-            c_label = "Open-WebUI" if "open-webui" in c_name_lower else ("Oficial Puro" if "ollama" in c_name_lower else "Docker")
-            print(f"[*] Modo de conexão: Docker exec [{c_label}] (container: '{client.docker_container}')")
-        else:
-            print(f"[*] Modo de conexão: Ollama Nativo / HTTP direto ({client.base_url})")
-    else:
-        model_name = args.model or "gpt-4o-mini"
-        print(f"[*] Inicializando cliente OpenAI (Modelo: {model_name})...")
-        client = OpenAIClient(
-            model=model_name,
-            api_key=args.openai_key,
-            base_url=args.openai_base_url
-        )
-
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    indiv_dir = out_dir / "individuais"
-    if not args.no_individual:
-        indiv_dir.mkdir(parents=True, exist_ok=True)
-
-    consolidated_json_path = out_dir / "classificacao_diplomas.json"
-    consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
-    existing_by_md5 = {}
-
-    # 1. Carrega processamentos anteriores do JSON consolidado (se existir e não for --force)
-    count_from_consolidated = 0
-    if consolidated_json_path.exists() and not args.force:
-        try:
-            with open(consolidated_json_path, "r", encoding="utf-8") as f:
-                old_data = json.load(f)
-                if isinstance(old_data, list):
-                    for item in old_data:
-                        if isinstance(item, dict) and "md5" in item:
-                            existing_by_md5[item["md5"]] = item
-                            count_from_consolidated += 1
-        except Exception as e:
-            print(f"[Aviso] Não foi possível ler {consolidated_json_path.name}: {e}")
-
-    # 2. Carrega / reconcilia arquivos da pasta 'individuais'
-    #    (essencial caso a execução anterior tenha sido interrompida com Ctrl+C ou parada forçada)
-    count_from_indiv = 0
-    if indiv_dir.exists() and not args.force:
-        try:
-            for entry in os.scandir(indiv_dir):
-                if entry.is_file() and entry.name.endswith(".json") and not entry.name.startswith("."):
-                    h = entry.name[:-5].lower()
-                    if h not in existing_by_md5:
-                        try:
-                            with open(entry.path, "r", encoding="utf-8") as f:
-                                item = json.load(f)
-                                if isinstance(item, dict) and item.get("md5"):
-                                    existing_by_md5[item["md5"]] = item
-                                    count_from_indiv += 1
-                        except Exception:
-                            continue
-        except Exception as e:
-            print(f"[Aviso] Erro ao ler pasta de arquivos individuais: {e}")
-
-    effective_model_name = getattr(client, "model", model_name)
-
-    if existing_by_md5:
-        details = []
-        if count_from_consolidated > 0:
-            details.append(f"{count_from_consolidated} do JSON consolidado")
-        if count_from_indiv > 0:
-            details.append(f"{count_from_indiv} recuperados da pasta individuais/")
-        det_str = f" ({', '.join(details)})" if details else ""
-        print(f"[*] Histórico carregado: {len(existing_by_md5)} documento(s) já classificados{det_str}.")
-
-        # Se recuperamos novos itens da pasta de individuais que não estavam no consolidado,
-        # sincroniza o consolidado imediatamente para proteger o estado
-        if count_from_indiv > 0:
-            save_consolidated_reports(existing_by_md5, out_dir, args.provider, effective_model_name)
-            print(f"[*] Relatório consolidado sincronizado com sucesso ({len(existing_by_md5)} documentos salvos).")
-
-    # 3. Indexa hashes MD5 dos PDFs de entrada
-    print(f"[*] Indexando e verificando integridade de {len(pdf_files)} PDF(s)...")
-    pdf_meta_map = {}
-    if len(pdf_files) > 20:
-        workers_idx = min(16, (os.cpu_count() or 4) * 2)
-        with ThreadPoolExecutor(max_workers=workers_idx) as executor:
-            future_to_pdf = {executor.submit(get_file_metadata, p): p for p in pdf_files}
-            iterator = as_completed(future_to_pdf)
-            if tqdm:
-                iterator = tqdm(iterator, total=len(pdf_files), desc="Indexando PDFs (MD5)", unit="doc")
-            for fut in iterator:
-                p = future_to_pdf[fut]
-                try:
-                    pdf_meta_map[p] = fut.result()
-                except Exception:
-                    pdf_meta_map[p] = {"md5": "", "data_criacao": "", "data_modificacao": ""}
-    else:
-        for p in pdf_files:
-            try:
-                pdf_meta_map[p] = get_file_metadata(p)
-            except Exception:
-                pdf_meta_map[p] = {"md5": "", "data_criacao": "", "data_modificacao": ""}
-
-    # 4. Separa os arquivos entre já processados e novos/pendentes
-    files_to_process = []
-    already_done_results = []
-    ocr_candidate_count = 0
-    seen_md5_to_process = set()
-
-    for pdf in pdf_files:
-        meta = pdf_meta_map.get(pdf) or get_file_metadata(pdf)
-        h = meta.get("md5", "")
-        if not h:
-            files_to_process.append(pdf)
-            continue
-
-        if h in existing_by_md5 and not args.force:
-            item = existing_by_md5[h]
-            # Respeita sempre aprovação manual humana
-            if item.get("status_conferencia") == "aprovado":
-                already_done_results.append(item)
-                continue
-
-            # Se o usuário solicitou reprocessamento de OCR (--reprocess-ocr / Opção 2)
-            if args.reprocess_ocr:
-                tipo_atual = (item.get("tipo_documento") or "").strip().lower()
-                tipo_nao_identificado = (not tipo_atual) or tipo_atual in [
-                    "não identificado", "nao identificado", "outro", "não informado", "nao informado"
-                ]
-                cpf_item = item.get("cpf")
-                cpf_invalido = bool(cpf_item and not is_valid_cpf_syntax(cpf_item))
-                teve_tentativa_ocr = item.get("tentativa_ocr_llm", False)
-                teve_erro_ocr = (item.get("status") == "erro") and ("OCR" in (item.get("erro") or ""))
-
-                precisa_ocr = (teve_erro_ocr or ((tipo_nao_identificado or cpf_invalido) and not teve_tentativa_ocr))
-
-                if not args.skip_ocr and precisa_ocr:
-                    if h not in seen_md5_to_process:
-                        files_to_process.append(pdf)
-                        seen_md5_to_process.add(h)
-                    ocr_candidate_count += 1
-                else:
-                    already_done_results.append(item)
-            else:
-                # Modo Incremental padrão (Opção 1)
-                # Pula todos os que já foram processados com sucesso
-                if item.get("status") == "sucesso":
-                    already_done_results.append(item)
-                else:
-                    # Documentos com status "erro" ou "pendente" são reprocessados no incremental
-                    if h not in seen_md5_to_process:
-                        files_to_process.append(pdf)
-                        seen_md5_to_process.add(h)
-        else:
-            if h not in seen_md5_to_process:
-                files_to_process.append(pdf)
-                seen_md5_to_process.add(h)
-
-    if ocr_candidate_count > 0:
-        print(f"[*] Identificados {ocr_candidate_count} documento(s) elegíveis para OCR via LLM (erros de leitura, tipo não identificado ou CPF com sintaxe errada).")
-
-    print(f"[*] Total de PDFs: {len(pdf_files)} | Já concluídos: {len(already_done_results)} | A processar: {len(files_to_process)}")
-
-    # Mantém um dicionário global unificado com todo o histórico acumulado
-    active_results = dict(existing_by_md5)
-    new_results = []
-
-    if files_to_process:
-        print(f"[*] Iniciando classificação de {len(files_to_process)} documento(s) com {args.workers} worker(s)...")
-
-        def handle_file(pdf: Path):
-            meta = pdf_meta_map.get(pdf) or get_file_metadata(pdf)
-            h = meta.get("md5")
-            old_item = existing_by_md5.get(h)
-
-            res = process_single_pdf(
-                pdf,
-                client,
-                max_pages=args.max_pages,
-                skip_ocr=args.skip_ocr,
-                metadata=meta
-            )
-
-            # Preserva metadados de conferência humana caso já existissem
-            if old_item:
-                if "status_conferencia" in old_item:
-                    res["status_conferencia"] = old_item["status_conferencia"]
-                if "observacoes_conferencia" in old_item:
-                    res["observacoes_conferencia"] = old_item["observacoes_conferencia"]
-                if "conferido_em" in old_item:
-                    res["conferido_em"] = old_item["conferido_em"]
-
-            if not args.no_individual:
-                file_identifier = res["md5"]
-                single_json_path = indiv_dir / f"{file_identifier}.json"
-                tmp_single_json = indiv_dir / f".{file_identifier}.json.tmp"
-                try:
-                    with open(tmp_single_json, "w", encoding="utf-8") as f:
-                        json.dump(res, f, ensure_ascii=False, indent=2)
-                    tmp_single_json.replace(single_json_path)
-                except Exception as e:
-                    print(f"[Aviso] Falha ao gravar {single_json_path.name}: {e}")
-
-                single_txt_path = indiv_dir / f"{file_identifier}.txt"
-                tmp_single_txt = indiv_dir / f".{file_identifier}.txt.tmp"
-                try:
-                    with open(tmp_single_txt, "w", encoding="utf-8") as f:
-                        f.write(format_single_txt(res))
-                    tmp_single_txt.replace(single_txt_path)
-                except Exception as e:
-                    print(f"[Aviso] Falha ao gravar {single_txt_path.name}: {e}")
-
-            return res
-
-        processed_count = 0
-        save_interval = 10  # Grava no consolidado continuamente a cada 10 arquivos concluídos
-
-        if args.workers > 1:
-            executor = ThreadPoolExecutor(max_workers=args.workers)
-            try:
-                future_to_file = {executor.submit(handle_file, f): f for f in files_to_process}
-                iterator = as_completed(future_to_file)
-                if tqdm:
-                    iterator = tqdm(iterator, total=len(files_to_process), desc="Processando Novos PDFs", unit="doc")
-                for future in iterator:
-                    res = future.result()
-                    new_results.append(res)
-                    active_results[res["md5"]] = res
-                    processed_count += 1
-                    if processed_count % save_interval == 0:
-                        save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
-            except KeyboardInterrupt:
-                print("\n\n[!] Interrupção solicitada pelo usuário (Ctrl+C). Cancelando fila e salvando dados...")
-                executor.shutdown(wait=False, cancel_futures=True)
-                save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
-                print(f"[✓] Progresso salvo com sucesso! ({len(active_results)} documentos totais no consolidado e individuais)")
-                print("[*] Você pode retomar a qualquer momento escolhendo a Opção 1 (Incremental).")
-                sys.exit(130)
-            finally:
-                executor.shutdown(wait=False)
-        else:
-            iterator = files_to_process
-            if tqdm:
-                iterator = tqdm(files_to_process, desc="Processando Novos PDFs", unit="doc")
-            try:
-                for f in iterator:
-                    res = handle_file(f)
-                    new_results.append(res)
-                    active_results[res["md5"]] = res
-                    processed_count += 1
-                    if processed_count % save_interval == 0:
-                        save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
-            except KeyboardInterrupt:
-                print("\n\n[!] Interrupção solicitada pelo usuário (Ctrl+C). Salvando dados...")
-                save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
-                print(f"[✓] Progresso salvo com sucesso! ({len(active_results)} documentos totais no consolidado e individuais)")
-                print("[*] Você pode retomar a qualquer momento escolhendo a Opção 1 (Incremental).")
-                sys.exit(130)
-    else:
-        print("[*] Todos os documentos já estão atualizados no banco de dados!")
-
-    # Gravação final consolidada
-    save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
-    results = sorted(list(active_results.values()), key=lambda x: str(x.get("md5", "")))
-
-    # Resumo no terminal
-    sucessos = sum(1 for r in results if r.get("status") == "sucesso")
-    erros = len(results) - sucessos
-
-    print("\n" + "=" * 60)
-    print("PROCESSAMENTO CONCLUÍDO COM SUCESSO!")
-    print(f"Total processados : {len(results)}")
-    print(f"Classificados OK  : {sucessos}")
-    print(f"Erros             : {erros}")
-    print("-" * 60)
-    print(f"Relatório JSON consolidado : {consolidated_json_path}")
-    print(f"Relatório TXT consolidado  : {consolidated_txt_path}")
-    if not args.no_individual:
-        print(f"Arquivos individuais (MD5) : {indiv_dir}/")
-    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":

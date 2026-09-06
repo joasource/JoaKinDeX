@@ -203,6 +203,7 @@ A chave da OpenAI pode ser fornecida de **4 formas simples**:
 | `--no-individual` | Não gera arquivos JSON/TXT individuais por MD5 | `False` |
 | `--prompt`, `--interativo` | Força o menu interativo no console | `False` |
 | `-y`, `--no-prompt`, `--batch`| Desativa o menu interativo (modo batch) | `False` |
+| `--reset-config`, `--reset` | Restaura todas as opções para os padrões de fábrica neutros | `False` |
 
 ---
 
@@ -300,6 +301,24 @@ Para revisar visualmente o PDF original contra os dados extraídos pelo modelo:
 
 Acesse no seu navegador:
 👉 **`http://localhost:8088`** (ou a porta escolhida)
+
+### ⚙️ Painel Web de Configuração & Processamento em Lote
+
+Você pode gerenciar todas as configurações e disparar classificações em lote diretamente pela interface web, sem precisar abrir o terminal:
+
+- Clique no botão **⚙️ Configuração & Lote** no canto superior direito.
+- **Pastas & Arquivos**: Alterne a pasta de entrada de PDFs e a pasta/arquivo de saída com verificação e contadores automáticos.
+- **Inteligência Artificial (IA)**:
+  - Alternância instantânea entre **Ollama** e **OpenAI**.
+  - Detecção automática de containers (**Docker Open-WebUI**, **Docker Oficial**, **Ollama Nativo**) e listagem dinâmica dos modelos baixados (ex: `gemma4:e4b`).
+  - Configuração de chave de API da OpenAI (com máscara de segurança e detecção de variáveis de ambiente).
+- **Processamento em Lote em Segundo Plano**:
+  - Escolha entre Modo **Incremental** (pula os já concluídos), **Reprocessar OCR** ou **Forçar Tudo** (preserva conferências manuais aprovadas).
+  - Ajuste de **Workers concorrentes** (threads) e limite de páginas por PDF.
+  - **Acompanhamento ao Vivo**: Barra de progresso com porcentagem, cartões de métricas (A Fazer, Concluídos, Sucessos, Falhas), indicação do arquivo atual e terminal de eventos.
+  - **Interrupção Segura**: Botão para interromper o lote a qualquer momento gravando o progresso consolidado.
+  - **Atualização Automática**: Assim que novos documentos são classificados, a lista lateral é atualizada sem reiniciar o servidor.
+  - **Restauração de Fábrica**: Botão para redefinir todas as pastas e parâmetros para os padrões neutros (`./pdf` e `./saida`).
 
 ### 📋 Exportação Rápida e Visual Law (Word / Documentação Jurídica)
 

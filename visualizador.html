@@ -85,6 +85,20 @@
 
       <div class="h-4 w-px bg-slate-800 mx-1"></div>
 
+      <!-- Indicador animado de lote rodando -->
+      <button id="batchHeaderBadge" onclick="openConfigModal('batch')" style="display: none;" title="Processamento em lote em andamento - Clique para ver detalhes"
+              class="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 rounded border border-amber-500/40 text-xs flex items-center gap-1.5 transition animate-pulse font-medium">
+        <i class="fa-solid fa-spinner fa-spin text-amber-400"></i>
+        <span id="batchHeaderBadgeText">Lote: 0%</span>
+      </button>
+
+      <!-- Botão Painel de Configurações & Lote -->
+      <button onclick="openConfigModal()" title="Configurações & Processamento em Lote"
+              class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded border border-emerald-500/40 text-xs flex items-center gap-1.5 transition font-medium">
+        <i class="fa-solid fa-sliders"></i>
+        <span class="hidden sm:inline">Configuração & Lote</span>
+      </button>
+
       <button onclick="exportJSON()" title="Exportar JSON Atualizado"
               class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
         <i class="fa-solid fa-download text-emerald-400"></i>
@@ -519,6 +533,358 @@
 
   </main>
 
+  <!-- MODAL DE CONFIGURAÇÃO & PROCESSAMENTO EM LOTE -->
+  <div id="configModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 transition-all duration-200 hidden">
+    <div class="w-full max-w-4xl max-h-[92vh] flex flex-col bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      
+      <!-- Cabeçalho do Modal -->
+      <div class="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="bg-emerald-500/15 text-emerald-400 p-2 rounded-lg border border-emerald-500/30">
+            <i class="fa-solid fa-sliders text-base"></i>
+          </div>
+          <div>
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              Configurações & Processamento em Lote
+              <span id="batchModalStatusPill" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700 font-normal">
+                Pronto
+              </span>
+            </h2>
+            <p class="text-xs text-slate-400">Altere pastas, selecione a IA (Ollama / OpenAI) e execute a classificação em segundo plano</p>
+          </div>
+        </div>
+        <button onclick="closeConfigModal()" title="Fechar (Esc)" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Abas de Navegação -->
+      <div class="flex border-b border-slate-800 bg-slate-950/50 px-5 pt-2 text-xs font-medium gap-1 shrink-0">
+        <button id="tabBtnFolders" onclick="switchConfigTab('folders')" class="px-4 py-2 border-b-2 border-emerald-500 text-emerald-400 font-semibold flex items-center gap-2 transition">
+          <i class="fa-solid fa-folder-tree"></i> Pastas & Arquivos
+        </button>
+        <button id="tabBtnAi" onclick="switchConfigTab('ai')" class="px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+          <i class="fa-solid fa-brain"></i> Inteligência Artificial (IA)
+        </button>
+        <button id="tabBtnBatch" onclick="switchConfigTab('batch')" class="px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+          <i class="fa-solid fa-bolt"></i> Execução em Lote & Progresso
+          <span id="batchTabBadge" class="hidden w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+        </button>
+      </div>
+
+      <!-- Conteúdo do Modal (Scrollável) -->
+      <div class="flex-1 overflow-y-auto p-5 space-y-6">
+
+        <!-- ABA 1: PASTAS E ARQUIVOS -->
+        <div id="tabContentFolders" class="space-y-4">
+          <div class="bg-slate-950/60 p-4 rounded-lg border border-slate-800/80 space-y-3">
+            <h3 class="text-xs font-semibold text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-folder-open text-amber-400"></i> Pastas de Trabalho
+            </h3>
+            
+            <!-- Pasta de PDFs -->
+            <div class="space-y-1">
+              <label class="block text-[11px] font-medium text-slate-300">Pasta dos PDFs de Entrada:</label>
+              <input type="text" id="cfgInputPdfDir" placeholder="./pdf ou /caminho/completo"
+                     class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
+              <p class="text-[10px] text-slate-400">Local onde estão os documentos originais a serem classificados e visualizados.</p>
+            </div>
+
+            <!-- Pasta de Saída / Arquivo JSON -->
+            <div class="space-y-1">
+              <label class="block text-[11px] font-medium text-slate-300">Pasta de Saída / Arquivo JSON:</label>
+              <input type="text" id="cfgInputJsonPath" placeholder="./saida/classificacao_diplomas.json"
+                     class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
+              <p class="text-[10px] text-slate-400">Caminho do arquivo consolidado (e onde fica a subpasta de individuais).</p>
+            </div>
+
+            <!-- Indicadores em tempo real -->
+            <div class="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-900/80 p-3 rounded border border-slate-800">
+              <div class="flex items-center gap-4 text-xs">
+                <div>
+                  <span class="text-slate-400">PDFs indexados:</span>
+                  <span id="cfgCountPdfs" class="ml-1 font-bold text-emerald-400">0</span>
+                </div>
+                <div class="h-3 w-px bg-slate-700"></div>
+                <div>
+                  <span class="text-slate-400">Documentos no banco:</span>
+                  <span id="cfgCountDocs" class="ml-1 font-bold text-cyan-400">0</span>
+                </div>
+              </div>
+              <button type="button" onclick="testAndRefreshFolders()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-arrows-rotate text-emerald-400"></i> Verificar Pastas
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABA 2: INTELIGÊNCIA ARTIFICIAL (IA) -->
+        <div id="tabContentAi" class="space-y-4 hidden">
+          <!-- Seletor de Provedor -->
+          <div class="space-y-2">
+            <label class="block text-xs font-semibold text-slate-300">Provedor de LLM:</label>
+            <div class="grid grid-cols-2 gap-3">
+              <button type="button" id="btnProviderOllama" onclick="setAiProvider('ollama')"
+                      class="flex items-center justify-center gap-2.5 p-3 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 font-medium text-xs transition">
+                <i class="fa-solid fa-server text-base"></i>
+                <div class="text-left">
+                  <div class="font-bold">Ollama (Local / Docker)</div>
+                  <div class="text-[10px] text-slate-400">Sem custos de API, 100% offline</div>
+                </div>
+              </button>
+              <button type="button" id="btnProviderOpenai" onclick="setAiProvider('openai')"
+                      class="flex items-center justify-center gap-2.5 p-3 rounded-lg border border-slate-800 bg-slate-950/60 text-slate-400 font-medium text-xs transition hover:border-slate-700">
+                <i class="fa-solid fa-cloud text-base"></i>
+                <div class="text-left">
+                  <div class="font-bold">OpenAI (Nuvem / API)</div>
+                  <div class="text-[10px] text-slate-400">Modelos gpt-4o, gpt-4o-mini</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Configurações OLLAMA -->
+          <div id="sectionOllama" class="bg-slate-950/60 p-4 rounded-lg border border-slate-800 space-y-3.5">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-microchip text-emerald-400"></i> Configuração do Ollama
+              </h4>
+              <button type="button" onclick="detectEnvironments()" class="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                <i class="fa-solid fa-rotate"></i> Redetectar Ambientes
+              </button>
+            </div>
+
+            <!-- Seleção de Ambiente detectado -->
+            <div class="space-y-1">
+              <label class="block text-[11px] font-medium text-slate-300">Ambiente Detectado:</label>
+              <select id="cfgOllamaEnvSelect" onchange="onOllamaEnvChanged()"
+                      class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500">
+                <option value="">Detectando ambientes...</option>
+              </select>
+              <p id="cfgOllamaEnvDesc" class="text-[10px] text-slate-400 italic"></p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <!-- Modelo Ollama -->
+              <div class="space-y-1">
+                <label class="block text-[11px] font-medium text-slate-300">Modelo:</label>
+                <select id="cfgOllamaModelSelect" onchange="onOllamaModelSelectChanged()"
+                        class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500">
+                  <option value="">Carregando modelos...</option>
+                </select>
+                <input type="text" id="cfgOllamaModelCustom" placeholder="Ou digite o modelo (ex: gemma4:e4b)" style="display: none;"
+                       class="w-full mt-1 bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-emerald-500 font-mono">
+              </div>
+
+              <!-- URL do Ollama -->
+              <div class="space-y-1">
+                <label class="block text-[11px] font-medium text-slate-300">URL da API Ollama:</label>
+                <input type="text" id="cfgOllamaUrl" placeholder="http://localhost:11434"
+                       class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
+                <p class="text-[10px] text-slate-400">Padrão: http://localhost:11434</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Configurações OPENAI -->
+          <div id="sectionOpenai" class="bg-slate-950/60 p-4 rounded-lg border border-slate-800 space-y-3.5 hidden">
+            <h4 class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <i class="fa-solid fa-key text-cyan-400"></i> Configuração da OpenAI
+            </h4>
+
+            <div class="space-y-1">
+              <label class="block text-[11px] font-medium text-slate-300">
+                Chave de API (OpenAI API Key):
+                <span id="cfgOpenaiKeyStatus" class="text-[10px] font-normal text-slate-400 ml-1"></span>
+              </label>
+              <div class="relative">
+                <input type="password" id="cfgOpenaiKey" placeholder="sk-..."
+                       class="w-full bg-slate-900 border border-slate-700 rounded pl-3 pr-8 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
+                <button type="button" onclick="togglePasswordVisibility('cfgOpenaiKey', this)" class="absolute right-2.5 top-2 text-slate-400 hover:text-slate-200 text-xs">
+                  <i class="fa-solid fa-eye"></i>
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-400">Se já estiver configurada no arquivo .env ou variável de ambiente, você pode deixar este campo em branco.</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="space-y-1">
+                <label class="block text-[11px] font-medium text-slate-300">Modelo OpenAI:</label>
+                <select id="cfgOpenaiModelSelect" onchange="onOpenaiModelChanged()"
+                        class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500">
+                  <option value="gpt-4o-mini">gpt-4o-mini (Recomendado - Rápido & Econômico)</option>
+                  <option value="gpt-4o">gpt-4o (Alta precisão multimodal)</option>
+                  <option value="gpt-4-turbo">gpt-4-turbo</option>
+                  <option value="o3-mini">o3-mini</option>
+                  <option value="custom">Outro (digitar...)</option>
+                </select>
+                <input type="text" id="cfgOpenaiModelCustom" placeholder="Nome do modelo personalizado" style="display: none;"
+                       class="w-full mt-1 bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-[11px] text-slate-300 font-mono">
+              </div>
+
+              <div class="space-y-1">
+                <label class="block text-[11px] font-medium text-slate-300">Base URL (Opcional):</label>
+                <input type="text" id="cfgOpenaiBaseUrl" placeholder="https://api.openai.com/v1"
+                       class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
+                <p class="text-[10px] text-slate-400">Compatível com Groq, OpenRouter, vLLM ou proxy.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABA 3: EXECUÇÃO EM LOTE & PROGRESSO -->
+        <div id="tabContentBatch" class="space-y-5 hidden">
+          <!-- Estratégia de Execução -->
+          <div class="bg-slate-950/60 p-4 rounded-lg border border-slate-800 space-y-3">
+            <h4 class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <i class="fa-solid fa-list-check text-emerald-400"></i> Estratégia de Execução
+            </h4>
+
+            <div class="space-y-2">
+              <label class="flex items-start gap-2.5 p-2.5 rounded bg-slate-900/60 border border-slate-800 cursor-pointer hover:border-slate-700 transition">
+                <input type="radio" name="batchMode" value="incremental" checked class="mt-0.5 text-emerald-500 focus:ring-emerald-500">
+                <div class="text-xs">
+                  <div class="font-semibold text-slate-200">1) Modo Incremental <span class="text-[10px] text-emerald-400 font-normal">[Padrão Recomendado]</span></div>
+                  <div class="text-[11px] text-slate-400">Pula todos os documentos já classificados com sucesso. Processa apenas PDFs inéditos ou que tiveram erros/falhas na execução anterior.</div>
+                </div>
+              </label>
+
+              <label class="flex items-start gap-2.5 p-2.5 rounded bg-slate-900/60 border border-slate-800 cursor-pointer hover:border-slate-700 transition">
+                <input type="radio" name="batchMode" value="reprocess_ocr" class="mt-0.5 text-amber-500 focus:ring-amber-500">
+                <div class="text-xs">
+                  <div class="font-semibold text-slate-200">2) Reprocessar OCR com LLM</div>
+                  <div class="text-[11px] text-slate-400">Varre o banco e força o OCR visual apenas nos documentos com erros de leitura, tipo não identificado ou CPF com erro de digitação.</div>
+                </div>
+              </label>
+
+              <label class="flex items-start gap-2.5 p-2.5 rounded bg-slate-900/60 border border-slate-800 cursor-pointer hover:border-slate-700 transition">
+                <input type="radio" name="batchMode" value="force" class="mt-0.5 text-rose-500 focus:ring-rose-500">
+                <div class="text-xs">
+                  <div class="font-semibold text-slate-200">3) Forçar Reprocessamento Total</div>
+                  <div class="text-[11px] text-slate-400">Reclassifica todos os arquivos PDF do zero. <span class="text-emerald-400 font-medium">Suas conferências manuais aprovadas serão preservadas intactas.</span></div>
+                </div>
+              </label>
+            </div>
+
+            <!-- Parâmetros avançados -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+              <div class="space-y-1">
+                <div class="flex justify-between items-center text-[11px]">
+                  <label class="font-medium text-slate-300">Workers Concorrentes (Threads):</label>
+                  <span id="cfgWorkersVal" class="font-bold text-emerald-400">1</span>
+                </div>
+                <input type="range" id="cfgWorkersRange" min="1" max="16" value="1"
+                       oninput="document.getElementById('cfgWorkersVal').innerText = this.value"
+                       class="w-full accent-emerald-500 cursor-pointer">
+                <p class="text-[10px] text-slate-400">Para Ollama local use 1 ou 2. Para OpenAI use de 2 a 8.</p>
+              </div>
+
+              <div class="space-y-1">
+                <label class="block text-[11px] font-medium text-slate-300">Máx. Páginas por PDF:</label>
+                <input type="number" id="cfgMaxPages" min="1" max="20" value="4"
+                       class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
+                <p class="text-[10px] text-slate-400">Lê as primeiras páginas de cada arquivo (padrão: 4).</p>
+              </div>
+            </div>
+
+            <div class="pt-1 flex flex-wrap gap-4 text-xs">
+              <label class="flex items-center gap-2 cursor-pointer text-slate-300">
+                <input type="checkbox" id="cfgSkipOcr" class="rounded text-emerald-500 focus:ring-emerald-500">
+                <span>Pular OCR Visual (extrair apenas texto embutido no PDF)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- PAINEL DE ACOMPANHAMENTO AO VIVO -->
+          <div id="batchProgressContainer" class="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span id="batchLiveStatusIcon" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+                <span id="batchLiveStatusTitle" class="text-xs font-semibold text-white">Status: Parado</span>
+              </div>
+              <span id="batchLiveTime" class="text-[11px] font-mono text-slate-400">00:00</span>
+            </div>
+
+            <!-- Barra de Progresso -->
+            <div class="space-y-1">
+              <div class="flex justify-between text-[11px]">
+                <span id="batchLiveMessage" class="text-slate-300 truncate max-w-[80%]">Nenhum processamento em andamento.</span>
+                <span id="batchLivePercent" class="font-bold text-emerald-400 font-mono">0%</span>
+              </div>
+              <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden border border-slate-700/50">
+                <div id="batchLiveBar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Cartões de métricas -->
+            <div class="grid grid-cols-4 gap-2 pt-1">
+              <div class="bg-slate-900/80 p-2 rounded border border-slate-800/80 text-center">
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider">A Fazer</div>
+                <div id="batchStatToProcess" class="text-sm font-bold text-slate-200">0</div>
+              </div>
+              <div class="bg-slate-900/80 p-2 rounded border border-slate-800/80 text-center">
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider">Concluídos</div>
+                <div id="batchStatProcessed" class="text-sm font-bold text-cyan-400">0</div>
+              </div>
+              <div class="bg-slate-900/80 p-2 rounded border border-slate-800/80 text-center">
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider">Sucessos</div>
+                <div id="batchStatSuccess" class="text-sm font-bold text-emerald-400">0</div>
+              </div>
+              <div class="bg-slate-900/80 p-2 rounded border border-slate-800/80 text-center">
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider">Erros</div>
+                <div id="batchStatErrors" class="text-sm font-bold text-rose-400">0</div>
+              </div>
+            </div>
+
+            <!-- Terminal de Logs Recentes -->
+            <div class="space-y-1 pt-1">
+              <div class="flex justify-between items-center text-[10px] text-slate-400">
+                <span>Console de Eventos:</span>
+                <button type="button" onclick="clearBatchLogs()" class="hover:text-slate-200">Limpar</button>
+              </div>
+              <div id="batchTerminalLogs" class="bg-slate-950 border border-slate-900 rounded p-2 text-[11px] font-mono text-slate-300 h-28 overflow-y-auto space-y-0.5">
+                <div class="text-slate-500 italic">Aguardando início de tarefas...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Rodapé do Modal com Botões de Ação -->
+      <div class="px-5 py-3.5 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div>
+          <button type="button" onclick="resetToFactoryDefaults()" title="Restaurar para os padrões de fábrica neutros"
+                  class="px-3 py-1.5 bg-slate-900 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 rounded border border-slate-800 hover:border-rose-900/50 text-xs flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Padrão de Fábrica</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <button type="button" onclick="saveConfiguration(true)"
+                  class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-floppy-disk text-slate-400"></i>
+            <span>Salvar Configurações</span>
+          </button>
+
+          <button type="button" id="btnBatchStop" onclick="stopBatch()" style="display: none;"
+                  class="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-rose-900/40 animate-pulse">
+            <i class="fa-solid fa-stop"></i>
+            <span>Interromper Lote</span>
+          </button>
+
+          <button type="button" id="btnBatchStart" onclick="startBatch()"
+                  class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-emerald-900/40">
+            <i class="fa-solid fa-play"></i>
+            <span>Iniciar Processamento em Lote</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION -->
   <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 text-slate-100 border border-slate-700 px-4 py-2.5 rounded-lg shadow-xl text-xs flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
     <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
@@ -563,6 +929,7 @@
     window.addEventListener('DOMContentLoaded', () => {
       loadDocuments();
       setupKeyboardShortcuts();
+      checkBatchStatusOnLoad();
     });
 
     async function loadDocuments() {
@@ -1911,6 +2278,14 @@
       window.addEventListener('keydown', (e) => {
         const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
 
+        if (e.key === 'Escape') {
+          const modal = document.getElementById('configModal');
+          if (modal && !modal.classList.contains('hidden')) {
+            closeConfigModal();
+            return;
+          }
+        }
+
         if (e.ctrlKey && e.key === 'Enter') {
           e.preventDefault();
           approveAndNext();
@@ -1925,6 +2300,662 @@
           }
         }
       });
+    }
+
+    // =========================================================================
+    // GERENCIAMENTO DE CONFIGURAÇÃO & PROCESSAMENTO EM LOTE
+    // =========================================================================
+    let systemConfig = null;
+    let detectedEnvironments = [];
+    let activeBatchPolling = null;
+    let lastBatchStatus = null;
+    let isBatchRunning = false;
+    let currentAiProvider = 'ollama';
+
+    function openConfigModal(initialTab = 'folders') {
+      const modal = document.getElementById('configModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        switchConfigTab(initialTab);
+        loadSystemConfig();
+        startBatchPolling();
+      }
+    }
+
+    function closeConfigModal() {
+      const modal = document.getElementById('configModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        if (!isBatchRunning) {
+          stopBatchPolling();
+        }
+      }
+    }
+
+    function switchConfigTab(tabName) {
+      const tabs = ['folders', 'ai', 'batch'];
+      tabs.forEach(t => {
+        const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+        const content = document.getElementById('tabContent' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (t === tabName) {
+          if (btn) {
+            btn.className = "px-4 py-2 border-b-2 border-emerald-500 text-emerald-400 font-semibold flex items-center gap-2 transition";
+          }
+          if (content) content.classList.remove('hidden');
+        } else {
+          if (btn) {
+            btn.className = "px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
+          }
+          if (content) content.classList.add('hidden');
+        }
+      });
+    }
+
+    function setAiProvider(provider) {
+      currentAiProvider = provider;
+      const btnOllama = document.getElementById('btnProviderOllama');
+      const btnOpenai = document.getElementById('btnProviderOpenai');
+      const secOllama = document.getElementById('sectionOllama');
+      const secOpenai = document.getElementById('sectionOpenai');
+
+      if (provider === 'ollama') {
+        if (btnOllama) {
+          btnOllama.className = "flex items-center justify-center gap-2.5 p-3 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 font-medium text-xs transition";
+        }
+        if (btnOpenai) {
+          btnOpenai.className = "flex items-center justify-center gap-2.5 p-3 rounded-lg border border-slate-800 bg-slate-950/60 text-slate-400 font-medium text-xs transition hover:border-slate-700";
+        }
+        if (secOllama) secOllama.classList.remove('hidden');
+        if (secOpenai) secOpenai.classList.add('hidden');
+      } else {
+        if (btnOllama) {
+          btnOllama.className = "flex items-center justify-center gap-2.5 p-3 rounded-lg border border-slate-800 bg-slate-950/60 text-slate-400 font-medium text-xs transition hover:border-slate-700";
+        }
+        if (btnOpenai) {
+          btnOpenai.className = "flex items-center justify-center gap-2.5 p-3 rounded-lg border border-cyan-500/50 bg-cyan-500/10 text-cyan-300 font-medium text-xs transition";
+        }
+        if (secOllama) secOllama.classList.add('hidden');
+        if (secOpenai) secOpenai.classList.remove('hidden');
+      }
+    }
+
+    function togglePasswordVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i>';
+      } else {
+        input.type = 'password';
+        btn.innerHTML = '<i class="fa-solid fa-eye"></i>';
+      }
+    }
+
+    async function loadSystemConfig() {
+      try {
+        const res = await fetch('/api/config');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        systemConfig = data;
+
+        const classif = data.classificador || {};
+        const vis = data.visualizador || {};
+
+        // 1. Pastas
+        const inPdf = document.getElementById('cfgInputPdfDir');
+        if (inPdf) inPdf.value = classif.input || vis.pdf_dir || './pdf';
+
+        const inJson = document.getElementById('cfgInputJsonPath');
+        if (inJson) inJson.value = vis.json_path || classif.output_dir || './saida/classificacao_diplomas.json';
+
+        const countP = document.getElementById('cfgCountPdfs');
+        if (countP) countP.innerText = data.pdf_count ?? (data.current_pdf_count ?? 0);
+
+        const countD = document.getElementById('cfgCountDocs');
+        if (countD) countD.innerText = data.doc_count ?? (data.current_doc_count ?? 0);
+
+        // 2. Provedor de IA
+        const prov = classif.provider || vis.provider || 'ollama';
+        setAiProvider(prov);
+
+        // Ollama URL
+        const inOllamaUrl = document.getElementById('cfgOllamaUrl');
+        if (inOllamaUrl) inOllamaUrl.value = classif.ollama_url || vis.ollama_url || 'http://localhost:11434';
+
+        // Ambientes Ollama
+        detectedEnvironments = data.environments || [];
+        populateOllamaEnvironments(classif.docker, classif.model);
+
+        // OpenAI
+        const inOpenaiKey = document.getElementById('cfgOpenaiKey');
+        const keyStatus = document.getElementById('cfgOpenaiKeyStatus');
+        if (classif.has_openai_key) {
+          if (keyStatus) keyStatus.innerHTML = '<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-check"></i> Chave detectada</span>';
+          if (inOpenaiKey && classif.openai_key_masked) inOpenaiKey.placeholder = classif.openai_key_masked;
+        } else {
+          if (keyStatus) keyStatus.innerHTML = '<span class="text-slate-500">Nenhuma chave detectada</span>';
+          if (inOpenaiKey) inOpenaiKey.placeholder = 'sk-...';
+        }
+
+        const inOpenaiBaseUrl = document.getElementById('cfgOpenaiBaseUrl');
+        if (inOpenaiBaseUrl) inOpenaiBaseUrl.value = classif.openai_base_url || '';
+
+        const selOpenaiModel = document.getElementById('cfgOpenaiModelSelect');
+        const customOpenaiModel = document.getElementById('cfgOpenaiModelCustom');
+        const currentOpenaiModel = classif.model || 'gpt-4o-mini';
+        if (selOpenaiModel) {
+          const known = ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o3-mini'];
+          if (known.includes(currentOpenaiModel)) {
+            selOpenaiModel.value = currentOpenaiModel;
+            if (customOpenaiModel) customOpenaiModel.style.display = 'none';
+          } else {
+            selOpenaiModel.value = 'custom';
+            if (customOpenaiModel) {
+              customOpenaiModel.style.display = 'block';
+              customOpenaiModel.value = currentOpenaiModel;
+            }
+          }
+        }
+
+        // 3. Execução em Lote
+        const workers = classif.workers || 1;
+        const wRange = document.getElementById('cfgWorkersRange');
+        const wVal = document.getElementById('cfgWorkersVal');
+        if (wRange) wRange.value = workers;
+        if (wVal) wVal.innerText = workers;
+
+        const maxP = document.getElementById('cfgMaxPages');
+        if (maxP) maxP.value = classif.max_pages || 4;
+
+        const skipO = document.getElementById('cfgSkipOcr');
+        if (skipO) skipO.checked = !!classif.skip_ocr;
+
+        // Atualiza estado do lote
+        if (data.batch_status) {
+          updateBatchUI(data.batch_status);
+        }
+
+      } catch (err) {
+        console.error('Erro ao carregar configurações /api/config:', err);
+      }
+    }
+
+    function populateOllamaEnvironments(currentDocker = null, currentModel = null) {
+      const select = document.getElementById('cfgOllamaEnvSelect');
+      if (!select) return;
+
+      select.innerHTML = '';
+      if (!detectedEnvironments || detectedEnvironments.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '__default__';
+        opt.innerText = 'Ollama Padrão (http://localhost:11434)';
+        select.appendChild(opt);
+      } else {
+        detectedEnvironments.forEach((env, idx) => {
+          const opt = document.createElement('option');
+          opt.value = String(idx);
+          let label = env.name || env.type;
+          if (env.models && env.models.length > 0) {
+            label += ` (${env.models.length} modelo${env.models.length > 1 ? 's' : ''})`;
+          }
+          opt.innerText = label;
+          if (currentDocker && env.container === currentDocker) {
+            opt.selected = true;
+          }
+          select.appendChild(opt);
+        });
+      }
+
+      const optCustom = document.createElement('option');
+      optCustom.value = '__custom__';
+      optCustom.innerText = '⚙️ Outro / URL Personalizada...';
+      select.appendChild(optCustom);
+
+      onOllamaEnvChanged(currentModel);
+    }
+
+    function onOllamaEnvChanged(desiredModel = null) {
+      const select = document.getElementById('cfgOllamaEnvSelect');
+      const descEl = document.getElementById('cfgOllamaEnvDesc');
+      const modelSelect = document.getElementById('cfgOllamaModelSelect');
+      const modelCustom = document.getElementById('cfgOllamaModelCustom');
+      const urlInput = document.getElementById('cfgOllamaUrl');
+      if (!select || !modelSelect) return;
+
+      const val = select.value;
+      let env = null;
+
+      if (val !== '__default__' && val !== '__custom__' && detectedEnvironments[parseInt(val, 10)]) {
+        env = detectedEnvironments[parseInt(val, 10)];
+      }
+
+      if (env) {
+        if (descEl) descEl.innerText = env.description || '';
+        if (urlInput && env.base_url) urlInput.value = env.base_url;
+
+        modelSelect.innerHTML = '';
+        const models = env.models || [];
+        const modelsDisplay = env.models_display || [];
+
+        if (models.length > 0) {
+          models.forEach((m, i) => {
+            const mOpt = document.createElement('option');
+            mOpt.value = m;
+            mOpt.innerText = modelsDisplay[i] || m;
+            if (desiredModel && m === desiredModel) mOpt.selected = true;
+            modelSelect.appendChild(mOpt);
+          });
+        } else {
+          const mOpt = document.createElement('option');
+          mOpt.value = 'gemma4:e4b';
+          mOpt.innerText = 'gemma4:e4b (Padrão sugerido)';
+          modelSelect.appendChild(mOpt);
+        }
+
+        const mOptCustom = document.createElement('option');
+        mOptCustom.value = '__custom__';
+        mOptCustom.innerText = 'Digitar outro modelo...';
+        modelSelect.appendChild(mOptCustom);
+
+      } else {
+        if (descEl) descEl.innerText = 'Ambiente HTTP direto ou personalizado.';
+        modelSelect.innerHTML = `
+          <option value="gemma4:e4b">gemma4:e4b (Padrão)</option>
+          <option value="__custom__">Digitar outro modelo...</option>
+        `;
+      }
+
+      onOllamaModelSelectChanged(desiredModel);
+    }
+
+    function onOllamaModelSelectChanged(desiredModel = null) {
+      const modelSelect = document.getElementById('cfgOllamaModelSelect');
+      const modelCustom = document.getElementById('cfgOllamaModelCustom');
+      if (!modelSelect || !modelCustom) return;
+
+      if (modelSelect.value === '__custom__') {
+        modelCustom.style.display = 'block';
+        if (desiredModel && desiredModel !== '__custom__') modelCustom.value = desiredModel;
+      } else {
+        modelCustom.style.display = 'none';
+      }
+    }
+
+    function onOpenaiModelChanged() {
+      const sel = document.getElementById('cfgOpenaiModelSelect');
+      const custom = document.getElementById('cfgOpenaiModelCustom');
+      if (!sel || !custom) return;
+      if (sel.value === 'custom') {
+        custom.style.display = 'block';
+      } else {
+        custom.style.display = 'none';
+      }
+    }
+
+    async function detectEnvironments() {
+      showToast('Detectando ambientes Ollama...', 'info');
+      try {
+        const res = await fetch('/api/environments');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        detectedEnvironments = await res.json();
+        populateOllamaEnvironments();
+        showToast('Detecção de ambientes concluída!', 'success');
+      } catch (err) {
+        showToast('Falha ao detectar ambientes: ' + err.message, 'error');
+      }
+    }
+
+    function collectConfigPayload() {
+      const pdfDir = (document.getElementById('cfgInputPdfDir')?.value || '').trim();
+      const jsonPath = (document.getElementById('cfgInputJsonPath')?.value || '').trim();
+      const workers = parseInt(document.getElementById('cfgWorkersRange')?.value || '1', 10);
+      const maxPages = parseInt(document.getElementById('cfgMaxPages')?.value || '4', 10);
+      const skipOcr = !!document.getElementById('cfgSkipOcr')?.checked;
+
+      let model = '';
+      let docker = null;
+      let ollamaUrl = (document.getElementById('cfgOllamaUrl')?.value || '').trim() || 'http://localhost:11434';
+      let openaiKey = (document.getElementById('cfgOpenaiKey')?.value || '').trim();
+      let openaiBaseUrl = (document.getElementById('cfgOpenaiBaseUrl')?.value || '').trim();
+
+      if (currentAiProvider === 'ollama') {
+        const envSelect = document.getElementById('cfgOllamaEnvSelect');
+        if (envSelect && envSelect.value !== '__default__' && envSelect.value !== '__custom__') {
+          const env = detectedEnvironments[parseInt(envSelect.value, 10)];
+          if (env && env.container) {
+            docker = env.container;
+          }
+        }
+        const mSel = document.getElementById('cfgOllamaModelSelect');
+        if (mSel && mSel.value === '__custom__') {
+          model = (document.getElementById('cfgOllamaModelCustom')?.value || '').trim();
+        } else if (mSel) {
+          model = mSel.value;
+        }
+        if (!model) model = 'gemma4:e4b';
+      } else {
+        const mSel = document.getElementById('cfgOpenaiModelSelect');
+        if (mSel && mSel.value === 'custom') {
+          model = (document.getElementById('cfgOpenaiModelCustom')?.value || '').trim();
+        } else if (mSel) {
+          model = mSel.value;
+        }
+        if (!model) model = 'gpt-4o-mini';
+      }
+
+      return {
+        classificador: {
+          input: pdfDir,
+          output_dir: jsonPath,
+          provider: currentAiProvider,
+          model: model,
+          docker: docker,
+          ollama_url: ollamaUrl,
+          openai_key: openaiKey || undefined,
+          openai_base_url: openaiBaseUrl || undefined,
+          workers: workers,
+          max_pages: maxPages,
+          skip_ocr: skipOcr
+        },
+        visualizador: {
+          pdf_dir: pdfDir,
+          json_path: jsonPath,
+          provider: currentAiProvider,
+          model: model,
+          ollama_url: ollamaUrl
+        }
+      };
+    }
+
+    async function saveConfiguration(notifyUser = true) {
+      const payload = collectConfigPayload();
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const result = await res.json();
+
+        const countP = document.getElementById('cfgCountPdfs');
+        if (countP && result.pdf_count !== undefined) countP.innerText = result.pdf_count;
+        const countD = document.getElementById('cfgCountDocs');
+        if (countD && result.doc_count !== undefined) countD.innerText = result.doc_count;
+
+        loadDocuments();
+
+        if (notifyUser) {
+          showToast(result.mensagem || 'Configurações salvas com sucesso!', 'success');
+        }
+        return true;
+      } catch (err) {
+        showToast('Erro ao salvar configurações: ' + err.message, 'error');
+        return false;
+      }
+    }
+
+    async function testAndRefreshFolders() {
+      showToast('Verificando pastas e indexando...', 'info');
+      await saveConfiguration(false);
+      await loadSystemConfig();
+      showToast('Pastas verificadas e contagens atualizadas!', 'success');
+    }
+
+    async function resetToFactoryDefaults() {
+      const ok = confirm(
+        'Deseja realmente restaurar todas as configurações para os padrões de fábrica neutros (./pdf e ./saida)?\n\nIsso limpará personalizações de caminhos e modelos.'
+      );
+      if (!ok) return;
+
+      try {
+        const res = await fetch('/api/config/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const result = await res.json();
+        showToast('Padrões de fábrica restaurados com sucesso!', 'info');
+        await loadSystemConfig();
+        await loadDocuments();
+      } catch (err) {
+        showToast('Erro ao restaurar padrões: ' + err.message, 'error');
+      }
+    }
+
+    async function startBatch() {
+      const saved = await saveConfiguration(false);
+      if (!saved) return;
+
+      const modeRadio = document.querySelector('input[name="batchMode"]:checked');
+      const mode = modeRadio ? modeRadio.value : 'incremental';
+
+      const payload = collectConfigPayload().classificador;
+      payload.reprocess_ocr = (mode === 'reprocess_ocr');
+      payload.force = (mode === 'force');
+
+      try {
+        const res = await fetch('/api/batch/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (!res.ok || result.status === 'erro') {
+          showToast(result.mensagem || 'Falha ao iniciar lote.', 'error');
+          return;
+        }
+
+        showToast(result.mensagem || 'Processamento em lote iniciado!', 'success');
+        switchConfigTab('batch');
+        startBatchPolling();
+      } catch (err) {
+        showToast('Erro ao conectar ao servidor: ' + err.message, 'error');
+      }
+    }
+
+    async function stopBatch() {
+      const ok = confirm('Deseja realmente interromper o processamento em lote?\nO progresso atual será salvo com segurança.');
+      if (!ok) return;
+
+      try {
+        const res = await fetch('/api/batch/stop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const result = await res.json();
+        showToast(result.mensagem || 'Sinal de interrupção enviado.', 'info');
+      } catch (err) {
+        showToast('Erro ao solicitar parada: ' + err.message, 'error');
+      }
+    }
+
+    function clearBatchLogs() {
+      const logContainer = document.getElementById('batchTerminalLogs');
+      if (logContainer) logContainer.innerHTML = '<div class="text-slate-500 italic">Logs limpos.</div>';
+    }
+
+    function startBatchPolling() {
+      if (activeBatchPolling) return;
+      pollBatchStatus();
+      activeBatchPolling = setInterval(pollBatchStatus, 1500);
+    }
+
+    function stopBatchPolling() {
+      if (activeBatchPolling) {
+        clearInterval(activeBatchPolling);
+        activeBatchPolling = null;
+      }
+    }
+
+    async function checkBatchStatusOnLoad() {
+      try {
+        const res = await fetch('/api/batch/status');
+        if (!res.ok) return;
+        const status = await res.json();
+        updateBatchUI(status);
+        if (status.is_running) {
+          startBatchPolling();
+        }
+      } catch (err) {
+        // Servidor iniciando ou offline
+      }
+    }
+
+    async function pollBatchStatus() {
+      try {
+        const res = await fetch('/api/batch/status');
+        if (!res.ok) return;
+        const status = await res.json();
+        updateBatchUI(status);
+      } catch (err) {
+        console.warn('Erro ao consultar /api/batch/status:', err);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatTime(seconds) {
+      if (!seconds || isNaN(seconds)) return '00:00';
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function updateBatchUI(status) {
+      if (!status) return;
+      const wasRunning = isBatchRunning;
+      isBatchRunning = !!status.is_running;
+
+      // 1. Badge animado no topo
+      const headerBadge = document.getElementById('batchHeaderBadge');
+      const headerBadgeText = document.getElementById('batchHeaderBadgeText');
+      const batchTabBadge = document.getElementById('batchTabBadge');
+
+      if (headerBadge) {
+        if (isBatchRunning) {
+          headerBadge.style.display = 'flex';
+          const toProc = status.to_process_count || 0;
+          const proc = status.processed_count || 0;
+          if (headerBadgeText) {
+            headerBadgeText.innerText = `Lote: ${status.percentage || 0}% (${proc}/${toProc})`;
+          }
+        } else {
+          headerBadge.style.display = 'none';
+        }
+      }
+
+      if (batchTabBadge) {
+        if (isBatchRunning) batchTabBadge.classList.remove('hidden');
+        else batchTabBadge.classList.add('hidden');
+      }
+
+      // 2. Botões Iniciar / Interromper
+      const btnStart = document.getElementById('btnBatchStart');
+      const btnStop = document.getElementById('btnBatchStop');
+
+      if (btnStart) {
+        btnStart.disabled = isBatchRunning;
+        if (isBatchRunning) {
+          btnStart.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+          btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+      }
+
+      if (btnStop) {
+        btnStop.style.display = isBatchRunning ? 'flex' : 'none';
+      }
+
+      // 3. Status Pill & Mensagens
+      const pill = document.getElementById('batchModalStatusPill');
+      const statusIcon = document.getElementById('batchLiveStatusIcon');
+      const statusTitle = document.getElementById('batchLiveStatusTitle');
+      const liveMsg = document.getElementById('batchLiveMessage');
+      const livePct = document.getElementById('batchLivePercent');
+      const liveBar = document.getElementById('batchLiveBar');
+      const liveTime = document.getElementById('batchLiveTime');
+
+      const st = status.status || 'idle';
+      let pillText = 'Pronto';
+      let pillClass = 'text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700 font-normal';
+      let iconColor = 'bg-slate-500';
+
+      if (st === 'running' || st === 'indexing') {
+        pillText = st === 'indexing' ? 'Indexando' : 'Executando';
+        pillClass = 'text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 font-semibold animate-pulse';
+        iconColor = 'bg-amber-400 animate-ping';
+      } else if (st === 'completed') {
+        pillText = 'Concluído';
+        pillClass = 'text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40 font-semibold';
+        iconColor = 'bg-emerald-400';
+      } else if (st === 'stopped') {
+        pillText = 'Interrompido';
+        pillClass = 'text-[10px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full border border-rose-500/40 font-semibold';
+        iconColor = 'bg-rose-400';
+      } else if (st === 'error') {
+        pillText = 'Erro';
+        pillClass = 'text-[10px] bg-rose-600/30 text-rose-300 px-2 py-0.5 rounded-full border border-rose-500/50 font-semibold';
+        iconColor = 'bg-rose-500';
+      }
+
+      if (pill) {
+        pill.innerText = pillText;
+        pill.className = pillClass;
+      }
+      if (statusIcon) statusIcon.className = `w-2.5 h-2.5 rounded-full ${iconColor}`;
+      if (statusTitle) statusTitle.innerText = `Status: ${pillText}`;
+      if (liveMsg) liveMsg.innerText = status.message || 'Aguardando tarefas.';
+      if (livePct) livePct.innerText = `${status.percentage || 0}%`;
+      if (liveBar) liveBar.style.width = `${status.percentage || 0}%`;
+      if (liveTime) liveTime.innerText = formatTime(status.elapsed_seconds || 0);
+
+      // 4. Métricas Numéricas
+      const statToProc = document.getElementById('batchStatToProcess');
+      const statProc = document.getElementById('batchStatProcessed');
+      const statSucc = document.getElementById('batchStatSuccess');
+      const statErr = document.getElementById('batchStatErrors');
+
+      if (statToProc) statToProc.innerText = status.to_process_count || 0;
+      if (statProc) statProc.innerText = status.processed_count || 0;
+      if (statSucc) statSucc.innerText = status.success_count || 0;
+      if (statErr) statErr.innerText = status.error_count || 0;
+
+      // 5. Console de Logs
+      const logsContainer = document.getElementById('batchTerminalLogs');
+      if (logsContainer && status.logs && status.logs.length > 0) {
+        logsContainer.innerHTML = status.logs.map(l => {
+          let lineClass = 'text-slate-300';
+          if (l.includes('[✓]')) lineClass = 'text-emerald-400';
+          else if (l.includes('[✗]') || l.includes('❌') || l.includes('Erro')) lineClass = 'text-rose-400 font-semibold';
+          else if (l.includes('🛑') || l.includes('ℹ️')) lineClass = 'text-amber-300';
+          return `<div class="${lineClass}">${escapeHtml(l)}</div>`;
+        }).join('');
+        logsContainer.scrollTop = logsContainer.scrollHeight;
+      }
+
+      // 6. Transição de Lote Concluído / Interrompido
+      if (wasRunning && !isBatchRunning) {
+        loadDocuments();
+        if (st === 'completed') {
+          showToast('Processamento em lote concluído com sucesso!', 'success');
+        } else if (st === 'stopped') {
+          showToast('Processamento em lote interrompido. Progresso salvo!', 'info');
+        }
+      }
+
+      lastBatchStatus = status;
     }
   </script>
 </body>
