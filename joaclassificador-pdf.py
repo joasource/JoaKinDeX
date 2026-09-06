@@ -92,6 +92,41 @@ def format_cpf(raw_cpf: Optional[str]) -> Optional[str]:
     return raw_cpf.strip() if raw_cpf else None
 
 
+def validate_cpf_checksum(cpf: str) -> bool:
+    """Valida os dois dígitos verificadores do CPF de acordo com o algoritmo oficial da Receita Federal."""
+    digits = [int(d) for d in re.sub(r"\D", "", str(cpf))]
+    if len(digits) != 11:
+        return False
+    if len(set(digits)) == 1:
+        return False
+    s1 = sum(d * w for d, w in zip(digits[:9], range(10, 1, -1)))
+    r1 = (s1 * 10) % 11
+    d1 = 0 if r1 == 10 else r1
+    if d1 != digits[9]:
+        return False
+    s2 = sum(d * w for d, w in zip(digits[:10], range(11, 1, -1)))
+    r2 = (s2 * 10) % 11
+    d2 = 0 if r2 == 10 else r2
+    return d2 == digits[10]
+
+
+def is_valid_cpf_syntax(cpf: Optional[str], check_checksum: bool = True) -> bool:
+    """
+    Retorna True se o CPF tiver sintaxe correta (11 dígitos, formato 000.000.000-00)
+    e opcionalmente se for aprovado no cálculo dos dígitos verificadores.
+    """
+    if not cpf:
+        return False
+    digits = re.sub(r"\D", "", str(cpf))
+    if len(digits) != 11:
+        return False
+    if not re.match(r"^\d{3}\.\d{3}\.\d{3}-\d{2}$", str(cpf)):
+        return False
+    if check_checksum and not validate_cpf_checksum(cpf):
+        return False
+    return True
+
+
 def extract_cpf_fallback(text: str) -> Optional[str]:
     """Busca padrão de CPF diretamente no texto do documento como contingência."""
     match = re.search(r"(?:CPF|C\.P\.F)[\s:\.ºn°]*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})", text, re.IGNORECASE)
@@ -582,7 +617,7 @@ def process_single_pdf(
 
     try:
         # Extração de texto da camada digital nativa
-        text = extract_pdf_text(str(pdf_path), max_pages=max_pages) if not force_ocr else ""
+        text = extract_pdf_text(str(pdf_path), max_pages=max_pages)
         has_text = bool(text and len(text.strip()) >= 15)
 
         # Helper para sanitização de strings e listas
@@ -594,9 +629,9 @@ def process_single_pdf(
             return v
 
         # ---------------------------------------------------------------------
-        # CASO 1: Arquivo sem texto legível digitalmente -> OCR usando a LLM
+        # CASO 1: Arquivo sem texto legível digitalmente OU force_ocr -> OCR usando a LLM
         # ---------------------------------------------------------------------
-        if not has_text:
+        if not has_text or force_ocr:
             if skip_ocr:
                 res_dict["status"] = "erro"
                 res_dict["erro"] = "Documento sem texto legível digitalmente (requer OCR, mas --skip-ocr está ativo)."
@@ -609,9 +644,10 @@ def process_single_pdf(
                 return res_dict
 
             try:
-                vision_prompt = build_vision_prompt()
+                extra_ctx = text if (force_ocr and has_text) else None
+                vision_prompt = build_vision_prompt(extra_context=extra_ctx)
                 extracted_data = client.generate_json_with_images(vision_prompt, images)
-                res_dict["metodo_leitura"] = "ocr_llm"
+                res_dict["metodo_leitura"] = "ocr_llm" if not has_text else "hibrido_texto_e_ocr_llm"
                 res_dict["tentativa_ocr_llm"] = True
             except Exception as e:
                 res_dict["status"] = "erro"
@@ -648,7 +684,10 @@ def process_single_pdf(
         res_dict["tipo_documento"] = _clean_str(extracted_data.get("tipo_documento"))
 
         # ---------------------------------------------------------------------
-        # CASO 2: Tinha camada de leitura, mas tipo_documento ficou "Não identificado" / "Outro" / None
+        # CASO 2: Tinha camada de leitura, mas:
+        # A) O tipo_documento ficou "Não identificado" / "Outro" / None
+        # OU
+        # B) Foi detectado um CPF, mas com sintaxe errada (tamanho != 11, formatação incorreta ou dígitos inválidos)
         # Tenta OCR via LLM uma única vez ("Caso não seja identificado novamente, não insista mais").
         # ---------------------------------------------------------------------
         tipo_atual = (res_dict.get("tipo_documento") or "").strip().lower()
@@ -656,27 +695,46 @@ def process_single_pdf(
             "não identificado", "nao identificado", "outro", "não informado", "nao informado"
         ]
 
-        if has_text and is_tipo_unidentified and not res_dict.get("tentativa_ocr_llm") and not skip_ocr:
+        cpf_atual = res_dict.get("cpf")
+        is_cpf_flawed = bool(cpf_atual and not is_valid_cpf_syntax(cpf_atual))
+
+        precisa_releitura_ocr = (is_tipo_unidentified or is_cpf_flawed)
+
+        if has_text and precisa_releitura_ocr and not res_dict.get("tentativa_ocr_llm") and not skip_ocr:
             res_dict["tentativa_ocr_llm"] = True
             try:
                 images = render_pdf_pages_to_base64(str(pdf_path), max_pages=min(max_pages, 2))
                 if images:
-                    vision_prompt = build_vision_prompt(extra_context=text)
+                    extra_notes = []
+                    if is_tipo_unidentified:
+                        extra_notes.append("O 'tipo_documento' não pôde ser determinado com precisão na leitura textual.")
+                    if is_cpf_flawed:
+                        extra_notes.append(f"O CPF extraído da camada de texto ({cpf_atual}) está com sintaxe ou dígitos incorretos. Verifique visualmente com atenção o CPF impresso no documento.")
+
+                    context_msg = f"{text}\n\n" + "\n".join(extra_notes)
+                    vision_prompt = build_vision_prompt(extra_context=context_msg)
                     ocr_data = client.generate_json_with_images(vision_prompt, images)
-                    new_tipo = _clean_str(ocr_data.get("tipo_documento"))
 
-                    # Se a nova leitura visual classificou um tipo válido, atualiza
-                    if new_tipo and new_tipo.lower() not in [
-                        "não identificado", "nao identificado", "outro", "não informado", "nao informado"
-                    ]:
-                        res_dict["tipo_documento"] = new_tipo
-                        res_dict["metodo_leitura"] = "hibrido_texto_e_ocr_llm"
+                    # 1. Atualiza tipo de documento se OCR classificou
+                    if is_tipo_unidentified:
+                        new_tipo = _clean_str(ocr_data.get("tipo_documento"))
+                        if new_tipo and new_tipo.lower() not in [
+                            "não identificado", "nao identificado", "outro", "não informado", "nao informado"
+                        ]:
+                            res_dict["tipo_documento"] = new_tipo
+                            res_dict["metodo_leitura"] = "hibrido_texto_e_ocr_llm"
 
-                    # Aproveita outros dados que o OCR possa ter localizado e que estavam vazios
+                    # 2. Atualiza CPF se OCR encontrou CPF com sintaxe correta
+                    new_cpf_raw = ocr_data.get("cpf")
+                    if new_cpf_raw:
+                        formatted_new_cpf = format_cpf(new_cpf_raw)
+                        if formatted_new_cpf and is_valid_cpf_syntax(formatted_new_cpf):
+                            res_dict["cpf"] = formatted_new_cpf
+                            res_dict["metodo_leitura"] = "hibrido_texto_e_ocr_llm"
+
+                    # 3. Aproveita outros dados que o OCR possa ter localizado e que estavam vazios
                     if not res_dict["beneficiario"] and ocr_data.get("beneficiario"):
                         res_dict["beneficiario"] = _clean_str(ocr_data.get("beneficiario"))
-                    if not res_dict["cpf"] and ocr_data.get("cpf"):
-                        res_dict["cpf"] = format_cpf(ocr_data.get("cpf"))
                     if not res_dict["rg"] and ocr_data.get("rg"):
                         res_dict["rg"] = _clean_str(ocr_data.get("rg"))
                     if not res_dict["curso"] and ocr_data.get("curso"):
@@ -966,12 +1024,14 @@ def main():
             tipo_nao_identificado = (not tipo_atual) or tipo_atual in [
                 "não identificado", "nao identificado", "outro", "não informado", "nao informado"
             ]
+            cpf_item = item.get("cpf")
+            cpf_invalido = bool(cpf_item and not is_valid_cpf_syntax(cpf_item))
             teve_tentativa_ocr = item.get("tentativa_ocr_llm", False)
             teve_erro_ocr = (item.get("status") == "erro") and ("OCR" in (item.get("erro") or ""))
 
-            precisa_ocr = (teve_erro_ocr or (tipo_nao_identificado and not teve_tentativa_ocr))
+            precisa_ocr = (teve_erro_ocr or ((tipo_nao_identificado or cpf_invalido) and not teve_tentativa_ocr))
 
-            if (precisa_ocr or args.reprocess_ocr) and not args.skip_ocr and not teve_tentativa_ocr:
+            if not args.skip_ocr and ((precisa_ocr and not teve_tentativa_ocr) or args.reprocess_ocr):
                 files_to_process.append(pdf)
                 ocr_candidate_count += 1
             else:
@@ -980,7 +1040,7 @@ def main():
             files_to_process.append(pdf)
 
     if ocr_candidate_count > 0:
-        print(f"[*] Identificados {ocr_candidate_count} documento(s) elegíveis para OCR via LLM (erros de leitura ou tipo não identificado).")
+        print(f"[*] Identificados {ocr_candidate_count} documento(s) elegíveis para OCR via LLM (erros de leitura, tipo não identificado ou CPF com sintaxe errada).")
 
     print(f"[*] Total de PDFs: {len(pdf_files)} | Já processados: {len(already_done_results)} | A processar: {len(files_to_process)}")
 

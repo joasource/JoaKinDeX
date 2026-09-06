@@ -14,6 +14,17 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
 from datetime import datetime
 
+try:
+    from classificador import process_single_pdf, OllamaClient, OpenAIClient
+except Exception:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("classificador", Path(__file__).parent / "joaclassificador-pdf.py")
+    classificador = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(classificador)
+    process_single_pdf = classificador.process_single_pdf
+    OllamaClient = classificador.OllamaClient
+    OpenAIClient = classificador.OpenAIClient
+
 
 def resolve_pdf_dir(specified_dir: str = None) -> Path:
     if specified_dir:
@@ -166,12 +177,40 @@ def calculate_md5(file_path: Path) -> str:
 
 
 class ConferenciaServer:
-    def __init__(self, json_path: str, pdf_dir: str, html_path: str):
+    def __init__(
+        self,
+        json_path: str,
+        pdf_dir: str,
+        html_path: str,
+        provider: str = "ollama",
+        model: str = None,
+        ollama_url: str = "http://localhost:11434"
+    ):
         self.json_path = Path(json_path).resolve()
         self.pdf_dir = Path(pdf_dir).resolve()
         self.html_path = Path(html_path).resolve()
+        self.provider = provider or "ollama"
+        self.model = model
+        self.ollama_url = ollama_url
+        self._llm_client = None
         self.md5_to_file = {}
         self.build_pdf_index()
+
+    def get_llm_client(self):
+        if self._llm_client is not None:
+            return self._llm_client
+
+        if self.provider == "ollama":
+            model_name = self.model or "gemma4:e4b"
+            url = self.ollama_url or "http://localhost:11434"
+            print(f"[*] Inicializando cliente Ollama para OCR visual sob demanda (modelo: {model_name})...")
+            self._llm_client = OllamaClient(model=model_name, base_url=url)
+        else:
+            model_name = self.model or "gpt-4o-mini"
+            print(f"[*] Inicializando cliente OpenAI para OCR visual sob demanda (modelo: {model_name})...")
+            self._llm_client = OpenAIClient(model=model_name)
+
+        return self._llm_client
 
     def build_pdf_index(self):
         """Indexa os arquivos PDFs da pasta mapeando seus MD5."""
@@ -446,6 +485,80 @@ def create_handler(server_ctx: ConferenciaServer):
                     self.send_error(404, f"Documento MD5 {target_md5} não encontrado.")
                 return
 
+            # Re-análise via OCR Multimodal com LLM sob demanda
+            if path == "/api/ocr":
+                target_md5 = payload.get("md5")
+                if not target_md5:
+                    self.send_error(400, "MD5 do documento não informado.")
+                    return
+
+                pdf_file = server_ctx.md5_to_file.get(target_md5)
+                if not pdf_file or not pdf_file.exists():
+                    server_ctx.build_pdf_index()
+                    pdf_file = server_ctx.md5_to_file.get(target_md5)
+
+                if not pdf_file or not pdf_file.exists():
+                    self.send_error(404, f"Arquivo PDF com MD5 {target_md5} não encontrado na pasta de PDFs.")
+                    return
+
+                try:
+                    client = server_ctx.get_llm_client()
+                    novo_doc = process_single_pdf(pdf_file, client, force_ocr=True)
+
+                    # Sanitiza listas para strings para compatibilidade com o visualizador
+                    for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "rg", "data"]:
+                        v = novo_doc.get(k)
+                        if isinstance(v, list):
+                            novo_doc[k] = ", ".join(str(x) for x in v if x)
+
+                    dados_atuais = server_ctx.load_data()
+                    found = False
+                    for idx, doc in enumerate(dados_atuais):
+                        if doc.get("md5") == target_md5:
+                            if "status_conferencia" in doc:
+                                novo_doc["status_conferencia"] = doc["status_conferencia"]
+                            if "observacoes_conferencia" in doc:
+                                novo_doc["observacoes_conferencia"] = doc["observacoes_conferencia"]
+                            dados_atuais[idx] = novo_doc
+                            found = True
+                            break
+                    if not found:
+                        dados_atuais.append(novo_doc)
+
+                    server_ctx.save_data(dados_atuais)
+
+                    # Se existir pasta 'individuais' correspondente, atualiza o arquivo individual também
+                    indiv_dir = server_ctx.json_path.parent / "individuais"
+                    if indiv_dir.exists():
+                        indiv_file = indiv_dir / f"{target_md5}.json"
+                        try:
+                            with open(indiv_file, "w", encoding="utf-8") as fi:
+                                json.dump(novo_doc, fi, ensure_ascii=False, indent=2)
+                        except Exception:
+                            pass
+
+                    resp = json.dumps({
+                        "status": "sucesso",
+                        "item": novo_doc,
+                        "mensagem": "OCR via LLM concluído com sucesso!"
+                    }, ensure_ascii=False).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(resp)))
+                    self.end_headers()
+                    self.wfile.write(resp)
+                    return
+                except Exception as e:
+                    err_msg = f"Erro ao executar OCR via LLM: {e}"
+                    print(f"[Erro OCR API] {err_msg}")
+                    resp = json.dumps({"status": "erro", "mensagem": err_msg}, ensure_ascii=False).encode("utf-8")
+                    self.send_response(500)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(resp)))
+                    self.end_headers()
+                    self.wfile.write(resp)
+                    return
+
             self.send_error(404, "Endpoint não encontrado")
 
     return RequestHandler
@@ -488,6 +601,24 @@ def main():
         help="Força a solicitação interativa de pastas e configurações no console."
     )
     parser.add_argument(
+        "--provider",
+        choices=["ollama", "openai"],
+        default="ollama",
+        help="Provedor de LLM para OCR visual sob demanda (padrão: ollama)."
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Modelo de LLM para OCR visual (padrão: gemma4:e4b para Ollama ou gpt-4o-mini para OpenAI)."
+    )
+    parser.add_argument(
+        "--ollama-url",
+        type=str,
+        default="http://localhost:11434",
+        help="URL base da API do Ollama (padrão: http://localhost:11434)."
+    )
+    parser.add_argument(
         "--no-prompt", "-y", "--batch",
         dest="no_prompt",
         action="store_true",
@@ -525,7 +656,10 @@ def main():
     ctx = ConferenciaServer(
         json_path=str(json_path_final),
         pdf_dir=str(pdf_dir_final),
-        html_path=args.html
+        html_path=args.html,
+        provider=args.provider,
+        model=args.model,
+        ollama_url=args.ollama_url
     )
     handler = create_handler(ctx)
 
