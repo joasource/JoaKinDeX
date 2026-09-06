@@ -1772,27 +1772,89 @@
         }
       };
 
-      try {
-        if (navigator.clipboard && window.ClipboardItem) {
+      const copyRes = await copyRichAndPlainText(htmlContent, plainContent);
+      if (copyRes.rich) {
+        showToast('Ficha copiada em formato Visual Law para o Word!', 'success');
+      } else {
+        showToast('Ficha copiada em texto simples!', 'info');
+      }
+      updateBtnVisual();
+    }
+
+    async function copyRichAndPlainText(htmlContent, plainContent) {
+      const fullHtml = `<!--StartFragment-->${htmlContent}<!--EndFragment-->`;
+
+      // Estratégia 1: Clipboard API moderna (funciona quando em Secure Context: localhost ou HTTPS)
+      if (window.isSecureContext && navigator.clipboard && window.ClipboardItem) {
+        try {
           const blobText = new Blob([plainContent], { type: 'text/plain' });
-          const blobHtml = new Blob([htmlContent], { type: 'text/html' });
+          const blobHtml = new Blob([fullHtml], { type: 'text/html' });
           await navigator.clipboard.write([
             new ClipboardItem({
               'text/plain': blobText,
               'text/html': blobHtml
             })
           ]);
-        } else {
-          await navigator.clipboard.writeText(plainContent);
+          return { success: true, rich: true };
+        } catch (e) {
+          console.warn('ClipboardItem moderno falhou, tentando fallback rico via evento copy:', e);
         }
-        showToast('Ficha completa copiada! Pronta para colar no Word/Petição.', 'success');
-        updateBtnVisual();
-      } catch (err) {
-        console.warn('Fallback para cópia em texto simples:', err);
-        copyTextFallback(plainContent);
-        showToast('Ficha copiada em texto simples!', 'success');
-        updateBtnVisual();
       }
+
+      // Estratégia 2: Fallback rico via evento síncrono 'copy'
+      // Este método funciona em navegadores no Windows acessando via rede local (HTTP não-seguro como 192.168.x.x)
+      try {
+        let eventHandled = false;
+        const copyHandler = (e) => {
+          e.preventDefault();
+          e.clipboardData.setData('text/html', fullHtml);
+          e.clipboardData.setData('text/plain', plainContent);
+          eventHandled = true;
+        };
+        document.addEventListener('copy', copyHandler);
+        let execSuccess = false;
+        try {
+          execSuccess = document.execCommand('copy');
+        } finally {
+          document.removeEventListener('copy', copyHandler);
+        }
+        if (eventHandled && execSuccess) {
+          return { success: true, rich: true };
+        }
+      } catch (e) {
+        console.warn('Fallback de evento copy rico falhou:', e);
+      }
+
+      // Estratégia 3: Fallback via elemento HTML no DOM selecionado
+      try {
+        const container = document.createElement('div');
+        container.innerHTML = fullHtml;
+        container.style.position = 'fixed';
+        container.style.left = '-9999px';
+        container.style.top = '0';
+        container.style.opacity = '0';
+        document.body.appendChild(container);
+
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(container);
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        const execSuccess = document.execCommand('copy');
+        selection.removeAllRanges();
+        document.body.removeChild(container);
+
+        if (execSuccess) {
+          return { success: true, rich: true };
+        }
+      } catch (e) {
+        console.warn('Fallback de seleção DOM falhou:', e);
+      }
+
+      // Estratégia 4: Fallback final para texto simples
+      copyTextFallback(plainContent);
+      return { success: true, rich: false };
     }
 
     function copyTextFallback(text) {
