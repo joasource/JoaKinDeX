@@ -117,43 +117,78 @@ pip install -r requirements.txt
 
 ## 💻 Como Usar
 
-### 1. Execução Básica com Ollama (Padrão)
+### 1. Modo Interativo no Console (Recomendado)
 
-Se o seu Ollama estiver rodando localmente (na porta `11434`) ou em container Docker (`open-webui`):
+Ao executar o comando sem argumentos, o **menu interativo** é aberto no terminal para guiar a configuração:
 
 ```bash
-./joaclassificador-pdf -i ./meus_pdfs -o ./saida
+./joaclassificador-pdf
+# ou:
+./executar.sh
 ```
 
-Para especificar outro modelo do Ollama:
+O menu permite configurar facilmente:
+- 📁 **Pasta de PDFs**: sugere a pasta padrão e contabiliza quantos arquivos PDF existem no caminho informado.
+- 📄 **Pasta de saída**: onde serão gravados os relatórios consolidados e individuais.
+- 🤖 **Provedor de IA**: alterna facilmente entre **Ollama** e **OpenAI**.
+- 🧠 **Modelo de IA**: auto-detecta modelos instalados no Ollama (local/Docker) ou sugere `gpt-4o-mini`.
+- ⚡ **Concorrência**: ajusta o número de threads simultâneas para acelerar o processamento.
+- 🔍 **OCR Multimodal**: opção para ativar ou desativar leitura visual em PDFs escaneados ou com erros de CPF/Tipo.
+- ⚙️ **Estratégia**: escolher entre modo incremental (apenas novos/pendentes), reprocessar quem precisa de OCR ou reprocessar tudo do zero.
+- 📋 **Resumo da Execução**: exibe todas as opções selecionadas para confirmação antes de iniciar.
+
+---
+
+### 2. Execução Direta por Linha de Comando (CLI)
+
+Se você informar os parâmetros na chamada do comando, ele executa **diretamente**, sem abrir o menu interativo:
+
+#### Com Ollama (Padrão):
 ```bash
+# Execução direta com pasta personalizada:
+./joaclassificador-pdf -i ./meus_pdfs -o ./saida
+
+# Especificando outro modelo:
 ./joaclassificador-pdf -i ./meus_pdfs -o ./saida -m llama3
 ```
 
-### 2. Execução com a API da OpenAI
-
-Para processar em alta velocidade utilizando processamento paralelo:
-
+#### Com a API da OpenAI (Paralelismo em Nuvem):
 ```bash
 export OPENAI_API_KEY="sk-sua-chave-aqui"
 
 ./joaclassificador-pdf -i ./meus_pdfs -o ./saida -p openai -m gpt-4o-mini -w 4
 ```
 
+#### Forçar Menu Interativo ou Modo Batch:
+```bash
+# Força a abertura do menu interativo (usando os parâmetros passados como valor inicial):
+./joaclassificador-pdf -i ./meus_pdfs --prompt
+
+# Modo silencioso/batch (executa sem perguntas interativas):
+./joaclassificador-pdf -y
+```
+
+---
+
 ### 3. Parâmetros da Linha de Comando
 
 | Parâmetro | Descrição | Valor Padrão |
 |---|---|---|
 | `-i`, `--input` | Caminho do diretório de PDFs ou arquivo único | `./pdf` |
-| `-o`, `--output-dir` | Diretório onde os resultados serão salvos | `./saida` |
+| `-o`, `--output-dir` | Diretório onde os relatórios serão salvos | `./saida` |
 | `-p`, `--provider` | Provedor de IA (`ollama` ou `openai`) | `ollama` |
-| `-m`, `--model` | Nome do modelo | `gemma4:e4b` / `gpt-4o-mini` |
-| `--docker` | Nome do container Docker do Ollama (se aplicável) | Auto-detecta (`open-webui`) |
+| `-m`, `--model` | Nome do modelo (`gemma4:e4b`, `gpt-4o-mini`, etc.) | Auto-detecta / padrão do provedor |
+| `--docker` | Nome do container Docker do Ollama | Auto-detecta (`open-webui`) |
 | `--ollama-url` | URL da API HTTP do Ollama | `http://localhost:11434` |
 | `--openai-key` | Chave de API da OpenAI | Lê de `OPENAI_API_KEY` |
 | `-w`, `--workers` | Número de threads concorrentes | `1` (Ollama) / `4+` (OpenAI) |
 | `--max-pages` | Máximo de páginas a ler por documento | `4` |
-| `--no-individual` | Desativa geração de arquivos individuais por MD5 | `False` |
+| `-f`, `--force` | Força o reprocessamento de todos os PDFs | `False` |
+| `--skip-ocr` | Desativa tentativas de OCR via LLM | `False` |
+| `--reprocess-ocr` | Reprocessa apenas quem precisa de OCR | `False` |
+| `--no-individual` | Não gera arquivos JSON/TXT individuais por MD5 | `False` |
+| `--prompt`, `--interativo` | Força o menu interativo no console | `False` |
+| `-y`, `--no-prompt`, `--batch`| Desativa o menu interativo (modo batch) | `False` |
 
 ---
 

@@ -851,6 +851,271 @@ def generate_consolidated_txt(
 
 
 # ---------------------------------------------------------------------------
+# Menu Interativo e Auxiliares de Configuração
+# ---------------------------------------------------------------------------
+def resolve_default_input_path(specified: Optional[str] = None) -> Path:
+    if specified:
+        p = Path(specified).expanduser().resolve()
+        if p.exists():
+            return p
+        elif specified not in ["./pdf", "pdf"]:
+            return p
+
+    candidates = [
+        Path("./pdf"),
+        Path("../pdf"),
+        Path.home() / "pdf",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c.resolve()
+
+    return Path("./pdf").resolve()
+
+
+def count_pdfs_in_path(p: Path) -> int:
+    if not p.exists():
+        return 0
+    if p.is_file():
+        return 1 if p.suffix.lower() == ".pdf" else 0
+    return len(list(p.glob("*.pdf")) + list(p.glob("*.PDF")))
+
+
+def get_available_ollama_models(
+    base_url: str = "http://localhost:11434",
+    docker_container: Optional[str] = None
+) -> List[str]:
+    # Tentativa 1: HTTP direto
+    try:
+        r = requests.get(f"{base_url.rstrip('/')}/api/tags", timeout=1.5)
+        if r.status_code == 200:
+            return [m["name"] for m in r.json().get("models", [])]
+    except Exception:
+        pass
+
+    # Tentativa 2: Docker
+    try:
+        candidates = [docker_container] if docker_container else ["open-webui", "ollama"]
+        for c in candidates:
+            if not c:
+                continue
+            cmd = ["docker", "exec", "-i", c, "curl", "-s", "http://localhost:11434/api/tags"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=2.5)
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                return [m["name"] for m in data.get("models", [])]
+    except Exception:
+        pass
+
+    return []
+
+
+def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
+    print("\n" + "=" * 70)
+    print("🎓 JOACLASSIFICADOR-PDF - MENU INTERATIVO DE CLASSIFICAÇÃO")
+    print("=" * 70)
+    print("Pressione ENTER para aceitar o valor padrão sugerido entre colchetes [ ].\n")
+
+    # 1. Pasta ou arquivo de entrada
+    default_input = resolve_default_input_path(args.input)
+    while True:
+        try:
+            resp_input = input(f"📁 Pasta ou arquivo PDF de entrada [{default_input}]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[Operação cancelada pelo usuário]")
+            sys.exit(0)
+
+        chosen_path = Path(resp_input).expanduser().resolve() if resp_input else default_input
+        if not chosen_path.exists():
+            print(f"   ⚠️  Aviso: Caminho '{chosen_path}' não foi encontrado.")
+            try:
+                conf = input("   Deseja manter esse caminho mesmo assim? (s/N): ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                sys.exit(0)
+            if conf in ["s", "sim", "y", "yes"]:
+                args.input = str(chosen_path)
+                break
+        else:
+            pdf_count = count_pdfs_in_path(chosen_path)
+            if pdf_count == 0:
+                print(f"   ⚠️  Aviso: Nenhum arquivo PDF encontrado em '{chosen_path}'.")
+                try:
+                    conf = input("   Deseja manter esse caminho mesmo assim? (s/N): ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    sys.exit(0)
+                if conf in ["s", "sim", "y", "yes"]:
+                    args.input = str(chosen_path)
+                    break
+            else:
+                print(f"   ↳ {pdf_count} arquivo(s) PDF localizado(s) para processar.")
+                args.input = str(chosen_path)
+                break
+
+    # 2. Pasta de saída
+    default_out = Path(args.output_dir or "./saida").expanduser().resolve()
+    while True:
+        try:
+            resp_out = input(f"\n📄 Pasta de saída dos relatórios [{default_out}]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[Operação cancelada pelo usuário]")
+            sys.exit(0)
+
+        chosen_out = Path(resp_out).expanduser().resolve() if resp_out else default_out
+        args.output_dir = str(chosen_out)
+        break
+
+    # 3. Provedor de IA
+    print("\n🤖 Provedor de Inteligência Artificial:")
+    print("   1) Ollama (Modelos locais ou Docker open-webui) [Padrão]")
+    print("   2) OpenAI (Modelos em nuvem via API)")
+    while True:
+        try:
+            resp_prov = input(f"Escolha o provedor (1 ou 2) [1]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[Operação cancelada pelo usuário]")
+            sys.exit(0)
+
+        if resp_prov in ["", "1", "ollama"]:
+            args.provider = "ollama"
+            break
+        elif resp_prov in ["2", "openai"]:
+            args.provider = "openai"
+            break
+        else:
+            print("   ⚠️  Opção inválida. Digite 1 ou 2.")
+
+    # 4. Modelo de IA
+    if args.provider == "ollama":
+        detected_models = get_available_ollama_models(args.ollama_url, args.docker)
+        default_model = args.model or (detected_models[0] if detected_models else "gemma4:e4b")
+        if detected_models:
+            print(f"   ↳ Modelos detectados no Ollama: {', '.join(detected_models)}")
+        while True:
+            try:
+                resp_mod = input(f"\n🧠 Modelo Ollama [{default_model}]: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\n[Operação cancelada pelo usuário]")
+                sys.exit(0)
+            args.model = resp_mod if resp_mod else default_model
+            break
+    else:
+        default_model = args.model or "gpt-4o-mini"
+        while True:
+            try:
+                resp_mod = input(f"\n🧠 Modelo OpenAI [{default_model}]: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\n[Operação cancelada pelo usuário]")
+                sys.exit(0)
+            args.model = resp_mod if resp_mod else default_model
+            break
+
+        env_key = os.environ.get("OPENAI_API_KEY", "")
+        if not env_key and not args.openai_key:
+            try:
+                resp_key = input("🔑 Chave de API OpenAI (OPENAI_API_KEY): ").strip()
+                if resp_key:
+                    args.openai_key = resp_key
+            except (EOFError, KeyboardInterrupt):
+                print("\n[Operação cancelada pelo usuário]")
+                sys.exit(0)
+
+    # 5. Threads de processamento (Workers)
+    default_workers = args.workers if (args.workers and args.workers > 1) else (4 if args.provider == "openai" else 1)
+    while True:
+        try:
+            resp_w = input(f"\n⚡ Concorrência / Threads simultâneas [{default_workers}]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[Operação cancelada pelo usuário]")
+            sys.exit(0)
+
+        if not resp_w:
+            args.workers = default_workers
+            break
+        try:
+            w_val = int(resp_w)
+            if w_val >= 1:
+                args.workers = w_val
+                break
+            else:
+                print("   ⚠️  O número de workers deve ser pelo menos 1.")
+        except ValueError:
+            print("   ⚠️  Digite um número inteiro válido.")
+
+    # 6. OCR Multimodal via LLM
+    print("\n🔍 OCR Multimodal via LLM (para PDFs digitalizados e correções de CPF/Tipo):")
+    default_ocr_str = "N" if args.skip_ocr else "S"
+    try:
+        resp_ocr = input(f"Deseja manter o OCR multimodal ativado? (S/n) [{default_ocr_str}]: ").strip().lower()
+        if resp_ocr in ["n", "nao", "não", "no"]:
+            args.skip_ocr = True
+        elif resp_ocr in ["s", "sim", "y", "yes", ""]:
+            args.skip_ocr = False
+    except (EOFError, KeyboardInterrupt):
+        print("\n[Operação cancelada pelo usuário]")
+        sys.exit(0)
+
+    # 7. Estratégia de Processamento
+    print("\n⚙️  Estratégia de Processamento:")
+    print("   1) Incremental: Processar novos e pendentes (ignora já concluídos com sucesso) [Padrão]")
+    print("   2) Reprocessar documentos que necessitam de OCR (erros ou não identificados)")
+    print("   3) Forçar reprocessamento de TODOS os documentos do zero")
+    while True:
+        try:
+            resp_mode = input("Escolha o modo de execução (1, 2 ou 3) [1]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[Operação cancelada pelo usuário]")
+            sys.exit(0)
+
+        if resp_mode in ["", "1"]:
+            args.force = False
+            args.reprocess_ocr = False
+            break
+        elif resp_mode == "2":
+            args.force = False
+            args.reprocess_ocr = True
+            break
+        elif resp_mode == "3":
+            args.force = True
+            args.reprocess_ocr = False
+            break
+        else:
+            print("   ⚠️  Opção inválida. Digite 1, 2 ou 3.")
+
+    # Resumo
+    in_p = Path(args.input)
+    pdf_qtd = count_pdfs_in_path(in_p)
+    mode_desc = (
+        "Reprocessar TUDO do zero (--force)" if args.force
+        else ("Reprocessar pendentes de OCR (--reprocess-ocr)" if args.reprocess_ocr
+        else "Incremental (apenas novos e pendentes)")
+    )
+    ocr_desc = "Desativado (--skip-ocr)" if args.skip_ocr else "Ativado (Automático para escaneados e erros de CPF/Tipo)"
+
+    print("\n" + "=" * 70)
+    print("📋 RESUMO DA CONFIGURAÇÃO DO CLASSIFICADOR")
+    print("=" * 70)
+    print(f"• Entrada      : {args.input} ({pdf_qtd} arquivo(s) PDF)")
+    print(f"• Saída        : {args.output_dir}")
+    print(f"• Provedor     : {args.provider.upper()} (Modelo: {args.model})")
+    print(f"• Concorrência : {args.workers} thread(s)")
+    print(f"• OCR com LLM  : {ocr_desc}")
+    print(f"• Execução     : {mode_desc}")
+    print("=" * 70)
+
+    try:
+        conf_start = input("Deseja iniciar a classificação agora? (S/n) [S]: ").strip().lower()
+        if conf_start in ["n", "nao", "não", "no"]:
+            print("\n[Operação cancelada pelo usuário]")
+            sys.exit(0)
+    except (EOFError, KeyboardInterrupt):
+        print("\n[Operação cancelada pelo usuário]")
+        sys.exit(0)
+
+    print("\n" + "=" * 70 + "\n")
+    return args
+
+
+# ---------------------------------------------------------------------------
 # Execução Principal (CLI)
 # ---------------------------------------------------------------------------
 def main():
@@ -937,8 +1202,35 @@ def main():
         action="store_true",
         help="Desativa a criação de arquivos JSON e TXT individuais por PDF (nomeados por MD5)."
     )
+    parser.add_argument(
+        "--prompt", "--interativo",
+        dest="force_prompt",
+        action="store_true",
+        help="Abre o menu interativo no console para configurar as opções antes de iniciar."
+    )
+    parser.add_argument(
+        "-y", "--no-prompt", "--batch",
+        dest="no_prompt",
+        action="store_true",
+        help="Executa diretamente sem perguntas interativas no console."
+    )
 
     args = parser.parse_args()
+
+    # Detecta se foram passados argumentos explícitos via CLI
+    explicit_cli_args = [
+        arg for arg in sys.argv[1:]
+        if arg not in ["--prompt", "--interativo", "-y", "--no-prompt", "--batch"]
+    ]
+    is_tty = sys.stdin.isatty()
+    should_prompt = args.force_prompt or (
+        is_tty
+        and not args.no_prompt
+        and len(explicit_cli_args) == 0
+    )
+
+    if should_prompt:
+        args = prompt_interactive_menu(args)
 
     input_path = Path(args.input)
     if not input_path.exists():
