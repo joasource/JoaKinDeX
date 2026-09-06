@@ -27,13 +27,18 @@ O projeto é focado em privacidade, conformidade e auditoria: identifica os arqu
 - **Múltiplos Provedores de IA**:
   - **Ollama**: Suporta execução local ou via Docker (`open-webui` / `ollama`), com modelos como `gemma4:e4b`, `llama3`, `mistral`, etc.
   - **OpenAI**: Compatível com modelos como `gpt-4o-mini`, `gpt-4o` ou qualquer endpoint compatível.
+- **OCR Multimodal Híbrido com LLM**:
+  - Leitura automática de PDFs digitalizados (sem camada textual nativa) via renderização visual (`pypdfium2`).
+  - Re-análise inteligente quando detectado CPF com tamanho/sintaxe/dígito inválido ou tipo de documento não identificado.
+  - Botão no visualizador para disparar OCR visual sob demanda com um clique.
 - **Relatórios Duplos (JSON & TXT)**:
   - Arquivo consolidado `classificacao_diplomas.json`.
   - Arquivo consolidado `classificacao_diplomas.txt` para leitura humana.
   - Arquivos individuais por MD5 na pasta `saida/individuais/`.
 - **Interface Web de Conferência Humana**:
   - Visualização lado a lado (PDF original vs Formulário JSON).
-  - Edição direta de qualquer campo.
+  - Edição direta de qualquer campo e filtros cruzados por Natureza e Tipo.
+  - Re-análise via OCR multimodal diretamente pela interface.
   - Aprovação rápida com atalho de teclado (`Ctrl + Enter`).
   - Atualização do JSON e TXT em tempo real.
 
@@ -48,7 +53,8 @@ joaclassificador-pdf/
 ├── servidor_visualizador.py    # Servidor HTTP leve para conferência
 ├── iniciar_visualizador.sh     # Script para iniciar a interface web
 ├── visualizador.html           # Interface web com PDF e formulário
-├── requirements.txt            # Dependências Python
+├── requirements.txt            # Dependências Python (pip)
+├── environment.yml             # Arquivo de especificação do ambiente Conda
 └── README.md                   # Documentação do projeto
 ```
 
@@ -64,17 +70,38 @@ cd joaclassificador-pdf
 
 ### 2. Criar e Ativar Ambiente Virtual
 
-**Com Python venv:**
+#### Opção A: Utilizando Conda (Recomendado)
+
+Você pode configurar o ambiente completo com **Python 3.10** e todas as dependências de três formas:
+
+**1. Comando único via arquivo `environment.yml`:**
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+conda env create -f environment.yml
+conda activate pdf-classifier
+```
+
+**2. Passo a passo manual no terminal:**
+```bash
+# Cria o ambiente com a versão inicial recomendada do Python (3.10)
+conda create -n pdf-classifier python=3.10 -y
+
+# Ativa o ambiente
+conda activate pdf-classifier
+
+# Instala todas as dependências requeridas
 pip install -r requirements.txt
 ```
 
-**Ou com Conda:**
+**3. Instalação direta em linha única (sem dependência de arquivos locais):**
 ```bash
-conda create -n pdf-classifier python=3.10 -y
-conda activate pdf-classifier
+conda create -n pdf-classifier python=3.10 -y && conda run -n pdf-classifier pip install "pypdf>=4.0.0" "pdfplumber>=0.10.0" "pypdfium2>=4.30.0" "pillow>=10.0.0" "requests>=2.31.0" "tqdm>=4.66.0" "openai>=1.0.0" "fonttools>=4.50.0"
+```
+
+#### Opção B: Utilizando Python venv padrão
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
