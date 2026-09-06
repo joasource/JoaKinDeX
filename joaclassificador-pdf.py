@@ -805,10 +805,11 @@ def process_single_pdf(
     client: BaseLLMClient,
     max_pages: int = 4,
     force_ocr: bool = False,
-    skip_ocr: bool = False
+    skip_ocr: bool = False,
+    metadata: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:
     # Metadados do arquivo (MD5, data de criação e modificação)
-    meta = get_file_metadata(pdf_path)
+    meta = metadata or get_file_metadata(pdf_path)
 
     res_dict = {
         "md5": meta["md5"],
@@ -1063,6 +1064,41 @@ def generate_consolidated_txt(
     lines.append("=" * 80)
 
     return "\n".join(lines)
+
+
+def save_consolidated_reports(
+    items_dict: Dict[str, Any],
+    out_dir: Path,
+    provider_name: str,
+    model_name: str
+) -> None:
+    """
+    Salva os relatórios consolidado JSON e TXT de forma atômica para evitar perda ou
+    corrupção de dados em caso de parada forçada (Ctrl+C, kill ou reinicialização).
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    consolidated_json_path = out_dir / "classificacao_diplomas.json"
+    consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
+    results = sorted(list(items_dict.values()), key=lambda x: str(x.get("md5", "")))
+
+    # 1. JSON consolidado atômico
+    tmp_json = out_dir / f".tmp_{consolidated_json_path.name}"
+    try:
+        with open(tmp_json, "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+        tmp_json.replace(consolidated_json_path)
+    except Exception as e:
+        print(f"[Aviso] Falha ao gravar {consolidated_json_path.name}: {e}")
+
+    # 2. TXT consolidado atômico
+    try:
+        report_text = generate_consolidated_txt(results, provider_name, model_name)
+        tmp_txt = out_dir / f".tmp_{consolidated_txt_path.name}"
+        with open(tmp_txt, "w", encoding="utf-8") as f:
+            f.write(report_text)
+        tmp_txt.replace(consolidated_txt_path)
+    except Exception as e:
+        print(f"[Aviso] Falha ao gravar {consolidated_txt_path.name}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1565,29 +1601,96 @@ def main():
         indiv_dir.mkdir(parents=True, exist_ok=True)
 
     consolidated_json_path = out_dir / "classificacao_diplomas.json"
+    consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
     existing_by_md5 = {}
 
-    # Carrega processamentos anteriores para modo incremental
+    # 1. Carrega processamentos anteriores do JSON consolidado (se existir e não for --force)
+    count_from_consolidated = 0
     if consolidated_json_path.exists() and not args.force:
         try:
             with open(consolidated_json_path, "r", encoding="utf-8") as f:
                 old_data = json.load(f)
-                for item in old_data:
-                    # Reutiliza documentos que foram processados com sucesso ou conferidos manualmente
-                    if "md5" in item:
-                        existing_by_md5[item["md5"]] = item
+                if isinstance(old_data, list):
+                    for item in old_data:
+                        if isinstance(item, dict) and "md5" in item:
+                            existing_by_md5[item["md5"]] = item
+                            count_from_consolidated += 1
         except Exception as e:
-            existing_by_md5 = {}
+            print(f"[Aviso] Não foi possível ler {consolidated_json_path.name}: {e}")
 
-    # Separa os arquivos entre já processados e novos
+    # 2. Carrega / reconcilia arquivos da pasta 'individuais'
+    #    (essencial caso a execução anterior tenha sido interrompida com Ctrl+C ou parada forçada)
+    count_from_indiv = 0
+    if indiv_dir.exists() and not args.force:
+        try:
+            for entry in os.scandir(indiv_dir):
+                if entry.is_file() and entry.name.endswith(".json") and not entry.name.startswith("."):
+                    h = entry.name[:-5].lower()
+                    if h not in existing_by_md5:
+                        try:
+                            with open(entry.path, "r", encoding="utf-8") as f:
+                                item = json.load(f)
+                                if isinstance(item, dict) and item.get("md5"):
+                                    existing_by_md5[item["md5"]] = item
+                                    count_from_indiv += 1
+                        except Exception:
+                            continue
+        except Exception as e:
+            print(f"[Aviso] Erro ao ler pasta de arquivos individuais: {e}")
+
+    effective_model_name = getattr(client, "model", model_name)
+
+    if existing_by_md5:
+        details = []
+        if count_from_consolidated > 0:
+            details.append(f"{count_from_consolidated} do JSON consolidado")
+        if count_from_indiv > 0:
+            details.append(f"{count_from_indiv} recuperados da pasta individuais/")
+        det_str = f" ({', '.join(details)})" if details else ""
+        print(f"[*] Histórico carregado: {len(existing_by_md5)} documento(s) já classificados{det_str}.")
+
+        # Se recuperamos novos itens da pasta de individuais que não estavam no consolidado,
+        # sincroniza o consolidado imediatamente para proteger o estado
+        if count_from_indiv > 0:
+            save_consolidated_reports(existing_by_md5, out_dir, args.provider, effective_model_name)
+            print(f"[*] Relatório consolidado sincronizado com sucesso ({len(existing_by_md5)} documentos salvos).")
+
+    # 3. Indexa hashes MD5 dos PDFs de entrada
+    print(f"[*] Indexando e verificando integridade de {len(pdf_files)} PDF(s)...")
+    pdf_meta_map = {}
+    if len(pdf_files) > 20:
+        workers_idx = min(16, (os.cpu_count() or 4) * 2)
+        with ThreadPoolExecutor(max_workers=workers_idx) as executor:
+            future_to_pdf = {executor.submit(get_file_metadata, p): p for p in pdf_files}
+            iterator = as_completed(future_to_pdf)
+            if tqdm:
+                iterator = tqdm(iterator, total=len(pdf_files), desc="Indexando PDFs (MD5)", unit="doc")
+            for fut in iterator:
+                p = future_to_pdf[fut]
+                try:
+                    pdf_meta_map[p] = fut.result()
+                except Exception:
+                    pdf_meta_map[p] = {"md5": "", "data_criacao": "", "data_modificacao": ""}
+    else:
+        for p in pdf_files:
+            try:
+                pdf_meta_map[p] = get_file_metadata(p)
+            except Exception:
+                pdf_meta_map[p] = {"md5": "", "data_criacao": "", "data_modificacao": ""}
+
+    # 4. Separa os arquivos entre já processados e novos/pendentes
     files_to_process = []
     already_done_results = []
-
-    print("[*] Verificando documentos já processados anteriormente...")
     ocr_candidate_count = 0
+    seen_md5_to_process = set()
+
     for pdf in pdf_files:
-        meta = get_file_metadata(pdf)
-        h = meta["md5"]
+        meta = pdf_meta_map.get(pdf) or get_file_metadata(pdf)
+        h = meta.get("md5", "")
+        if not h:
+            files_to_process.append(pdf)
+            continue
+
         if h in existing_by_md5 and not args.force:
             item = existing_by_md5[h]
             # Respeita sempre aprovação manual humana
@@ -1595,44 +1698,64 @@ def main():
                 already_done_results.append(item)
                 continue
 
-            tipo_atual = (item.get("tipo_documento") or "").strip().lower()
-            tipo_nao_identificado = (not tipo_atual) or tipo_atual in [
-                "não identificado", "nao identificado", "outro", "não informado", "nao informado"
-            ]
-            cpf_item = item.get("cpf")
-            cpf_invalido = bool(cpf_item and not is_valid_cpf_syntax(cpf_item))
-            teve_tentativa_ocr = item.get("tentativa_ocr_llm", False)
-            teve_erro_ocr = (item.get("status") == "erro") and ("OCR" in (item.get("erro") or ""))
+            # Se o usuário solicitou reprocessamento de OCR (--reprocess-ocr / Opção 2)
+            if args.reprocess_ocr:
+                tipo_atual = (item.get("tipo_documento") or "").strip().lower()
+                tipo_nao_identificado = (not tipo_atual) or tipo_atual in [
+                    "não identificado", "nao identificado", "outro", "não informado", "nao informado"
+                ]
+                cpf_item = item.get("cpf")
+                cpf_invalido = bool(cpf_item and not is_valid_cpf_syntax(cpf_item))
+                teve_tentativa_ocr = item.get("tentativa_ocr_llm", False)
+                teve_erro_ocr = (item.get("status") == "erro") and ("OCR" in (item.get("erro") or ""))
 
-            precisa_ocr = (teve_erro_ocr or ((tipo_nao_identificado or cpf_invalido) and not teve_tentativa_ocr))
+                precisa_ocr = (teve_erro_ocr or ((tipo_nao_identificado or cpf_invalido) and not teve_tentativa_ocr))
 
-            if not args.skip_ocr and ((precisa_ocr and not teve_tentativa_ocr) or args.reprocess_ocr):
-                files_to_process.append(pdf)
-                ocr_candidate_count += 1
+                if not args.skip_ocr and precisa_ocr:
+                    if h not in seen_md5_to_process:
+                        files_to_process.append(pdf)
+                        seen_md5_to_process.add(h)
+                    ocr_candidate_count += 1
+                else:
+                    already_done_results.append(item)
             else:
-                already_done_results.append(item)
+                # Modo Incremental padrão (Opção 1)
+                # Pula todos os que já foram processados com sucesso
+                if item.get("status") == "sucesso":
+                    already_done_results.append(item)
+                else:
+                    # Documentos com status "erro" ou "pendente" são reprocessados no incremental
+                    if h not in seen_md5_to_process:
+                        files_to_process.append(pdf)
+                        seen_md5_to_process.add(h)
         else:
-            files_to_process.append(pdf)
+            if h not in seen_md5_to_process:
+                files_to_process.append(pdf)
+                seen_md5_to_process.add(h)
 
     if ocr_candidate_count > 0:
         print(f"[*] Identificados {ocr_candidate_count} documento(s) elegíveis para OCR via LLM (erros de leitura, tipo não identificado ou CPF com sintaxe errada).")
 
-    print(f"[*] Total de PDFs: {len(pdf_files)} | Já processados: {len(already_done_results)} | A processar: {len(files_to_process)}")
+    print(f"[*] Total de PDFs: {len(pdf_files)} | Já concluídos: {len(already_done_results)} | A processar: {len(files_to_process)}")
 
+    # Mantém um dicionário global unificado com todo o histórico acumulado
+    active_results = dict(existing_by_md5)
     new_results = []
+
     if files_to_process:
         print(f"[*] Iniciando classificação de {len(files_to_process)} documento(s) com {args.workers} worker(s)...")
 
         def handle_file(pdf: Path):
-            meta = get_file_metadata(pdf)
-            h = meta["md5"]
+            meta = pdf_meta_map.get(pdf) or get_file_metadata(pdf)
+            h = meta.get("md5")
             old_item = existing_by_md5.get(h)
 
             res = process_single_pdf(
                 pdf,
                 client,
                 max_pages=args.max_pages,
-                skip_ocr=args.skip_ocr
+                skip_ocr=args.skip_ocr,
+                metadata=meta
             )
 
             # Preserva metadados de conferência humana caso já existissem
@@ -1647,48 +1770,75 @@ def main():
             if not args.no_individual:
                 file_identifier = res["md5"]
                 single_json_path = indiv_dir / f"{file_identifier}.json"
-                with open(single_json_path, "w", encoding="utf-8") as f:
-                    json.dump(res, f, ensure_ascii=False, indent=2)
+                tmp_single_json = indiv_dir / f".{file_identifier}.json.tmp"
+                try:
+                    with open(tmp_single_json, "w", encoding="utf-8") as f:
+                        json.dump(res, f, ensure_ascii=False, indent=2)
+                    tmp_single_json.replace(single_json_path)
+                except Exception as e:
+                    print(f"[Aviso] Falha ao gravar {single_json_path.name}: {e}")
+
                 single_txt_path = indiv_dir / f"{file_identifier}.txt"
-                with open(single_txt_path, "w", encoding="utf-8") as f:
-                    f.write(format_single_txt(res))
+                tmp_single_txt = indiv_dir / f".{file_identifier}.txt.tmp"
+                try:
+                    with open(tmp_single_txt, "w", encoding="utf-8") as f:
+                        f.write(format_single_txt(res))
+                    tmp_single_txt.replace(single_txt_path)
+                except Exception as e:
+                    print(f"[Aviso] Falha ao gravar {single_txt_path.name}: {e}")
+
             return res
 
+        processed_count = 0
+        save_interval = 10  # Grava no consolidado continuamente a cada 10 arquivos concluídos
+
         if args.workers > 1:
-            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            executor = ThreadPoolExecutor(max_workers=args.workers)
+            try:
                 future_to_file = {executor.submit(handle_file, f): f for f in files_to_process}
                 iterator = as_completed(future_to_file)
                 if tqdm:
                     iterator = tqdm(iterator, total=len(files_to_process), desc="Processando Novos PDFs", unit="doc")
                 for future in iterator:
-                    new_results.append(future.result())
+                    res = future.result()
+                    new_results.append(res)
+                    active_results[res["md5"]] = res
+                    processed_count += 1
+                    if processed_count % save_interval == 0:
+                        save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
+            except KeyboardInterrupt:
+                print("\n\n[!] Interrupção solicitada pelo usuário (Ctrl+C). Cancelando fila e salvando dados...")
+                executor.shutdown(wait=False, cancel_futures=True)
+                save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
+                print(f"[✓] Progresso salvo com sucesso! ({len(active_results)} documentos totais no consolidado e individuais)")
+                print("[*] Você pode retomar a qualquer momento escolhendo a Opção 1 (Incremental).")
+                sys.exit(130)
+            finally:
+                executor.shutdown(wait=False)
         else:
             iterator = files_to_process
             if tqdm:
                 iterator = tqdm(files_to_process, desc="Processando Novos PDFs", unit="doc")
-            for f in iterator:
-                res = handle_file(f)
-                new_results.append(res)
+            try:
+                for f in iterator:
+                    res = handle_file(f)
+                    new_results.append(res)
+                    active_results[res["md5"]] = res
+                    processed_count += 1
+                    if processed_count % save_interval == 0:
+                        save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
+            except KeyboardInterrupt:
+                print("\n\n[!] Interrupção solicitada pelo usuário (Ctrl+C). Salvando dados...")
+                save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
+                print(f"[✓] Progresso salvo com sucesso! ({len(active_results)} documentos totais no consolidado e individuais)")
+                print("[*] Você pode retomar a qualquer momento escolhendo a Opção 1 (Incremental).")
+                sys.exit(130)
     else:
         print("[*] Todos os documentos já estão atualizados no banco de dados!")
 
-    # Combina existentes + novos (sem duplicatas por MD5)
-    all_dict = {item["md5"]: item for item in already_done_results}
-    for item in new_results:
-        all_dict[item["md5"]] = item
-
-    results = list(all_dict.values())
-    results.sort(key=lambda x: x["md5"])
-
-    # 1. Salva arquivo consolidado JSON
-    with open(consolidated_json_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-
-    # 2. Salva arquivo consolidado TXT
-    consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
-    report_text = generate_consolidated_txt(results, args.provider, client.model if hasattr(client, "model") else model_name)
-    with open(consolidated_txt_path, "w", encoding="utf-8") as f:
-        f.write(report_text)
+    # Gravação final consolidada
+    save_consolidated_reports(active_results, out_dir, args.provider, effective_model_name)
+    results = sorted(list(active_results.values()), key=lambda x: str(x.get("md5", "")))
 
     # Resumo no terminal
     sucessos = sum(1 for r in results if r.get("status") == "sucesso")

@@ -233,19 +233,54 @@ class ConferenciaServer:
         print(f"[*] {len(self.md5_to_file)} PDFs indexados com sucesso pelo hash MD5.")
 
     def load_data(self):
-        if not self.json_path.exists():
-            return []
-        try:
-            with open(self.json_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[Erro] Falha ao ler JSON: {e}")
-            return []
+        data = []
+        existing_by_md5 = {}
+        if self.json_path.exists():
+            try:
+                with open(self.json_path, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                    if isinstance(loaded, list):
+                        data = loaded
+                        for item in data:
+                            if isinstance(item, dict) and "md5" in item:
+                                existing_by_md5[item["md5"]] = item
+            except Exception as e:
+                print(f"[Erro] Falha ao ler JSON: {e}")
+                data = []
+
+        # Reconciliação com arquivos da pasta individuais caso existam documentos não consolidados
+        indiv_dir = self.json_path.parent / "individuais"
+        if indiv_dir.exists():
+            recovered = 0
+            try:
+                for entry in os.scandir(indiv_dir):
+                    if entry.is_file() and entry.name.endswith(".json") and not entry.name.startswith("."):
+                        h = entry.name[:-5].lower()
+                        if h not in existing_by_md5:
+                            try:
+                                with open(entry.path, "r", encoding="utf-8") as f:
+                                    item = json.load(f)
+                                    if isinstance(item, dict) and item.get("md5"):
+                                        existing_by_md5[item["md5"]] = item
+                                        data.append(item)
+                                        recovered += 1
+                            except Exception:
+                                continue
+            except Exception as e:
+                print(f"[Erro] Falha ao escanear pasta individuais: {e}")
+
+            if recovered > 0:
+                print(f"[*] Visualizador sincronizou {recovered} documento(s) da pasta 'individuais/' para o relatório consolidado.")
+                self.save_data(data)
+
+        return data
 
     def save_data(self, data):
         self.json_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.json_path, "w", encoding="utf-8") as f:
+        tmp_json = self.json_path.parent / f".tmp_{self.json_path.name}"
+        with open(tmp_json, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        tmp_json.replace(self.json_path)
         # Atualiza também o relatório TXT consolidado correspondente
         self.update_txt_report(data)
 
