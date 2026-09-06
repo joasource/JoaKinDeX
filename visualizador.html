@@ -59,14 +59,27 @@
       </div>
     </div>
 
-    <!-- Progresso Geral -->
-    <div class="hidden md:flex items-center gap-4 bg-slate-900/80 px-4 py-1.5 rounded-lg border border-slate-800">
-      <div class="text-xs">
-        <span class="text-slate-400">Progresso:</span>
-        <span id="progressText" class="font-semibold text-emerald-400 ml-1">0 / 0 (0%)</span>
+    <!-- Indicadores de Progresso (IA e Revisão Humana) -->
+    <div class="hidden md:flex items-center gap-3 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 text-xs shrink-0">
+      <!-- Indicador IA -->
+      <div class="flex items-center gap-1.5" title="Total de documentos classificados com sucesso pela IA / Total de PDFs no lote">
+        <i class="fa-solid fa-robot text-cyan-400 text-[11px]"></i>
+        <span class="text-slate-400">Classificados (IA):</span>
+        <span id="aiClassifiedText" class="font-semibold text-cyan-300 font-mono">0 / 0 (0%)</span>
       </div>
-      <div class="w-28 bg-slate-800 rounded-full h-2 overflow-hidden">
-        <div id="progressBar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"></div>
+
+      <div class="h-3.5 w-px bg-slate-700"></div>
+
+      <!-- Indicador Revisão Humana -->
+      <div class="flex items-center gap-2" title="Total de documentos classificados que já foram revisados e aprovados por você (Ctrl+Enter)">
+        <div class="flex items-center gap-1.5">
+          <i class="fa-solid fa-user-check text-emerald-400 text-[11px]"></i>
+          <span class="text-slate-400">Revisão Humana:</span>
+          <span id="progressText" class="font-semibold text-emerald-400 font-mono">0 / 0 (0%)</span>
+        </div>
+        <div class="w-20 bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700/60" title="Progresso da conferência humana aprovada">
+          <div id="progressBar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"></div>
+        </div>
       </div>
     </div>
 
@@ -1631,11 +1644,26 @@
       if (activeTipoFilter) label.push(activeTipoFilter);
       document.getElementById('activeFilterLabel').innerText = label.length > 0 ? `(${label.join(' • ')})` : '';
 
-      const totalClassificados = total - documents.filter(d => isDocumentUnprocessed(d)).length;
+      const totalUnprocessed = documents.filter(d => isDocumentUnprocessed(d)).length;
+      const totalClassificados = total - totalUnprocessed;
       const totalAprovados = documents.filter(d => !isDocumentUnprocessed(d) && safeString(d.status_conferencia).toLowerCase() === 'aprovado').length;
-      const pct = totalClassificados > 0 ? Math.round((totalAprovados / totalClassificados) * 100) : 0;
-      document.getElementById('progressText').innerText = `${totalAprovados} / ${totalClassificados} conferidos (${pct}%)`;
-      document.getElementById('progressBar').style.width = `${pct}%`;
+      const pctHumano = totalClassificados > 0 ? Math.round((totalAprovados / totalClassificados) * 100) : 0;
+      const pctIA = total > 0 ? Math.round((totalClassificados / total) * 100) : 0;
+
+      const aiElem = document.getElementById('aiClassifiedText');
+      if (aiElem) {
+        aiElem.innerText = `${totalClassificados} / ${total} (${pctIA}%)`;
+      }
+
+      const progElem = document.getElementById('progressText');
+      if (progElem) {
+        progElem.innerText = `${totalAprovados} / ${totalClassificados} (${pctHumano}%)`;
+      }
+
+      const barElem = document.getElementById('progressBar');
+      if (barElem) {
+        barElem.style.width = `${pctHumano}%`;
+      }
     }
 
     // Retorna badge visual estilizado para o tipo de natureza
