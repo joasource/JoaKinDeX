@@ -18,6 +18,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pypdf")
 import base64
 import io
 import subprocess
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -314,10 +315,184 @@ class BaseLLMClient:
         raise NotImplementedError
 
 
+def detect_ollama_environments(base_url: str = "http://localhost:11434") -> List[Dict[str, Any]]:
+    """
+    Detecta de forma inteligente e exaustiva todos os ambientes Ollama disponíveis:
+    1. Ollama Nativo instalado diretamente no sistema host (sem Docker), rodando em localhost:11434
+    2. Binário nativo 'ollama' instalado no host (ativo ou parado)
+    3. Container Docker Oficial Puro do Ollama (ex: nome 'ollama' ou imagem 'ollama/ollama')
+    4. Container Docker Open-WebUI com Ollama embutido (ex: 'open-webui')
+    5. Qualquer outro container Docker executando Ollama
+
+    Retorna uma lista com informações detalhadas e modelos baixados de cada ambiente.
+    """
+    envs: List[Dict[str, Any]] = []
+    clean_url = base_url.rstrip("/")
+
+    # 1. Teste de conexão HTTP direta (Ollama nativo no host ou com porta exposta)
+    http_online = False
+    http_models: List[str] = []
+    http_models_display: List[str] = []
+    try:
+        r = requests.get(clean_url + "/api/tags", timeout=2)
+        if r.status_code == 200:
+            http_online = True
+            data = r.json()
+            for m in data.get("models", []):
+                m_name = m.get("name", "")
+                if m_name:
+                    http_models.append(m_name)
+                    sz_bytes = m.get("size", 0)
+                    param = m.get("details", {}).get("parameter_size", "")
+                    parts = []
+                    if sz_bytes:
+                        parts.append(f"{sz_bytes / (1024**3):.1f} GB")
+                    if param:
+                        parts.append(param)
+                    desc_extra = f" ({', '.join(parts)})" if parts else ""
+                    http_models_display.append(f"{m_name}{desc_extra}")
+    except Exception:
+        pass
+
+    # Verifica se o executável 'ollama' existe nativamente no host
+    native_bin = shutil.which("ollama")
+
+    if http_online:
+        desc = "Ollama Nativo / HTTP Direto (localhost:11434 - sem Docker)"
+        if native_bin:
+            desc = f"Ollama Nativo no Sistema ({native_bin}) via {clean_url}"
+        envs.append({
+            "type": "native_http",
+            "name": "Ollama Nativo (sem Docker)",
+            "description": desc,
+            "container": None,
+            "base_url": base_url,
+            "models": http_models,
+            "models_display": http_models_display,
+            "is_running": True
+        })
+    elif native_bin:
+        envs.append({
+            "type": "native_binary_stopped",
+            "name": f"Ollama Nativo Instalado ({native_bin})",
+            "description": f"Binário 'ollama' instalado no sistema ({native_bin}), mas o serviço HTTP não está ativo (execute: ollama serve)",
+            "container": None,
+            "base_url": base_url,
+            "models": [],
+            "models_display": [],
+            "is_running": False
+        })
+
+    # 2. Inspeção de containers Docker em execução
+    try:
+        res = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Status}}"],
+            capture_output=True,
+            text=True,
+            timeout=4
+        )
+        if res.returncode == 0:
+            for line in res.stdout.strip().splitlines():
+                if not line.strip():
+                    continue
+                parts = line.split("\t")
+                c_name = parts[0].strip()
+                c_image = parts[1].strip() if len(parts) > 1 else ""
+
+                # Classifica o tipo de container Ollama
+                is_official_ollama = (
+                    "ollama/ollama" in c_image.lower()
+                    or c_name.lower() == "ollama"
+                    or (c_image.lower() == "ollama:latest")
+                )
+                is_open_webui = (
+                    "open-webui" in c_name.lower()
+                    or "open-webui" in c_image.lower()
+                )
+                is_other_ollama = (
+                    not is_official_ollama
+                    and not is_open_webui
+                    and ("ollama" in c_name.lower() or "ollama" in c_image.lower())
+                )
+
+                if is_official_ollama or is_open_webui or is_other_ollama:
+                    c_models: List[str] = []
+                    c_models_display: List[str] = []
+
+                    # Tentativa 1: curl interno via /api/tags
+                    try:
+                        cmd_curl = ["docker", "exec", "-i", c_name, "curl", "-s", "http://localhost:11434/api/tags"]
+                        r_curl = subprocess.run(cmd_curl, capture_output=True, text=True, timeout=3)
+                        if r_curl.returncode == 0 and r_curl.stdout.strip():
+                            d_json = json.loads(r_curl.stdout)
+                            for m in d_json.get("models", []):
+                                m_name = m.get("name", "")
+                                if m_name:
+                                    c_models.append(m_name)
+                                    sz_bytes = m.get("size", 0)
+                                    param = m.get("details", {}).get("parameter_size", "")
+                                    extra_parts = []
+                                    if sz_bytes:
+                                        extra_parts.append(f"{sz_bytes / (1024**3):.1f} GB")
+                                    if param:
+                                        extra_parts.append(param)
+                                    extra_str = f" ({', '.join(extra_parts)})" if extra_parts else ""
+                                    c_models_display.append(f"{m_name}{extra_str}")
+                    except Exception:
+                        pass
+
+                    # Tentativa 2: comando ollama list no container
+                    if not c_models:
+                        try:
+                            cmd_list = ["docker", "exec", "-i", c_name, "ollama", "list"]
+                            r_list = subprocess.run(cmd_list, capture_output=True, text=True, timeout=3)
+                            if r_list.returncode == 0 and r_list.stdout.strip():
+                                lines = r_list.stdout.strip().splitlines()
+                                if len(lines) > 1:
+                                    for l in lines[1:]:
+                                        col = l.split()
+                                        if col:
+                                            m_name = col[0]
+                                            c_models.append(m_name)
+                                            m_sz = col[2] if len(col) >= 3 else ""
+                                            extra = f" ({m_sz})" if m_sz else ""
+                                            c_models_display.append(f"{m_name}{extra}")
+                        except Exception:
+                            pass
+
+                    if is_official_ollama:
+                        c_type = "docker_ollama_official"
+                        c_name_label = f"Docker Oficial Ollama (container: '{c_name}')"
+                        c_desc = f"Container Oficial Ollama Puro (container: '{c_name}', imagem: '{c_image}')"
+                    elif is_open_webui:
+                        c_type = "docker_open_webui"
+                        c_name_label = f"Docker Open-WebUI (container: '{c_name}')"
+                        c_desc = f"Container Open-WebUI com Ollama (container: '{c_name}', imagem: '{c_image}')"
+                    else:
+                        c_type = "docker_ollama_custom"
+                        c_name_label = f"Docker Ollama (container: '{c_name}')"
+                        c_desc = f"Container Docker Ollama Customizado (container: '{c_name}', imagem: '{c_image}')"
+
+                    envs.append({
+                        "type": c_type,
+                        "name": c_name_label,
+                        "description": c_desc,
+                        "container": c_name,
+                        "base_url": "http://localhost:11434",
+                        "models": c_models,
+                        "models_display": c_models_display,
+                        "is_running": True
+                    })
+    except Exception:
+        pass
+
+    return envs
+
+
 class OllamaClient(BaseLLMClient):
     """
-    Cliente para Ollama, suportando requisições HTTP diretas
-    e comunicação via docker exec para containers como open-webui.
+    Cliente para Ollama, suportando execução nativa no sistema operacional
+    e comunicação via docker exec (Container Oficial Ollama Puro ou Open-WebUI).
     """
     def __init__(
         self,
@@ -340,31 +515,20 @@ class OllamaClient(BaseLLMClient):
             self._resolve_model_name()
             return
 
-        try:
-            r = requests.get(f"{self.base_url}/api/tags", timeout=2)
-            if r.status_code == 200:
-                self.use_docker = False
-                self._resolve_model_name()
-                return
-        except Exception:
-            pass
+        envs = detect_ollama_environments(base_url=self.base_url)
+        running = [e for e in envs if e.get("is_running")]
 
-        try:
-            res = subprocess.run(
-                ["docker", "ps", "--format", "{{.Names}}"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            containers = res.stdout.strip().splitlines()
-            candidates = ["open-webui", "ollama"]
-            for c in candidates:
-                if c in containers:
-                    self.docker_container = c
-                    self.use_docker = True
-                    break
-        except Exception:
-            pass
+        if running:
+            # Prefere ambiente que já possua modelos baixados
+            best = next((e for e in running if e.get("models")), running[0])
+            if best["type"] == "native_http":
+                self.use_docker = False
+                self.docker_container = None
+            else:
+                self.use_docker = True
+                self.docker_container = best["container"]
+        else:
+            self.use_docker = False
 
         self._resolve_model_name()
 
@@ -383,14 +547,23 @@ class OllamaClient(BaseLLMClient):
 
     def _list_models(self) -> List[str]:
         try:
-            if self.use_docker:
+            if self.use_docker and self.docker_container:
                 cmd = ["docker", "exec", "-i", self.docker_container, "curl", "-s", "http://localhost:11434/api/tags"]
                 res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-                data = json.loads(res.stdout)
+                if res.returncode == 0 and res.stdout.strip():
+                    data = json.loads(res.stdout)
+                    return [m["name"] for m in data.get("models", [])]
+                # Fallback para ollama list
+                cmd2 = ["docker", "exec", "-i", self.docker_container, "ollama", "list"]
+                res2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=5)
+                if res2.returncode == 0 and res2.stdout.strip():
+                    lines = res2.stdout.strip().splitlines()
+                    return [l.split()[0] for l in lines[1:] if l.split()]
             else:
-                r = requests.get(f"{self.base_url}/api/tags", timeout=5)
+                url = self.base_url.rstrip("/") + "/api/tags"
+                r = requests.get(url, timeout=5)
                 data = r.json()
-            return [m["name"] for m in data.get("models", [])]
+                return [m["name"] for m in data.get("models", [])]
         except Exception:
             return []
 
@@ -927,28 +1100,14 @@ def get_available_ollama_models(
     base_url: str = "http://localhost:11434",
     docker_container: Optional[str] = None
 ) -> List[str]:
-    # Tentativa 1: HTTP direto
-    try:
-        r = requests.get(f"{base_url.rstrip('/')}/api/tags", timeout=1.5)
-        if r.status_code == 200:
-            return [m["name"] for m in r.json().get("models", [])]
-    except Exception:
-        pass
-
-    # Tentativa 2: Docker
-    try:
-        candidates = [docker_container] if docker_container else ["open-webui", "ollama"]
-        for c in candidates:
-            if not c:
-                continue
-            cmd = ["docker", "exec", "-i", c, "curl", "-s", "http://localhost:11434/api/tags"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=2.5)
-            if res.returncode == 0 and res.stdout.strip():
-                data = json.loads(res.stdout)
-                return [m["name"] for m in data.get("models", [])]
-    except Exception:
-        pass
-
+    envs = detect_ollama_environments(base_url=base_url)
+    if docker_container:
+        for e in envs:
+            if e.get("container") == docker_container:
+                return e.get("models", [])
+    for e in envs:
+        if e.get("is_running") and e.get("models"):
+            return e.get("models", [])
     return []
 
 
@@ -1028,10 +1187,48 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
 
     # 4. Modelo de IA
     if args.provider == "ollama":
-        detected_models = get_available_ollama_models(args.ollama_url, args.docker)
-        default_model = args.model or (detected_models[0] if detected_models else "gemma4:e4b")
-        if detected_models:
-            print(f"   ↳ Modelos detectados no Ollama: {', '.join(detected_models)}")
+        print("\n🔍 Detectando ambientes Ollama (Nativo no sistema, Docker oficial puro, Open-WebUI)...")
+        detected_envs = detect_ollama_environments(base_url=args.ollama_url)
+        running_envs = [e for e in detected_envs if e.get("is_running")]
+
+        chosen_env = None
+        if len(running_envs) == 1:
+            chosen_env = running_envs[0]
+            print(f"   [✓] {chosen_env['description']}")
+            if chosen_env["container"]:
+                args.docker = chosen_env["container"]
+        elif len(running_envs) > 1:
+            print(f"   [✓] Foram identificados {len(running_envs)} ambientes Ollama ativos:")
+            for idx, env_opt in enumerate(running_envs, 1):
+                m_prev = f" (Modelos: {', '.join(env_opt['models'][:3])})" if env_opt.get("models") else " (Sem modelos baixados)"
+                print(f"      {idx}) {env_opt['description']}{m_prev}")
+            try:
+                resp_env = input(f"   Selecione o ambiente Ollama desejado (1-{len(running_envs)}) [1]: ").strip()
+                sel_idx = int(resp_env) - 1 if (resp_env.isdigit() and 1 <= int(resp_env) <= len(running_envs)) else 0
+                chosen_env = running_envs[sel_idx]
+                if chosen_env["container"]:
+                    args.docker = chosen_env["container"]
+                else:
+                    args.docker = None
+            except (EOFError, KeyboardInterrupt):
+                print("\n[Operação cancelada pelo usuário]")
+                sys.exit(0)
+        else:
+            stopped_native = next((e for e in detected_envs if e.get("type") == "native_binary_stopped"), None)
+            if stopped_native:
+                print(f"   ⚠️  {stopped_native['description']}")
+            else:
+                print("   ⚠️  Nenhum servidor Ollama detectado (nem nativo em localhost:11434, nem em containers Docker).")
+
+        available_models = chosen_env["models"] if chosen_env else []
+        models_display = chosen_env.get("models_display", []) if chosen_env else []
+
+        if available_models:
+            print(f"   ↳ Modelos baixados encontrados: {', '.join(models_display or available_models)}")
+            default_model = args.model or available_models[0]
+        else:
+            default_model = args.model or "gemma4:e4b"
+
         while True:
             try:
                 resp_mod = input(f"\n🧠 Modelo Ollama [{default_model}]: ").strip()
@@ -1347,9 +1544,11 @@ def main():
             docker_container=args.docker
         )
         if client.use_docker:
-            print(f"[*] Modo de conexão: Docker exec (container: {client.docker_container})")
+            c_name_lower = client.docker_container.lower()
+            c_label = "Open-WebUI" if "open-webui" in c_name_lower else ("Oficial Puro" if "ollama" in c_name_lower else "Docker")
+            print(f"[*] Modo de conexão: Docker exec [{c_label}] (container: '{client.docker_container}')")
         else:
-            print(f"[*] Modo de conexão: HTTP direto ({client.base_url})")
+            print(f"[*] Modo de conexão: Ollama Nativo / HTTP direto ({client.base_url})")
     else:
         model_name = args.model or "gpt-4o-mini"
         print(f"[*] Inicializando cliente OpenAI (Modelo: {model_name})...")

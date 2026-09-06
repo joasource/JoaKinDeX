@@ -131,7 +131,7 @@ O menu permite configurar facilmente:
 - 📁 **Pasta de PDFs**: sugere a pasta padrão e contabiliza quantos arquivos PDF existem no caminho informado.
 - 📄 **Pasta de saída**: onde serão gravados os relatórios consolidados e individuais.
 - 🤖 **Provedor de IA**: alterna facilmente entre **Ollama** e **OpenAI**.
-- 🧠 **Modelo de IA**: auto-detecta modelos instalados no Ollama (local/Docker) ou sugere `gpt-4o-mini`.
+- 🧠 **Modelo de IA**: auto-detecta de forma inteligente o ambiente do Ollama ativo (**Nativo sem Docker**, **Container Oficial Ollama Puro** ou **Container Open-WebUI**) e lista todos os modelos baixados com tamanho e parâmetros, ou sugere `gpt-4o-mini` para OpenAI.
 - ⚡ **Concorrência**: ajusta o número de threads simultâneas para acelerar o processamento.
 - 🔍 **OCR Multimodal**: opção para ativar ou desativar leitura visual em PDFs escaneados ou com erros de CPF/Tipo.
 - ⚙️ **Estratégia**: escolher entre modo incremental (apenas novos/pendentes), reprocessar quem precisa de OCR ou reprocessar tudo do zero.
