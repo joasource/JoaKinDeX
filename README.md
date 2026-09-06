@@ -46,7 +46,7 @@ O projeto é focado em privacidade, conformidade e auditoria: identifica os arqu
   - Botões de cópia rápida em cada campo lido (CPF, Beneficiário, Curso, RG, Instituição, etc.).
   - **Copiar Ficha Completa (Visual Law)**: Gera um card institucional com borda lateral executiva e tabela limpa em Rich Text (HTML) pronto para colar no Microsoft Word, LibreOffice ou Google Docs, com fallback inteligente para texto puro.
 - **Acesso Remoto Seguro via Cloudflare Tunnel (Docker)**:
-  - Configuração opcional via `docker-compose.yml` para expor o visualizador com certificado SSL/HTTPS via Cloudflare Zero Trust (ex: `https://documentos.joaca.com.br`), garantindo suporte total às APIs de Área de Transferência em qualquer computador da rede.
+  - Configuração opcional via `docker-compose.yml` para expor o visualizador com certificado SSL/HTTPS via Cloudflare Zero Trust (ex: `https://documentos.seu-dominio.com.br`), garantindo suporte total às APIs de Área de Transferência em qualquer computador da rede.
 
 ---
 
@@ -274,7 +274,7 @@ Para acessar o visualizador de outros dispositivos (ou máquinas Windows na rede
    ```bash
    docker compose up -d
    ```
-3. No painel da Cloudflare (Zero Trust ➔ Networks ➔ Tunnels), aponte o subdomínio desejado (ex: `documentos.joaca.com.br`) para `http://localhost:8088`.
+3. No painel da Cloudflare (Zero Trust ➔ Networks ➔ Tunnels), aponte o subdomínio desejado (ex: `documentos.seu-dominio.com.br`) para `http://localhost:8088`.
 
 ---
 
