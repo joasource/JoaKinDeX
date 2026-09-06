@@ -1046,6 +1046,7 @@
       loadDocuments();
       setupKeyboardShortcuts();
       checkBatchStatusOnLoad();
+      loadSystemConfig();
     });
 
     async function loadDocuments() {
@@ -2029,6 +2030,49 @@
       }
     }
 
+    function updateOcrButtonsState() {
+      const btn1 = document.getElementById('btnOcrLlm');
+      const btn2 = document.getElementById('btnOcrLlmHeader');
+      if (!btn1 && !btn2) return;
+
+      const prov = (currentAiProvider || systemConfig?.visualizador?.provider || 'ollama').toLowerCase();
+
+      let modelName = '';
+      if (prov === 'openai') {
+        const sel = document.getElementById('cfgOpenaiModelSelect');
+        const custom = document.getElementById('cfgOpenaiModelCustom');
+        modelName = (sel && sel.value === 'custom' ? custom?.value : sel?.value) || systemConfig?.visualizador?.model || 'gpt-4o-mini';
+      } else {
+        const sel = document.getElementById('cfgOllamaModelSelect');
+        const custom = document.getElementById('cfgOllamaModelCustom');
+        modelName = (sel && sel.value === '__custom__' ? custom?.value : sel?.value) || systemConfig?.visualizador?.model || 'gemma4:e4b';
+      }
+
+      if (prov === 'openai') {
+        if (btn2) {
+          btn2.className = "px-2.5 py-1 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm";
+          btn2.title = `Re-analisar e extrair dados deste documento com OCR visual via OpenAI API (${modelName})`;
+          btn2.innerHTML = '<i class="fa-solid fa-cloud text-cyan-400"></i> <span>OCR (OpenAI)</span>';
+        }
+        if (btn1) {
+          btn1.className = "py-1.5 px-3 bg-cyan-600/15 hover:bg-cyan-600/25 text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0";
+          btn1.title = `Re-analisar e extrair dados deste documento com OCR visual via OpenAI API (${modelName})`;
+          btn1.innerHTML = '<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Re-analisar OCR (OpenAI)</span>';
+        }
+      } else {
+        if (btn2) {
+          btn2.className = "px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm";
+          btn2.title = `Re-analisar e extrair dados deste documento com OCR multimodal via Ollama Local (${modelName})`;
+          btn2.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>OCR (Ollama)</span>';
+        }
+        if (btn1) {
+          btn1.className = "py-1.5 px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0";
+          btn1.title = `Re-analisar e extrair dados deste documento com OCR multimodal via Ollama Local (${modelName})`;
+          btn1.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Re-analisar OCR</span>';
+        }
+      }
+    }
+
     async function triggerOcrLlm() {
       if (!filteredDocs || filteredDocs.length === 0 || currentIndex < 0 || currentIndex >= filteredDocs.length) {
         showToast('Nenhum documento selecionado para OCR.', 'error');
@@ -2037,34 +2081,76 @@
       const doc = filteredDocs[currentIndex];
       const targetMd5 = doc.md5;
 
+      const prov = (currentAiProvider || systemConfig?.visualizador?.provider || 'ollama').toLowerCase();
+
+      let modelName = '';
+      if (prov === 'openai') {
+        const sel = document.getElementById('cfgOpenaiModelSelect');
+        const custom = document.getElementById('cfgOpenaiModelCustom');
+        modelName = (sel && sel.value === 'custom' ? custom?.value : sel?.value) || systemConfig?.visualizador?.model || 'gpt-4o-mini';
+      } else {
+        const sel = document.getElementById('cfgOllamaModelSelect');
+        const custom = document.getElementById('cfgOllamaModelCustom');
+        modelName = (sel && sel.value === '__custom__' ? custom?.value : sel?.value) || systemConfig?.visualizador?.model || 'gemma4:e4b';
+      }
+
+      const openaiKeyInput = (document.getElementById('cfgOpenaiKey')?.value || '').trim();
+      const hasKey = systemConfig?.visualizador?.has_openai_key || systemConfig?.classificador?.has_openai_key;
+
+      if (prov === 'openai' && !openaiKeyInput && !hasKey) {
+        showToast('Chave da API da OpenAI não detectada! Abra as Configurações (aba IA) para informá-la.', 'error');
+        openConfigModal('ai');
+        return;
+      }
+
       const btn1 = document.getElementById('btnOcrLlm');
       const btn2 = document.getElementById('btnOcrLlmHeader');
       const originalHtml1 = btn1 ? btn1.innerHTML : '';
       const originalHtml2 = btn2 ? btn2.innerHTML : '';
 
+      const spinColor = prov === 'openai' ? 'text-cyan-400' : 'text-purple-400';
+      const provLabel = prov === 'openai' ? 'OpenAI API' : 'Ollama';
+
       if (btn1) {
         btn1.disabled = true;
-        btn1.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-purple-400"></i> Executando OCR...';
+        btn1.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin ${spinColor}"></i> Executando OCR (${provLabel})...`;
         btn1.classList.add('opacity-75', 'cursor-not-allowed');
       }
       if (btn2) {
         btn2.disabled = true;
-        btn2.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-purple-400"></i> <span>Executando...</span>';
+        btn2.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin ${spinColor}"></i> <span>Executando...</span>`;
         btn2.classList.add('opacity-75', 'cursor-not-allowed');
       }
 
-      showToast('Enviando documento para análise visual via LLM...', 'info');
+      showToast(`Enviando documento para OCR visual via ${provLabel} (${modelName})...`, 'info');
 
       try {
+        const payload = {
+          md5: targetMd5,
+          provider: prov,
+          model: modelName
+        };
+        if (openaiKeyInput) {
+          payload.openai_key = openaiKeyInput;
+        }
+        const customBaseUrl = (document.getElementById('cfgOpenaiBaseUrl')?.value || '').trim();
+        if (customBaseUrl) {
+          payload.openai_base_url = customBaseUrl;
+        }
+        const customOllamaUrl = (document.getElementById('cfgOllamaUrl')?.value || '').trim();
+        if (customOllamaUrl) {
+          payload.ollama_url = customOllamaUrl;
+        }
+
         const resp = await fetch('/api/ocr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ md5: targetMd5 })
+          body: JSON.stringify(payload)
         });
 
         const resData = await resp.json();
         if (!resp.ok || resData.status !== 'sucesso') {
-          throw new Error(resData.mensagem || resData.erro || 'Falha ao executar OCR via LLM.');
+          throw new Error(resData.mensagem || resData.erro || `Falha ao executar OCR via ${provLabel}.`);
         }
 
         const novoItem = resData.item;
@@ -2079,9 +2165,9 @@
         // Atualiza formulário e JSON viewer com os dados atualizados
         selectDocument(currentIndex, true);
         applyFilters(false);
-        showToast('OCR via LLM concluído com sucesso!', 'success');
+        showToast(resData.mensagem || `OCR via ${provLabel} concluído com sucesso!`, 'success');
       } catch (err) {
-        console.error('Erro no OCR via LLM:', err);
+        console.error(`Erro no OCR via ${provLabel}:`, err);
         showToast(`Erro no OCR: ${err.message}`, 'error');
       } finally {
         if (btn1) {
@@ -2094,6 +2180,7 @@
           btn2.innerHTML = originalHtml2;
           btn2.classList.remove('opacity-75', 'cursor-not-allowed');
         }
+        updateOcrButtonsState();
       }
     }
 
@@ -2498,6 +2585,7 @@
         if (secOllama) secOllama.classList.add('hidden');
         if (secOpenai) secOpenai.classList.remove('hidden');
       }
+      updateOcrButtonsState();
     }
 
     function togglePasswordVisibility(inputId, btn) {
@@ -2536,34 +2624,37 @@
         if (countD) countD.innerText = data.doc_count ?? (data.current_doc_count ?? 0);
 
         // 2. Provedor de IA
-        const prov = classif.provider || vis.provider || 'ollama';
+        const prov = vis.provider || classif.provider || 'ollama';
         setAiProvider(prov);
 
         // Ollama URL
         const inOllamaUrl = document.getElementById('cfgOllamaUrl');
-        if (inOllamaUrl) inOllamaUrl.value = classif.ollama_url || vis.ollama_url || 'http://localhost:11434';
+        if (inOllamaUrl) inOllamaUrl.value = vis.ollama_url || classif.ollama_url || 'http://localhost:11434';
 
         // Ambientes Ollama
         detectedEnvironments = data.environments || [];
-        populateOllamaEnvironments(classif.docker, classif.model);
+        populateOllamaEnvironments(classif.docker, vis.model || classif.model);
 
         // OpenAI
         const inOpenaiKey = document.getElementById('cfgOpenaiKey');
         const keyStatus = document.getElementById('cfgOpenaiKeyStatus');
-        if (classif.has_openai_key) {
+        const hasOpenaiKey = vis.has_openai_key || classif.has_openai_key;
+        const maskedKey = vis.openai_key_masked || classif.openai_key_masked;
+
+        if (hasOpenaiKey) {
           if (keyStatus) keyStatus.innerHTML = '<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-check"></i> Chave detectada</span>';
-          if (inOpenaiKey && classif.openai_key_masked) inOpenaiKey.placeholder = classif.openai_key_masked;
+          if (inOpenaiKey && maskedKey) inOpenaiKey.placeholder = maskedKey;
         } else {
           if (keyStatus) keyStatus.innerHTML = '<span class="text-slate-500">Nenhuma chave detectada</span>';
           if (inOpenaiKey) inOpenaiKey.placeholder = 'sk-...';
         }
 
         const inOpenaiBaseUrl = document.getElementById('cfgOpenaiBaseUrl');
-        if (inOpenaiBaseUrl) inOpenaiBaseUrl.value = classif.openai_base_url || '';
+        if (inOpenaiBaseUrl) inOpenaiBaseUrl.value = vis.openai_base_url || classif.openai_base_url || '';
 
         const selOpenaiModel = document.getElementById('cfgOpenaiModelSelect');
         const customOpenaiModel = document.getElementById('cfgOpenaiModelCustom');
-        const currentOpenaiModel = classif.model || 'gpt-4o-mini';
+        const currentOpenaiModel = (prov === 'openai' ? (vis.model || classif.model) : classif.model) || 'gpt-4o-mini';
         if (selOpenaiModel) {
           const known = ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o3-mini'];
           if (known.includes(currentOpenaiModel)) {
@@ -2577,6 +2668,9 @@
             }
           }
         }
+
+        // Atualiza estado visual e títulos dos botões de OCR
+        updateOcrButtonsState();
 
         // 3. Execução em Lote
         const workers = classif.workers || 1;
@@ -2700,6 +2794,7 @@
       } else {
         modelCustom.style.display = 'none';
       }
+      updateOcrButtonsState();
     }
 
     function onOpenaiModelChanged() {
@@ -2711,6 +2806,7 @@
       } else {
         custom.style.display = 'none';
       }
+      updateOcrButtonsState();
     }
 
     async function detectEnvironments() {
@@ -2783,7 +2879,9 @@
           json_path: jsonPath,
           provider: currentAiProvider,
           model: model,
-          ollama_url: ollamaUrl
+          ollama_url: ollamaUrl,
+          openai_key: openaiKey || undefined,
+          openai_base_url: openaiBaseUrl || undefined
         }
       };
     }
@@ -2803,6 +2901,14 @@
         if (countP && result.pdf_count !== undefined) countP.innerText = result.pdf_count;
         const countD = document.getElementById('cfgCountDocs');
         if (countD && result.doc_count !== undefined) countD.innerText = result.doc_count;
+
+        if (result.provider) {
+          if (!systemConfig) systemConfig = {};
+          if (!systemConfig.visualizador) systemConfig.visualizador = {};
+          systemConfig.visualizador.provider = result.provider;
+          systemConfig.visualizador.model = result.model;
+        }
+        updateOcrButtonsState();
 
         loadDocuments();
 

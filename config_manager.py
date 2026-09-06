@@ -45,6 +45,8 @@ def get_factory_defaults() -> Dict[str, Any]:
             "provider": "ollama",
             "model": None,
             "ollama_url": "http://localhost:11434",
+            "openai_key": None,
+            "openai_base_url": None,
         }
     }
 
@@ -137,6 +139,12 @@ def save_classifier_config(updates: Dict[str, Any]) -> None:
     if "ollama_url" in updates and updates["ollama_url"]:
         config["visualizador"]["ollama_url"] = updates["ollama_url"]
 
+    if "openai_key" in updates and updates["openai_key"]:
+        config["visualizador"]["openai_key"] = updates["openai_key"]
+
+    if "openai_base_url" in updates and updates["openai_base_url"]:
+        config["visualizador"]["openai_base_url"] = updates["openai_base_url"]
+
     save_all_config(config)
 
 
@@ -162,6 +170,19 @@ def save_visualizer_config(updates: Dict[str, Any]) -> None:
     for k, v in updates.items():
         if k in config["visualizador"]:
             config["visualizador"][k] = v
+
+    if "openai_key" in updates and updates["openai_key"]:
+        config["classificador"]["openai_key"] = updates["openai_key"]
+
+    if "openai_base_url" in updates and updates["openai_base_url"]:
+        config["classificador"]["openai_base_url"] = updates["openai_base_url"]
+
+    if "provider" in updates and updates["provider"]:
+        config["classificador"]["provider"] = updates["provider"]
+
+    if "model" in updates and updates["model"]:
+        config["classificador"]["model"] = updates["model"]
+
     save_all_config(config)
 
 

@@ -458,7 +458,9 @@ class ConferenciaServer:
         html_path: str,
         provider: str = "ollama",
         model: str = None,
-        ollama_url: str = "http://localhost:11434"
+        ollama_url: str = "http://localhost:11434",
+        openai_key: str = None,
+        openai_base_url: str = None
     ):
         self.json_path = Path(json_path).resolve()
         self.pdf_dir = Path(pdf_dir).resolve()
@@ -466,26 +468,56 @@ class ConferenciaServer:
         self.provider = provider or "ollama"
         self.model = model
         self.ollama_url = ollama_url
+        self.openai_key = openai_key
+        self.openai_base_url = openai_base_url
         self._llm_client = None
         self.md5_to_file = {}
         self.batch_manager = BatchManager(self)
         self.build_pdf_index()
 
-    def get_llm_client(self):
-        if self._llm_client is not None:
+    def get_llm_client(
+        self,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+        openai_key: Optional[str] = None,
+        openai_base_url: Optional[str] = None,
+        ollama_url: Optional[str] = None
+    ):
+        prov = (provider or self.provider or "ollama").lower().strip()
+        mod = model or self.model
+        o_url = ollama_url or self.ollama_url or "http://localhost:11434"
+        o_key = openai_key or self.openai_key or os.environ.get("OPENAI_API_KEY")
+        o_base = openai_base_url or self.openai_base_url or os.environ.get("OPENAI_BASE_URL")
+
+        # Se for a configuração padrão e já estiver em cache, reaproveita
+        is_default = (
+            prov == (self.provider or "ollama").lower().strip()
+            and (not mod or mod == self.model)
+            and (not openai_key or openai_key == self.openai_key)
+            and (not openai_base_url or openai_base_url == self.openai_base_url)
+            and (not ollama_url or ollama_url == self.ollama_url)
+        )
+
+        if is_default and self._llm_client is not None:
             return self._llm_client
 
-        if self.provider == "ollama":
-            model_name = self.model or "gemma4:e4b"
-            url = self.ollama_url or "http://localhost:11434"
-            print(f"[*] Inicializando cliente Ollama para OCR visual sob demanda (modelo: {model_name})...")
-            self._llm_client = OllamaClient(model=model_name, base_url=url)
-        else:
-            model_name = self.model or "gpt-4o-mini"
+        if prov == "openai":
+            model_name = mod or "gpt-4o-mini"
+            if not o_key:
+                raise ValueError(
+                    "Chave da API da OpenAI não configurada. Configure sua API key nas "
+                    "Configurações (ícone de engrenagem) ou defina a variável OPENAI_API_KEY."
+                )
             print(f"[*] Inicializando cliente OpenAI para OCR visual sob demanda (modelo: {model_name})...")
-            self._llm_client = OpenAIClient(model=model_name)
+            client = OpenAIClient(model=model_name, api_key=o_key, base_url=o_base)
+        else:
+            model_name = mod or "gemma4:e4b"
+            print(f"[*] Inicializando cliente Ollama para OCR visual sob demanda (modelo: {model_name}, url: {o_url})...")
+            client = OllamaClient(model=model_name, base_url=o_url)
 
-        return self._llm_client
+        if is_default:
+            self._llm_client = client
+        return client
 
     def build_pdf_index(self):
         """Indexa os arquivos PDFs da pasta mapeando seus MD5."""
@@ -724,24 +756,42 @@ def create_handler(server_ctx: ConferenciaServer):
                 cfg_classificador = get_classifier_config()
                 cfg_vis = get_visualizer_config()
                 clean_classificador = dict(cfg_classificador)
-                has_key = bool(clean_classificador.get("openai_key") or os.environ.get("OPENAI_API_KEY"))
-                if clean_classificador.get("openai_key"):
-                    k = clean_classificador["openai_key"]
-                    clean_classificador["openai_key_masked"] = k[:7] + "..." + k[-4:] if len(k) > 12 else "***"
-                else:
-                    clean_classificador["openai_key_masked"] = ""
+                clean_vis = dict(cfg_vis)
+
+                active_key = (
+                    clean_classificador.get("openai_key")
+                    or clean_vis.get("openai_key")
+                    or server_ctx.openai_key
+                    or os.environ.get("OPENAI_API_KEY")
+                )
+                has_key = bool(active_key)
+                masked_key = ""
+                if active_key:
+                    masked_key = active_key[:7] + "..." + active_key[-4:] if len(active_key) > 12 else "***"
+
+                clean_classificador["openai_key_masked"] = masked_key
                 clean_classificador["has_openai_key"] = has_key
+                if clean_classificador.get("openai_key"):
+                    del clean_classificador["openai_key"]
+
+                clean_vis["openai_key_masked"] = masked_key
+                clean_vis["has_openai_key"] = has_key
+                clean_vis["provider"] = server_ctx.provider
+                clean_vis["model"] = server_ctx.model
+                clean_vis["ollama_url"] = server_ctx.ollama_url
+                if clean_vis.get("openai_key"):
+                    del clean_vis["openai_key"]
 
                 envs = []
                 if detect_ollama_environments:
                     try:
-                        envs = detect_ollama_environments(clean_classificador.get("ollama_url") or "http://localhost:11434")
+                        envs = detect_ollama_environments(clean_classificador.get("ollama_url") or server_ctx.ollama_url or "http://localhost:11434")
                     except Exception as ex_env:
                         print(f"[Aviso] Falha ao detectar ambientes Ollama: {ex_env}")
 
                 resp_obj = {
                     "classificador": clean_classificador,
-                    "visualizador": cfg_vis,
+                    "visualizador": clean_vis,
                     "environments": envs,
                     "batch_status": server_ctx.batch_manager.get_status(),
                     "pdf_count": len(server_ctx.md5_to_file),
@@ -973,7 +1023,7 @@ def create_handler(server_ctx: ConferenciaServer):
                     self.send_error(404, f"Documento MD5 {target_md5} não encontrado.")
                 return
 
-            # Re-análise via OCR Multimodal com LLM sob demanda
+            # Re-análise via OCR Multimodal com LLM sob demanda (Ollama ou OpenAI)
             if path == "/api/ocr":
                 target_md5 = payload.get("md5")
                 if not target_md5:
@@ -990,7 +1040,19 @@ def create_handler(server_ctx: ConferenciaServer):
                     return
 
                 try:
-                    client = server_ctx.get_llm_client()
+                    req_prov = payload.get("provider")
+                    req_model = payload.get("model")
+                    req_key = payload.get("openai_key")
+                    req_base = payload.get("openai_base_url")
+                    req_ollama_url = payload.get("ollama_url")
+
+                    client = server_ctx.get_llm_client(
+                        provider=req_prov,
+                        model=req_model,
+                        openai_key=req_key,
+                        openai_base_url=req_base,
+                        ollama_url=req_ollama_url
+                    )
                     novo_doc = process_single_pdf(pdf_file, client, force_ocr=True)
 
                     # Sanitiza listas para strings para compatibilidade com o visualizador
@@ -1025,10 +1087,16 @@ def create_handler(server_ctx: ConferenciaServer):
                         except Exception:
                             pass
 
+                    active_prov = req_prov or server_ctx.provider or "ollama"
+                    provider_label = "OpenAI API" if active_prov == "openai" else "Ollama (LLM Local)"
+                    model_used = getattr(client, "model", req_model or server_ctx.model)
+
                     resp = json.dumps({
                         "status": "sucesso",
                         "item": novo_doc,
-                        "mensagem": "OCR via LLM concluído com sucesso!"
+                        "provider": active_prov,
+                        "model": model_used,
+                        "mensagem": f"OCR via {provider_label} ({model_used}) concluído com sucesso!"
                     }, ensure_ascii=False).encode("utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -1037,7 +1105,7 @@ def create_handler(server_ctx: ConferenciaServer):
                     self.wfile.write(resp)
                     return
                 except Exception as e:
-                    err_msg = f"Erro ao executar OCR via LLM: {e}"
+                    err_msg = f"Erro ao executar OCR: {e}"
                     print(f"[Erro OCR API] {err_msg}")
                     resp = json.dumps({"status": "erro", "mensagem": err_msg}, ensure_ascii=False).encode("utf-8")
                     self.send_response(500)
@@ -1056,7 +1124,7 @@ def create_handler(server_ctx: ConferenciaServer):
                     for k in ["input", "output_dir", "provider", "model", "workers", "max_pages", "skip_ocr", "docker", "ollama_url", "openai_key", "openai_base_url"]:
                         if k in payload:
                             updates_classificador[k] = payload[k]
-                    for k in ["pdf_dir", "json_path", "port", "provider", "model", "ollama_url"]:
+                    for k in ["pdf_dir", "json_path", "port", "provider", "model", "ollama_url", "openai_key", "openai_base_url"]:
                         if k in payload:
                             updates_visualizador[k] = payload[k]
 
@@ -1064,6 +1132,11 @@ def create_handler(server_ctx: ConferenciaServer):
                     val = updates_classificador["openai_key"]
                     if not val or "***" in val or "..." in val:
                         del updates_classificador["openai_key"]
+
+                if "openai_key" in updates_visualizador:
+                    val = updates_visualizador["openai_key"]
+                    if not val or "***" in val or "..." in val:
+                        del updates_visualizador["openai_key"]
 
                 if updates_classificador:
                     save_classifier_config(updates_classificador)
@@ -1100,6 +1173,16 @@ def create_handler(server_ctx: ConferenciaServer):
                     server_ctx.ollama_url = new_url
                     server_ctx._llm_client = None
 
+                new_key = updates_visualizador.get("openai_key") or updates_classificador.get("openai_key")
+                if new_key:
+                    server_ctx.openai_key = new_key
+                    server_ctx._llm_client = None
+
+                new_base_url = updates_visualizador.get("openai_base_url") or updates_classificador.get("openai_base_url")
+                if new_base_url is not None:
+                    server_ctx.openai_base_url = new_base_url
+                    server_ctx._llm_client = None
+
                 resp = json.dumps({
                     "status": "sucesso",
                     "mensagem": "Configurações salvas e aplicadas com sucesso!",
@@ -1126,6 +1209,8 @@ def create_handler(server_ctx: ConferenciaServer):
                 server_ctx.provider = factory["visualizador"]["provider"]
                 server_ctx.model = factory["visualizador"]["model"]
                 server_ctx.ollama_url = factory["visualizador"]["ollama_url"]
+                server_ctx.openai_key = factory["visualizador"].get("openai_key")
+                server_ctx.openai_base_url = factory["visualizador"].get("openai_base_url")
                 server_ctx._llm_client = None
                 server_ctx.build_pdf_index()
                 server_ctx.load_data()
@@ -1335,6 +1420,20 @@ def main():
         help="URL base da API do Ollama (padrão: http://localhost:11434)."
     )
     parser.add_argument(
+        "-k", "--key", "--openai-key",
+        dest="openai_key",
+        type=str,
+        default=None,
+        help="Chave de API da OpenAI (caso opte por OpenAI para OCR sob demanda)."
+    )
+    parser.add_argument(
+        "--openai-base-url",
+        dest="openai_base_url",
+        type=str,
+        default=None,
+        help="Base URL personalizada para endpoint compatível com OpenAI (opcional)."
+    )
+    parser.add_argument(
         "--no-prompt", "-y", "--batch",
         dest="no_prompt",
         action="store_true",
@@ -1349,6 +1448,10 @@ def main():
 
     # Carrega configurações salvas prévias como padrões do parser
     saved_cfg = get_visualizer_config()
+    classif_cfg = get_classifier_config()
+    saved_key = saved_cfg.get("openai_key") or classif_cfg.get("openai_key") or os.environ.get("OPENAI_API_KEY")
+    saved_base_url = saved_cfg.get("openai_base_url") or classif_cfg.get("openai_base_url") or os.environ.get("OPENAI_BASE_URL")
+
     parser.set_defaults(
         pdf_dir=saved_cfg.get("pdf_dir", "./pdf"),
         json_path=saved_cfg.get("json_path", "./saida/classificacao_diplomas.json"),
@@ -1357,6 +1460,8 @@ def main():
         provider=saved_cfg.get("provider", "ollama"),
         model=saved_cfg.get("model", None),
         ollama_url=saved_cfg.get("ollama_url", "http://localhost:11434"),
+        openai_key=saved_key,
+        openai_base_url=saved_base_url,
     )
 
     args = parser.parse_args()
@@ -1402,7 +1507,9 @@ def main():
             "port": port_final,
             "provider": args.provider,
             "model": args.model,
-            "ollama_url": args.ollama_url
+            "ollama_url": args.ollama_url,
+            "openai_key": args.openai_key,
+            "openai_base_url": args.openai_base_url
         })
 
     ctx = ConferenciaServer(
@@ -1411,7 +1518,9 @@ def main():
         html_path=args.html,
         provider=args.provider,
         model=args.model,
-        ollama_url=args.ollama_url
+        ollama_url=args.ollama_url,
+        openai_key=args.openai_key,
+        openai_base_url=args.openai_base_url
     )
     handler = create_handler(ctx)
 
