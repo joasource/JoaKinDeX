@@ -620,6 +620,16 @@ class ConferenciaServer:
                 existing_by_md5[h] = unprocessed_doc
                 data.append(unprocessed_doc)
 
+        # Enriquecimento com nome_arquivo e caminho_relativo para itens existentes caso estejam vazios
+        for item in data:
+            h = item.get("md5")
+            if h and h in self.md5_to_file:
+                pdf_file = self.md5_to_file[h]
+                if not item.get("nome_arquivo"):
+                    item["nome_arquivo"] = pdf_file.name
+                if not item.get("caminho_relativo"):
+                    item["caminho_relativo"] = str(pdf_file.relative_to(self.pdf_dir)) if self.pdf_dir in pdf_file.parents else pdf_file.name
+
         return data
 
     def save_data(self, data):

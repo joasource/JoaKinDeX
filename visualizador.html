@@ -1494,16 +1494,30 @@
       applyFilter(false);
     }
 
+    // Determina se um documento ainda não foi processado com sucesso ou está sem classificação válida
+    function isDocumentUnprocessed(doc) {
+      if (!doc) return true;
+      // 1. Explicitamente não processado
+      if (doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado') return true;
+      // 2. Falha na leitura ou processamento (nunca classificado com sucesso)
+      if (doc.status === 'erro' || (doc.status && doc.status !== 'sucesso')) return true;
+      // 3. Sem dados essenciais de classificação (beneficiário e curso vazios)
+      if (!safeString(doc.beneficiario).trim() && !safeString(doc.curso).trim()) return true;
+      return false;
+    }
+
     function applyFilter(preserveCurrentDoc = true) {
       const rawSearch = (document.getElementById('searchInput').value || '').trim();
       
       filteredDocs = documents.filter(doc => {
-        // 1. Filtro por status de conferência
-        const status = safeString(doc.status_conferencia || 'pendente').toLowerCase();
-        const isNaoProcessado = doc.status === 'nao_processado' || status === 'nao_processado';
-        if (activeStatusFilter === 'nao_processado' && !isNaoProcessado) return false;
-        if (activeStatusFilter === 'pendente' && (status === 'aprovado' || isNaoProcessado)) return false;
-        if (activeStatusFilter === 'aprovado' && (status !== 'aprovado' || isNaoProcessado)) return false;
+        // 1. Filtro por status de conferência / classificação
+        const isUnproc = isDocumentUnprocessed(doc);
+        const isAppr = !isUnproc && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
+        const isPend = !isUnproc && !isAppr;
+
+        if (activeStatusFilter === 'nao_processado' && !isUnproc) return false;
+        if (activeStatusFilter === 'pendente' && !isPend) return false;
+        if (activeStatusFilter === 'aprovado' && !isAppr) return false;
 
         // 2. Filtro por Natureza do Curso
         if (activeNaturezaFilter) {
@@ -1575,8 +1589,8 @@
       });
 
       const scopeTotal = scopeDocs.length;
-      const naoProcessados = scopeDocs.filter(d => d.status === 'nao_processado' || safeString(d.status_conferencia).toLowerCase() === 'nao_processado').length;
-      const aprovados = scopeDocs.filter(d => d.status !== 'nao_processado' && safeString(d.status_conferencia || 'pendente').toLowerCase() === 'aprovado').length;
+      const naoProcessados = scopeDocs.filter(d => isDocumentUnprocessed(d)).length;
+      const aprovados = scopeDocs.filter(d => !isDocumentUnprocessed(d) && safeString(d.status_conferencia || 'pendente').toLowerCase() === 'aprovado').length;
       const pendentes = scopeTotal - aprovados - naoProcessados;
 
       document.getElementById('count-todos').innerText = scopeTotal;
@@ -1592,15 +1606,18 @@
         const shortQ = rawSearch.length > 15 ? rawSearch.substring(0, 15) + '...' : rawSearch;
         label.push(`"${shortQ}"`);
       }
-      if (activeStatusFilter !== 'todos') label.push(activeStatusFilter);
+      if (activeStatusFilter !== 'todos') {
+        if (activeStatusFilter === 'nao_processado') label.push('Não Classificados');
+        else label.push(activeStatusFilter);
+      }
       if (activeNaturezaFilter) label.push(formatShortNature(activeNaturezaFilter));
       if (activeTipoFilter) label.push(activeTipoFilter);
       document.getElementById('activeFilterLabel').innerText = label.length > 0 ? `(${label.join(' • ')})` : '';
 
-      const totalProcessados = total - documents.filter(d => d.status === 'nao_processado').length;
-      const totalAprovados = documents.filter(d => d.status !== 'nao_processado' && safeString(d.status_conferencia).toLowerCase() === 'aprovado').length;
-      const pct = totalProcessados > 0 ? Math.round((totalAprovados / totalProcessados) * 100) : 0;
-      document.getElementById('progressText').innerText = `${totalAprovados} / ${totalProcessados} revisados (${pct}%)`;
+      const totalClassificados = total - documents.filter(d => isDocumentUnprocessed(d)).length;
+      const totalAprovados = documents.filter(d => !isDocumentUnprocessed(d) && safeString(d.status_conferencia).toLowerCase() === 'aprovado').length;
+      const pct = totalClassificados > 0 ? Math.round((totalAprovados / totalClassificados) * 100) : 0;
+      document.getElementById('progressText').innerText = `${totalAprovados} / ${totalClassificados} conferidos (${pct}%)`;
       document.getElementById('progressBar').style.width = `${pct}%`;
     }
 
@@ -1692,20 +1709,20 @@
 
       filteredDocs.forEach((doc, idx) => {
         const isSelected = idx === currentIndex;
-        const isNaoProcessado = doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado';
-        const isApproved = !isNaoProcessado && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
+        const isUnproc = isDocumentUnprocessed(doc);
+        const isApproved = !isUnproc && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
         
         const card = document.createElement('div');
         card.className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 ${
           isSelected 
             ? 'bg-slate-800/95 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30' 
-            : (isNaoProcessado ? 'bg-slate-900/40 hover:bg-slate-800/50 border-slate-800/60 text-slate-400' : 'bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400')
+            : (isUnproc ? 'bg-slate-900/40 hover:bg-slate-800/50 border-slate-800/60 text-slate-400' : 'bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400')
         }`;
 
         card.onclick = () => selectDocument(idx);
 
         let statusBadge = '';
-        if (isNaoProcessado) {
+        if (isUnproc) {
           statusBadge = `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1"><i class="fa-solid fa-file-circle-question text-[9px]"></i> Não Lido</span>`;
         } else if (isApproved) {
           statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1"><i class="fa-solid fa-check text-[9px]"></i> OK</span>`;
@@ -1713,17 +1730,17 @@
           statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0">Pendente</span>`;
         }
 
-        const naturezaBadge = isNaoProcessado
+        const naturezaBadge = isUnproc
           ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1"><i class="fa-solid fa-hourglass-start text-[9px]"></i>Aguardando</span>`
           : getNaturezaBadge(doc.natureza_curso);
-        const tipoBadge = isNaoProcessado
+        const tipoBadge = isUnproc
           ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1"><i class="fa-regular fa-file-pdf text-[9px]"></i>PDF</span>`
           : getTipoBadge(doc.tipo_documento);
         const md5Short = safeString(doc.md5).substring(0, 10);
-        const nome = safeString(doc.beneficiario) || (isNaoProcessado ? (doc.nome_arquivo || 'Arquivo PDF não lido') : 'Sem nome informado');
+        const nome = safeString(doc.beneficiario) || (isUnproc ? (doc.nome_arquivo || 'Arquivo PDF não lido') : 'Sem nome informado');
         const cpf = safeString(doc.cpf);
         const rg = safeString(doc.rg);
-        const curso = safeString(doc.curso) || (isNaoProcessado ? (doc.caminho_relativo || 'Clique em Classificar para extrair dados') : 'Curso não informado');
+        const curso = safeString(doc.curso) || (isUnproc ? (doc.caminho_relativo || 'Clique em Classificar para extrair dados') : 'Curso não informado');
 
         card.innerHTML = `
           <div class="flex items-center justify-between gap-1">
@@ -1937,12 +1954,16 @@
       document.getElementById('input_obs').value = safeString(doc.observacoes_conferencia);
 
       // Atualiza badge de status
-      const isNaoProcessado = doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado';
-      const isApproved = !isNaoProcessado && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
+      const isUnproc = isDocumentUnprocessed(doc);
+      const isApproved = !isUnproc && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
       const badge = document.getElementById('currentStatusBadge');
-      if (isNaoProcessado) {
+      if (isUnproc) {
         badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-rose-500/10 text-rose-400 border-rose-500/20";
-        badge.innerText = "Não Lido / Não Processado";
+        if (doc.status === 'erro') {
+          badge.innerText = "Não Classificado (Falha na Leitura)";
+        } else {
+          badge.innerText = "Não Classificado / Não Lido";
+        }
       } else if (isApproved) {
         badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
         badge.innerText = "Aprovado / Conferido";
@@ -2067,7 +2088,7 @@
       if (!btn1 && !btn2) return;
 
       const doc = (filteredDocs && currentIndex >= 0 && currentIndex < filteredDocs.length) ? filteredDocs[currentIndex] : null;
-      const isUnprocessed = doc ? (doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado') : false;
+      const isUnproc = isDocumentUnprocessed(doc);
 
       const prov = (currentAiProvider || systemConfig?.visualizador?.provider || 'ollama').toLowerCase();
 
@@ -2087,7 +2108,7 @@
       if (prov === 'openai') {
         if (btn2) {
           btn2.className = "px-2.5 py-1 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm";
-          if (isUnprocessed) {
+          if (isUnproc) {
             btn2.title = `Classificar este documento pela primeira vez com OCR visual via OpenAI API (${modelName})`;
             btn2.innerHTML = `<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Classificar (${shortModel})</span>`;
           } else {
@@ -2097,7 +2118,7 @@
         }
         if (btn1) {
           btn1.className = "py-1.5 px-3 bg-cyan-600/15 hover:bg-cyan-600/25 text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0";
-          if (isUnprocessed) {
+          if (isUnproc) {
             btn1.title = `Classificar este documento pela primeira vez com OCR visual via OpenAI API (${modelName})`;
             btn1.innerHTML = `<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Classificar com OCR (OpenAI)</span>`;
           } else {
@@ -2108,7 +2129,7 @@
       } else {
         if (btn2) {
           btn2.className = "px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm";
-          if (isUnprocessed) {
+          if (isUnproc) {
             btn2.title = `Classificar este documento pela primeira vez com OCR multimodal via Ollama Local (${modelName})`;
             btn2.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Classificar (${shortModel})</span>`;
           } else {
@@ -2118,7 +2139,7 @@
         }
         if (btn1) {
           btn1.className = "py-1.5 px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0";
-          if (isUnprocessed) {
+          if (isUnproc) {
             btn1.title = `Classificar este documento pela primeira vez com OCR multimodal via Ollama Local (${modelName})`;
             btn1.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Classificar com OCR</span>`;
           } else {
@@ -2136,7 +2157,7 @@
       }
       const doc = filteredDocs[currentIndex];
       const targetMd5 = doc.md5;
-      const isUnprocessed = doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado';
+      const isUnproc = isDocumentUnprocessed(doc);
 
       const prov = (currentAiProvider || systemConfig?.visualizador?.provider || 'ollama').toLowerCase();
 
@@ -2167,7 +2188,7 @@
 
       const spinColor = prov === 'openai' ? 'text-cyan-400' : 'text-purple-400';
       const provLabel = prov === 'openai' ? 'OpenAI API' : 'Ollama';
-      const actionVerb = isUnprocessed ? 'Classificando' : 'Reclassificando';
+      const actionVerb = isUnproc ? 'Classificando' : 'Reclassificando';
 
       if (btn1) {
         btn1.disabled = true;
