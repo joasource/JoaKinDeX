@@ -3,6 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Ollama](https://img.shields.io/badge/LLM-Ollama%20%7C%20OpenAI-orange.svg)](https://ollama.com/)
+[![GitHub](https://img.shields.io/badge/GitHub-joasource-181717?logo=github)](https://github.com/joasource/joaclassificador-pdf)
 
 **joaclassificador-pdf** é uma ferramenta de linha de comando (CLI) e interface web para **classificação e extração estruturada de diplomas, certificados e documentos acadêmicos em massa**, utilizando modelos locais (**Ollama**) ou em nuvem (**OpenAI API**).
 
@@ -35,12 +36,17 @@ O projeto é focado em privacidade, conformidade e auditoria: identifica os arqu
   - Arquivo consolidado `classificacao_diplomas.json`.
   - Arquivo consolidado `classificacao_diplomas.txt` para leitura humana.
   - Arquivos individuais por MD5 na pasta `saida/individuais/`.
-- **Interface Web de Conferência Humana**:
-  - Visualização lado a lado (PDF original vs Formulário JSON).
+- **Interface Web de Conferência Humana Lado a Lado**:
+  - Visualização split-screen (PDF original vs Formulário JSON).
   - Edição direta de qualquer campo e filtros cruzados por Natureza e Tipo.
   - Re-análise via OCR multimodal diretamente pela interface.
   - Aprovação rápida com atalho de teclado (`Ctrl + Enter`).
   - Atualização do JSON e TXT em tempo real.
+- **Exportação e Visual Law Prontos para Word e Petições**:
+  - Botões de cópia rápida em cada campo lido (CPF, Beneficiário, Curso, RG, Instituição, etc.).
+  - **Copiar Ficha Completa (Visual Law)**: Gera um card institucional com borda lateral executiva e tabela limpa em Rich Text (HTML) pronto para colar no Microsoft Word, LibreOffice ou Google Docs, com fallback inteligente para texto puro.
+- **Acesso Remoto Seguro via Cloudflare Tunnel (Docker)**:
+  - Configuração opcional via `docker-compose.yml` para expor o visualizador com certificado SSL/HTTPS via Cloudflare Zero Trust (ex: `https://documentos.joaca.com.br`), garantindo suporte total às APIs de Área de Transferência em qualquer computador da rede.
 
 ---
 
@@ -53,6 +59,8 @@ joaclassificador-pdf/
 ├── servidor_visualizador.py    # Servidor HTTP leve para conferência
 ├── iniciar_visualizador.sh     # Script para iniciar a interface web
 ├── visualizador.html           # Interface web com PDF e formulário
+├── docker-compose.yml          # Container Cloudflare Tunnel (acesso remoto HTTPS)
+├── .env.example                # Exemplo de configuração do token da Cloudflare
 ├── requirements.txt            # Dependências Python (pip)
 ├── environment.yml             # Arquivo de especificação do ambiente Conda
 └── README.md                   # Documentação do projeto
@@ -64,7 +72,7 @@ joaclassificador-pdf/
 
 ### 1. Clonar o Repositório
 ```bash
-git clone https://github.com/seu-usuario/joaclassificador-pdf.git
+git clone https://github.com/joasource/joaclassificador-pdf.git
 cd joaclassificador-pdf
 ```
 
@@ -244,7 +252,33 @@ Para revisar visualmente o PDF original contra os dados extraídos pelo modelo:
 Acesse no seu navegador:
 👉 **`http://localhost:8088`** (ou a porta escolhida)
 
-### Atalhos na Interface:
+### 📋 Exportação Rápida e Visual Law (Word / Documentação Jurídica)
+
+- **Cópia por Campo**: Ao lado de cada campo extraído (Beneficiário, CPF, RG, Curso, Instituição, etc.), há um botão de cópia rápida para transferir o dado isolado para a área de transferência.
+- **Copiar Ficha Completa (Visual Law)**:
+  - Localizado no canto inferior direito do painel de dados.
+  - Formata os dados em um **card institucional elegante** com callout lateral azul, tipografia executiva (Segoe UI/Calibri) e tabela estruturada.
+  - Compatível com colagem direta no **Microsoft Word**, **Google Docs** e **LibreOffice Writer** (preservando estilo, cores e alinhamento).
+  - Inclui fallback automático para texto puro limpo caso seja colado no Bloco de Notas ou terminal.
+
+### 🌐 Acesso Remoto Seguro via Cloudflare Tunnel (Docker)
+
+Para acessar o visualizador de outros dispositivos (ou máquinas Windows na rede) com certificado HTTPS e suporte nativo às APIs de área de transferência:
+
+1. Configure o token do seu túnel no arquivo `.env`:
+   ```bash
+   cp .env.example .env
+   # Edite o .env e insira o TUNNEL_TOKEN obtido no Cloudflare Zero Trust
+   ```
+2. Suba o container do Cloudflare Tunnel:
+   ```bash
+   docker compose up -d
+   ```
+3. No painel da Cloudflare (Zero Trust ➔ Networks ➔ Tunnels), aponte o subdomínio desejado (ex: `documentos.joaca.com.br`) para `http://localhost:8088`.
+
+---
+
+## ⌨️ Atalhos na Interface:
 - `Seta Esquerda` (`[`): Documento anterior
 - `Seta Direita` (`]`): Próximo documento
 - `Ctrl + Enter`: Aprovar conferência e avançar automaticamente
@@ -253,6 +287,8 @@ Acesse no seu navegador:
 
 ---
 
-## 🛡️ Licença
+## 🛡️ Licença e Autor
 
-Distribuído sob a licença MIT. Consulte `LICENSE` para obter mais detalhes.
+Desenvolvido por **Joaquim** ([@joasource](https://github.com/joasource)).
+
+Distribuído sob a licença MIT. Consulte o arquivo [`LICENSE`](LICENSE) para obter mais detalhes.
