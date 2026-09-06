@@ -278,7 +278,7 @@ Para revisar visualmente o PDF original contra os dados extraídos pelo modelo:
 
 1. **Modo Interativo (Console)**:
    Ao executar `./iniciar_visualizador.sh` no terminal sem parâmetros, o console solicita interativamente:
-   - **Pasta dos PDFs**: pressione `ENTER` para aceitar a pasta padrão sugerida (ex: `/home/joaquim/pdf` ou `./pdf`) ou digite o caminho desejado.
+   - **Pasta dos PDFs**: pressione `ENTER` para aceitar a pasta padrão sugerida (ex: `./pdf` ou o caminho salvo) ou digite o caminho desejado.
    - **Pasta de saída ou arquivo JSON**: pressione `ENTER` para manter a saída padrão (`./saida/classificacao_diplomas.json`) ou informe outro arquivo/pasta.
    - **Porta HTTP**: pressione `ENTER` para manter a porta padrão (`8088`) ou informe outra porta.
 

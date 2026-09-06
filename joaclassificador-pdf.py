@@ -55,6 +55,25 @@ try:
 except ImportError:
     OpenAI = None
 
+try:
+    from config_manager import (
+        get_classifier_config,
+        save_classifier_config,
+        reset_classifier_config,
+        has_custom_config,
+        get_factory_defaults
+    )
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from config_manager import (
+        get_classifier_config,
+        save_classifier_config,
+        reset_classifier_config,
+        has_custom_config,
+        get_factory_defaults
+    )
+
+
 
 def load_dotenv_if_present(env_path: Optional[Path] = None):
     """
@@ -1127,24 +1146,10 @@ def save_consolidated_reports(
 # ---------------------------------------------------------------------------
 # Menu Interativo e Auxiliares de Configuração
 # ---------------------------------------------------------------------------
-def resolve_default_input_path(specified: Optional[str] = None) -> Path:
-    if specified:
-        p = Path(specified).expanduser().resolve()
-        if p.exists():
-            return p
-        elif specified not in ["./pdf", "pdf"]:
-            return p
-
-    candidates = [
-        Path("./pdf"),
-        Path("../pdf"),
-        Path.home() / "pdf",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c.resolve()
-
-    return Path("./pdf").resolve()
+def resolve_default_input_path(specified: Optional[str] = None) -> str:
+    if specified and specified not in ["./pdf", "pdf"]:
+        return str(specified)
+    return "./pdf"
 
 
 def count_pdfs_in_path(p: Path) -> int:
@@ -1174,18 +1179,45 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
     print("\n" + "=" * 70)
     print("🎓 JOACLASSIFICADOR-PDF - MENU INTERATIVO DE CLASSIFICAÇÃO")
     print("=" * 70)
-    print("Pressione ENTER para aceitar o valor padrão sugerido entre colchetes [ ].\n")
+    print("Pressione ENTER para aceitar o valor padrão sugerido entre colchetes [ ].")
+
+    # Opção inicial se houver configurações personalizadas salvas
+    if has_custom_config("classificador"):
+        print("\n⚙️  Configurações salvas da execução anterior detectadas:")
+        print("   1) Continuar e personalizar configurações salvas [Padrão]")
+        print("   2) Restaurar todos os padrões de fábrica (limpar configurações salvas)")
+        try:
+            init_choice = input("Escolha a opção (1 ou 2) [1]: ").strip()
+            if init_choice == "2":
+                reset_classifier_config()
+                factory = get_factory_defaults()["classificador"]
+                for k, v in factory.items():
+                    setattr(args, k, v)
+                print("   [✓] Configurações restauradas com sucesso para os padrões de fábrica neutros!\n")
+        except (EOFError, KeyboardInterrupt):
+            print("\n[Operação cancelada pelo usuário]")
+            sys.exit(0)
 
     # 1. Pasta ou arquivo de entrada
     default_input = resolve_default_input_path(args.input)
     while True:
         try:
-            resp_input = input(f"📁 Pasta ou arquivo PDF de entrada [{default_input}]: ").strip()
+            resp_input = input(f"\n📁 Pasta ou arquivo PDF de entrada [{default_input}]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
 
-        chosen_path = Path(resp_input).expanduser().resolve() if resp_input else default_input
+        if resp_input.lower() in ["reset", "resetar", "padrao", "fábrica", "fabrica"]:
+            reset_classifier_config()
+            factory = get_factory_defaults()["classificador"]
+            for k, v in factory.items():
+                setattr(args, k, v)
+            default_input = resolve_default_input_path(args.input)
+            print("   [✓] Configurações restauradas para os padrões de fábrica neutros!")
+            continue
+
+        raw_chosen = resp_input if resp_input else default_input
+        chosen_path = Path(raw_chosen).expanduser().resolve()
         if not chosen_path.exists():
             print(f"   ⚠️  Aviso: Caminho '{chosen_path}' não foi encontrado.")
             try:
@@ -1193,7 +1225,7 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
             except (EOFError, KeyboardInterrupt):
                 sys.exit(0)
             if conf in ["s", "sim", "y", "yes"]:
-                args.input = str(chosen_path)
+                args.input = raw_chosen
                 break
         else:
             pdf_count = count_pdfs_in_path(chosen_path)
@@ -1204,15 +1236,15 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
                 except (EOFError, KeyboardInterrupt):
                     sys.exit(0)
                 if conf in ["s", "sim", "y", "yes"]:
-                    args.input = str(chosen_path)
+                    args.input = raw_chosen
                     break
             else:
                 print(f"   ↳ {pdf_count} arquivo(s) PDF localizado(s) para processar.")
-                args.input = str(chosen_path)
+                args.input = raw_chosen
                 break
 
     # 2. Pasta de saída
-    default_out = Path(args.output_dir or "./saida").expanduser().resolve()
+    default_out = args.output_dir or "./saida"
     while True:
         try:
             resp_out = input(f"\n📄 Pasta de saída dos relatórios [{default_out}]: ").strip()
@@ -1220,8 +1252,8 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
 
-        chosen_out = Path(resp_out).expanduser().resolve() if resp_out else default_out
-        args.output_dir = str(chosen_out)
+        chosen_out = resp_out if resp_out else default_out
+        args.output_dir = chosen_out
         break
 
     # 3. Provedor de IA
@@ -1449,6 +1481,22 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
         print("\n[Operação cancelada pelo usuário]")
         sys.exit(0)
 
+    # Salva opções configuradas pelo usuário para persistência
+    save_classifier_config({
+        "input": str(args.input),
+        "output_dir": str(args.output_dir),
+        "provider": args.provider,
+        "model": args.model,
+        "docker": args.docker,
+        "ollama_url": args.ollama_url,
+        "openai_key": args.openai_key,
+        "openai_base_url": args.openai_base_url,
+        "workers": args.workers,
+        "max_pages": args.max_pages,
+        "skip_ocr": args.skip_ocr,
+        "no_individual": args.no_individual
+    })
+
     print("\n" + "=" * 70 + "\n")
     return args
 
@@ -1464,19 +1512,19 @@ def main():
         "-i", "--input",
         type=str,
         default="./pdf",
-        help="Caminho do diretório de PDFs ou de um arquivo PDF específico (padrão: ./pdf)."
+        help="Caminho do diretório de PDFs ou de um arquivo PDF específico (padrão: %(default)s)."
     )
     parser.add_argument(
         "-o", "--output-dir",
         type=str,
         default="./saida",
-        help="Diretório onde os relatórios JSON e TXT serão salvos (padrão: ./saida)."
+        help="Diretório onde os relatórios JSON e TXT serão salvos (padrão: %(default)s)."
     )
     parser.add_argument(
         "-p", "--provider",
         choices=["ollama", "openai"],
         default="ollama",
-        help="Provedor de IA a utilizar: 'ollama' ou 'openai' (padrão: ollama)."
+        help="Provedor de IA a utilizar: 'ollama' ou 'openai' (padrão: %(default)s)."
     )
     parser.add_argument(
         "-m", "--model",
@@ -1554,13 +1602,46 @@ def main():
         action="store_true",
         help="Executa diretamente sem perguntas interativas no console."
     )
+    parser.add_argument(
+        "--reset-config", "--reset", "--factory-reset",
+        dest="reset_config",
+        action="store_true",
+        help="Restaura todas as configurações salvas para os padrões de fábrica neutros."
+    )
+
+    # Carrega configurações salvas prévias como padrões do parser
+    saved_cfg = get_classifier_config()
+    parser.set_defaults(
+        input=saved_cfg.get("input", "./pdf"),
+        output_dir=saved_cfg.get("output_dir", "./saida"),
+        provider=saved_cfg.get("provider", "ollama"),
+        model=saved_cfg.get("model", None),
+        docker=saved_cfg.get("docker", None),
+        ollama_url=saved_cfg.get("ollama_url", "http://localhost:11434"),
+        openai_key=saved_cfg.get("openai_key", None),
+        openai_base_url=saved_cfg.get("openai_base_url", None),
+        workers=saved_cfg.get("workers", 1),
+        max_pages=saved_cfg.get("max_pages", 4),
+        skip_ocr=saved_cfg.get("skip_ocr", False),
+        no_individual=saved_cfg.get("no_individual", False),
+    )
 
     args = parser.parse_args()
+
+    if args.reset_config:
+        reset_classifier_config()
+        print("[✓] Configurações do classificador restauradas para os padrões de fábrica neutros com sucesso.")
+        other_flags = [a for a in sys.argv[1:] if a not in ["--reset-config", "--reset", "--factory-reset"]]
+        if not other_flags:
+            sys.exit(0)
+        defaults = get_factory_defaults()["classificador"]
+        for k, v in defaults.items():
+            setattr(args, k, v)
 
     # Detecta se foram passados argumentos explícitos via CLI
     explicit_cli_args = [
         arg for arg in sys.argv[1:]
-        if arg not in ["--prompt", "--interativo", "-y", "--no-prompt", "--batch"]
+        if arg not in ["--prompt", "--interativo", "-y", "--no-prompt", "--batch", "--reset-config", "--reset", "--factory-reset"]
     ]
     is_tty = sys.stdin.isatty()
     should_prompt = args.force_prompt or (
@@ -1571,6 +1652,22 @@ def main():
 
     if should_prompt:
         args = prompt_interactive_menu(args)
+    else:
+        # Salva opções configuradas via CLI para persistência
+        save_classifier_config({
+            "input": str(args.input),
+            "output_dir": str(args.output_dir),
+            "provider": args.provider,
+            "model": args.model,
+            "docker": args.docker,
+            "ollama_url": args.ollama_url,
+            "openai_key": args.openai_key,
+            "openai_base_url": args.openai_base_url,
+            "workers": args.workers,
+            "max_pages": args.max_pages,
+            "skip_ocr": args.skip_ocr,
+            "no_individual": args.no_individual
+        })
 
     input_path = Path(args.input)
     if not input_path.exists():

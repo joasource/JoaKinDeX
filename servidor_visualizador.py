@@ -25,69 +25,48 @@ except Exception:
     OllamaClient = classificador.OllamaClient
     OpenAIClient = classificador.OpenAIClient
 
-
-def resolve_pdf_dir(specified_dir: str = None) -> Path:
-    if specified_dir:
-        p = Path(specified_dir).expanduser().resolve()
-        if p.exists() and p.is_dir():
-            return p
-        elif specified_dir not in ["./pdf", "pdf"]:
-            return p
-
-    candidates = [
-        Path("./pdf"),
-        Path("../pdf"),
-        Path.home() / "pdf",
-    ]
-    for c in candidates:
-        if c.exists() and c.is_dir():
-            return c.resolve()
-
-    return Path("./pdf").resolve()
+try:
+    from config_manager import (
+        get_visualizer_config,
+        save_visualizer_config,
+        reset_visualizer_config,
+        has_custom_config,
+        get_factory_defaults
+    )
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from config_manager import (
+        get_visualizer_config,
+        save_visualizer_config,
+        reset_visualizer_config,
+        has_custom_config,
+        get_factory_defaults
+    )
 
 
-def resolve_json_path(specified_json: str = None) -> Path:
+def resolve_pdf_dir(specified_dir: str = None) -> str:
+    """Retorna o diretório de PDFs padrão neutro ou o caminho especificado."""
+    if specified_dir and specified_dir not in ["./pdf", "pdf"]:
+        return str(specified_dir)
+    return "./pdf"
+
+
+def resolve_json_path(specified_json: str = None) -> str:
     """
     Resolve o caminho do arquivo JSON. Se for informado um diretório,
-    procura por classificacao_diplomas.json ou outro .json correspondente.
+    retorna o caminho esperado de classificacao_diplomas.json.
     """
-    if not specified_json:
-        # Tenta ./saida/classificacao_diplomas.json ou ../saida/classificacao_diplomas.json
-        candidates = [
-            Path("./saida/classificacao_diplomas.json"),
-            Path("../saida/classificacao_diplomas.json"),
-            Path("./classificacao_diplomas.json"),
-        ]
-        for c in candidates:
-            if c.exists():
-                return c.resolve()
-        return Path("./saida/classificacao_diplomas.json").resolve()
-
-    p = Path(specified_json).expanduser().resolve()
-
-    # Se for um diretório existente
-    if p.is_dir():
-        cand = p / "classificacao_diplomas.json"
-        if cand.exists():
-            return cand
-        # Procura qualquer .json na pasta
-        json_files = list(p.glob("*.json"))
-        for jf in json_files:
-            if "classificacao" in jf.name.lower():
-                return jf
-        if json_files:
-            return json_files[0]
-        return cand
-
-    # Se termina com extensão .json
-    if p.suffix.lower() == ".json":
-        return p
-
-    # Se o nome não tem extensão .json mas o usuário passou algo como 'minha_pasta/saida'
-    return p / "classificacao_diplomas.json"
+    if specified_json:
+        p = Path(specified_json).expanduser()
+        if p.is_dir():
+            return str(p / "classificacao_diplomas.json")
+        if p.suffix.lower() == ".json":
+            return str(p)
+        return str(p / "classificacao_diplomas.json")
+    return "./saida/classificacao_diplomas.json"
 
 
-def prompt_interactive_config(default_pdf_dir: Path, default_json_path: Path, default_port: int):
+def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, default_port: int):
     """
     Exibe menu interativo no console permitindo ao usuário escolher ou alterar
     as pastas de entrada de PDFs e de saída de JSONs antes de iniciar o servidor.
@@ -97,6 +76,24 @@ def prompt_interactive_config(default_pdf_dir: Path, default_json_path: Path, de
     print("=" * 70)
     print("Pressione ENTER para aceitar o valor padrão sugerido entre colchetes.\n")
 
+    # Opção inicial se houver configurações personalizadas salvas
+    if has_custom_config("visualizador"):
+        print("⚙️  Configurações salvas da execução anterior detectadas:")
+        print("   1) Continuar e personalizar configurações salvas [Padrão]")
+        print("   2) Restaurar todos os padrões de fábrica (limpar configurações salvas)")
+        try:
+            init_choice = input("Escolha a opção (1 ou 2) [1]: ").strip()
+            if init_choice == "2":
+                reset_visualizer_config()
+                factory = get_factory_defaults()["visualizador"]
+                default_pdf_dir = factory["pdf_dir"]
+                default_json_path = factory["json_path"]
+                default_port = factory["port"]
+                print("   [✓] Configurações do visualizador restauradas para os padrões de fábrica neutros!\n")
+        except (EOFError, KeyboardInterrupt):
+            print("\n[Operação cancelada pelo usuário]")
+            sys.exit(0)
+
     # 1. Pasta de PDFs
     chosen_pdf_dir = default_pdf_dir
     while True:
@@ -105,6 +102,15 @@ def prompt_interactive_config(default_pdf_dir: Path, default_json_path: Path, de
         except (EOFError, KeyboardInterrupt):
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
+
+        if resp_pdf.lower() in ["reset", "resetar", "padrao", "fábrica", "fabrica"]:
+            reset_visualizer_config()
+            factory = get_factory_defaults()["visualizador"]
+            default_pdf_dir = factory["pdf_dir"]
+            default_json_path = factory["json_path"]
+            default_port = factory["port"]
+            print("   [✓] Configurações restauradas para os padrões de fábrica neutros!")
+            continue
 
         if not resp_pdf:
             chosen_pdf_dir = default_pdf_dir
@@ -118,17 +124,17 @@ def prompt_interactive_config(default_pdf_dir: Path, default_json_path: Path, de
                 except (EOFError, KeyboardInterrupt):
                     sys.exit(0)
                 if conf in ["s", "sim", "y", "yes"]:
-                    chosen_pdf_dir = p
+                    chosen_pdf_dir = str(resp_pdf)
                     break
             else:
-                chosen_pdf_dir = p
+                chosen_pdf_dir = str(resp_pdf)
                 break
 
     # 2. Pasta de saída ou arquivo JSON
     chosen_json_path = default_json_path
     while True:
         try:
-            resp_json = input(f"📄 Pasta ou arquivo JSON [{default_json_path}]: ").strip()
+            resp_json = input(f"\n📄 Pasta de saída ou arquivo JSON [{default_json_path}]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
@@ -137,17 +143,18 @@ def prompt_interactive_config(default_pdf_dir: Path, default_json_path: Path, de
             chosen_json_path = default_json_path
             break
         else:
-            p = resolve_json_path(resp_json)
+            p_str = resolve_json_path(resp_json)
+            p = Path(p_str).expanduser().resolve()
             if not p.exists():
-                print(f"   ℹ️  Arquivo '{p}' ainda não existe (será criado ao salvar).")
-            chosen_json_path = p
+                print(f"   ℹ️  Arquivo '{p_str}' ainda não existe (será criado ao salvar).")
+            chosen_json_path = str(resp_json)
             break
 
     # 3. Porta
     chosen_port = default_port
     while True:
         try:
-            resp_port = input(f"🌐 Porta HTTP [{default_port}]: ").strip()
+            resp_port = input(f"\n🌐 Porta HTTP [{default_port}]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
@@ -164,6 +171,13 @@ def prompt_interactive_config(default_pdf_dir: Path, default_json_path: Path, de
                 print("   ⚠️  Porta inválida (deve estar entre 1 e 65535).")
         except ValueError:
             print("   ⚠️  Digite um número de porta válido.")
+
+    # Salva opções configuradas no visualizador
+    save_visualizer_config({
+        "pdf_dir": str(chosen_pdf_dir),
+        "json_path": str(chosen_json_path),
+        "port": chosen_port
+    })
 
     print("=" * 70 + "\n")
     return chosen_pdf_dir, chosen_json_path, chosen_port
@@ -607,21 +621,21 @@ def main():
         "-p", "--pdf-dir", "-i", "--input",
         dest="pdf_dir",
         type=str,
-        default=None,
-        help="Pasta contendo os arquivos PDFs a serem visualizados (padrão detectado: ~/pdf ou ./pdf)."
+        default="./pdf",
+        help="Pasta contendo os arquivos PDFs a serem visualizados (padrão: %(default)s)."
     )
     parser.add_argument(
         "-j", "--json", "-o", "--output", "--output-dir", "--saida",
         dest="json_path",
         type=str,
-        default=None,
-        help="Pasta de saída ou arquivo JSON de classificação (padrão: ./saida/classificacao_diplomas.json)."
+        default="./saida/classificacao_diplomas.json",
+        help="Pasta de saída ou arquivo JSON de classificação (padrão: %(default)s)."
     )
     parser.add_argument(
         "--port",
         type=int,
         default=8088,
-        help="Porta HTTP do servidor (padrão: 8088)."
+        help="Porta HTTP do servidor (padrão: %(default)s)."
     )
     parser.add_argument(
         "--html",
@@ -659,22 +673,50 @@ def main():
         action="store_true",
         help="Executa diretamente sem perguntas interativas no console."
     )
+    parser.add_argument(
+        "--reset-config", "--reset", "--factory-reset",
+        dest="reset_config",
+        action="store_true",
+        help="Restaura todas as configurações salvas do visualizador para os padrões de fábrica neutros."
+    )
+
+    # Carrega configurações salvas prévias como padrões do parser
+    saved_cfg = get_visualizer_config()
+    parser.set_defaults(
+        pdf_dir=saved_cfg.get("pdf_dir", "./pdf"),
+        json_path=saved_cfg.get("json_path", "./saida/classificacao_diplomas.json"),
+        port=saved_cfg.get("port", 8088),
+        html=saved_cfg.get("html", "./visualizador.html"),
+        provider=saved_cfg.get("provider", "ollama"),
+        model=saved_cfg.get("model", None),
+        ollama_url=saved_cfg.get("ollama_url", "http://localhost:11434"),
+    )
 
     args = parser.parse_args()
+
+    if args.reset_config:
+        reset_visualizer_config()
+        print("[✓] Configurações do visualizador restauradas para os padrões de fábrica neutros com sucesso.")
+        other_flags = [a for a in sys.argv[1:] if a not in ["--reset-config", "--reset", "--factory-reset"]]
+        if not other_flags:
+            sys.exit(0)
+        defaults = get_factory_defaults()["visualizador"]
+        for k, v in defaults.items():
+            setattr(args, k, v)
 
     default_pdf = resolve_pdf_dir(args.pdf_dir)
     default_json = resolve_json_path(args.json_path)
     default_port = args.port
 
     is_interactive = sys.stdin.isatty()
-    # Solicita interativamente no console se:
-    # 1. Flag --prompt/--interativo foi passada, OU
-    # 2. Executando em terminal interativo, sem flag --no-prompt e sem argumentos explícitos de diretório
+    explicit_cli_args = [
+        arg for arg in sys.argv[1:]
+        if arg not in ["--prompt", "--interativo", "-interactive", "-y", "--no-prompt", "--batch", "--reset-config", "--reset", "--factory-reset"]
+    ]
     should_prompt = args.force_prompt or (
         is_interactive
         and not args.no_prompt
-        and args.pdf_dir is None
-        and args.json_path is None
+        and len(explicit_cli_args) == 0
     )
 
     if should_prompt:
@@ -687,6 +729,14 @@ def main():
         pdf_dir_final = default_pdf
         json_path_final = default_json
         port_final = default_port
+        save_visualizer_config({
+            "pdf_dir": str(pdf_dir_final),
+            "json_path": str(json_path_final),
+            "port": port_final,
+            "provider": args.provider,
+            "model": args.model,
+            "ollama_url": args.ollama_url
+        })
 
     ctx = ConferenciaServer(
         json_path=str(json_path_final),

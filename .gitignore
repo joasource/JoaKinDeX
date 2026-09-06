@@ -19,6 +19,8 @@ pdf/
 # Logs e configurações locais
 *.log
 .env
+.joaclassificador_config.json
+.tmp_*
 .DS_Store
 .idea/
 .vscode/
