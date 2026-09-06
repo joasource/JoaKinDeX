@@ -908,10 +908,25 @@ def process_single_pdf(
                 res_dict["metodo_leitura"] = "ocr_llm" if not has_text else "hibrido_texto_e_ocr_llm"
                 res_dict["tentativa_ocr_llm"] = True
             except Exception as e:
-                res_dict["status"] = "erro"
-                res_dict["erro"] = f"Falha no OCR via LLM: {e}"
-                res_dict["tentativa_ocr_llm"] = True
-                return res_dict
+                # Fallback gracioso: se a chamada com imagens falhar (ex: modelo sem suporte a visão)
+                # mas o documento possuir camada de texto digital, aproveita a leitura do texto:
+                if has_text:
+                    try:
+                        print(f"[*] Chamada de visão falhou ({e}). Fazendo fallback para texto digital...")
+                        prompt = build_prompt(text)
+                        extracted_data = client.generate_json(prompt)
+                        res_dict["metodo_leitura"] = "texto_digital"
+                        res_dict["tentativa_ocr_llm"] = True
+                    except Exception as e2:
+                        res_dict["status"] = "erro"
+                        res_dict["erro"] = f"Falha no OCR via LLM ({e}) e na leitura textual ({e2})"
+                        res_dict["tentativa_ocr_llm"] = True
+                        return res_dict
+                else:
+                    res_dict["status"] = "erro"
+                    res_dict["erro"] = f"Falha no OCR via LLM: {e}"
+                    res_dict["tentativa_ocr_llm"] = True
+                    return res_dict
         else:
             # Leitura normal da camada de texto digital via LLM
             prompt = build_prompt(text)
@@ -946,6 +961,8 @@ def process_single_pdf(
         # A) O tipo_documento ficou "Não identificado" / "Outro" / None
         # OU
         # B) Foi detectado um CPF, mas com sintaxe errada (tamanho != 11, formatação incorreta ou dígitos inválidos)
+        # OU
+        # C) Nem beneficiário (aluno) nem curso foram identificados (ex: texto ilegível/fonte sem mapa)
         # Tenta OCR via LLM uma única vez ("Caso não seja identificado novamente, não insista mais").
         # ---------------------------------------------------------------------
         tipo_atual = (res_dict.get("tipo_documento") or "").strip().lower()
@@ -956,7 +973,9 @@ def process_single_pdf(
         cpf_atual = res_dict.get("cpf")
         is_cpf_flawed = bool(cpf_atual and not is_valid_cpf_syntax(cpf_atual))
 
-        precisa_releitura_ocr = (is_tipo_unidentified or is_cpf_flawed)
+        is_dados_principais_missing = (not res_dict.get("beneficiario")) and (not res_dict.get("curso"))
+
+        precisa_releitura_ocr = (is_tipo_unidentified or is_cpf_flawed or is_dados_principais_missing)
 
         if has_text and precisa_releitura_ocr and not res_dict.get("tentativa_ocr_llm") and not skip_ocr:
             res_dict["tentativa_ocr_llm"] = True
@@ -968,6 +987,8 @@ def process_single_pdf(
                         extra_notes.append("O 'tipo_documento' não pôde ser determinado com precisão na leitura textual.")
                     if is_cpf_flawed:
                         extra_notes.append(f"O CPF extraído da camada de texto ({cpf_atual}) está com sintaxe ou dígitos incorretos. Verifique visualmente com atenção o CPF impresso no documento.")
+                    if is_dados_principais_missing:
+                        extra_notes.append("O nome do aluno (beneficiário) e/ou curso não foram encontrados no texto digital. Verifique atentamente o documento visualmente.")
 
                     context_msg = f"{text}\n\n" + "\n".join(extra_notes)
                     vision_prompt = build_vision_prompt(extra_context=context_msg)

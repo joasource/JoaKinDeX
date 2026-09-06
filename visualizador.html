@@ -125,10 +125,11 @@
         </div>
 
         <!-- Filtro por Status da Conferência -->
-        <div class="flex gap-1 text-[11px]">
-          <button onclick="setStatusFilter('todos')" id="filter-todos" class="flex-1 py-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700">Todos (<span id="count-todos">0</span>)</button>
-          <button onclick="setStatusFilter('pendente')" id="filter-pendente" class="flex-1 py-1 rounded bg-slate-900 text-amber-400/80 hover:bg-slate-800 text-center transition">Pendentes (<span id="count-pendente">0</span>)</button>
-          <button onclick="setStatusFilter('aprovado')" id="filter-aprovado" class="flex-1 py-1 rounded bg-slate-900 text-emerald-400/80 hover:bg-slate-800 text-center transition">Aprovados (<span id="count-aprovado">0</span>)</button>
+        <div class="grid grid-cols-4 gap-1 text-[10.5px]">
+          <button onclick="setStatusFilter('todos')" id="filter-todos" class="py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700 truncate">Todos (<span id="count-todos">0</span>)</button>
+          <button onclick="setStatusFilter('pendente')" id="filter-pendente" class="py-1 px-1 rounded bg-slate-900 text-amber-400/80 hover:bg-slate-800 text-center transition truncate">Pendentes (<span id="count-pendente">0</span>)</button>
+          <button onclick="setStatusFilter('aprovado')" id="filter-aprovado" class="py-1 px-1 rounded bg-slate-900 text-emerald-400/80 hover:bg-slate-800 text-center transition truncate">Aprovados (<span id="count-aprovado">0</span>)</button>
+          <button onclick="setStatusFilter('nao_processado')" id="filter-nao_processado" class="py-1 px-1 rounded bg-slate-900 text-rose-400/80 hover:bg-slate-800 text-center transition truncate" title="Documentos PDF encontrados que ainda não foram lidos/classificados">Não Lidos (<span id="count-nao_processado">0</span>)</button>
         </div>
 
         <!-- NOVO: FILTRO POR NATUREZA / NÍVEL DO CURSO -->
@@ -245,10 +246,10 @@
         </div>
 
         <div class="flex items-center gap-2">
-          <button id="btnOcrLlmHeader" onclick="triggerOcrLlm()" title="Re-analisar e extrair dados deste documento com OCR multimodal via LLM"
+          <button id="btnProcessarDocHeader" onclick="triggerProcessarDocumento()" title="Classificar ou reclassificar dados deste documento com OCR multimodal via LLM ou API externa"
                   class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition">
             <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
-            <span>OCR via LLM</span>
+            <span>Classificar</span>
           </button>
           <div id="currentStatusBadge" class="text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20">
             Pendente
@@ -498,10 +499,10 @@
             <span>Copiar Ficha (Visual Law)</span>
           </button>
 
-          <button type="button" id="btnOcrLlm" onclick="triggerOcrLlm()" title="Re-analisar e extrair dados deste documento com OCR multimodal via LLM"
+          <button type="button" id="btnProcessarDoc" onclick="triggerProcessarDocumento()" title="Classificar ou reclassificar dados deste documento com OCR multimodal via LLM ou API externa"
                   class="py-1.5 px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0">
             <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
-            <span>Re-analisar OCR</span>
+            <span>Classificar com OCR</span>
           </button>
         </div>
 
@@ -1499,8 +1500,10 @@
       filteredDocs = documents.filter(doc => {
         // 1. Filtro por status de conferência
         const status = safeString(doc.status_conferencia || 'pendente').toLowerCase();
-        if (activeStatusFilter === 'pendente' && status === 'aprovado') return false;
-        if (activeStatusFilter === 'aprovado' && status !== 'aprovado') return false;
+        const isNaoProcessado = doc.status === 'nao_processado' || status === 'nao_processado';
+        if (activeStatusFilter === 'nao_processado' && !isNaoProcessado) return false;
+        if (activeStatusFilter === 'pendente' && (status === 'aprovado' || isNaoProcessado)) return false;
+        if (activeStatusFilter === 'aprovado' && (status !== 'aprovado' || isNaoProcessado)) return false;
 
         // 2. Filtro por Natureza do Curso
         if (activeNaturezaFilter) {
@@ -1538,12 +1541,17 @@
 
     function setStatusFilter(filter) {
       activeStatusFilter = filter;
-      ['todos', 'pendente', 'aprovado'].forEach(f => {
+      ['todos', 'pendente', 'aprovado', 'nao_processado'].forEach(f => {
         const btn = document.getElementById(`filter-${f}`);
+        if (!btn) return;
         if (f === filter) {
-          btn.className = "flex-1 py-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700";
+          btn.className = "py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700 truncate";
         } else {
-          btn.className = "flex-1 py-1 rounded bg-slate-900 text-slate-400 hover:bg-slate-800 text-center transition";
+          let textCol = 'text-slate-400';
+          if (f === 'pendente') textCol = 'text-amber-400/80';
+          if (f === 'aprovado') textCol = 'text-emerald-400/80';
+          if (f === 'nao_processado') textCol = 'text-rose-400/80';
+          btn.className = `py-1 px-1 rounded bg-slate-900 ${textCol} hover:bg-slate-800 text-center transition truncate`;
         }
       });
       applyFilter(false);
@@ -1567,12 +1575,15 @@
       });
 
       const scopeTotal = scopeDocs.length;
-      const aprovados = scopeDocs.filter(d => safeString(d.status_conferencia || 'pendente').toLowerCase() === 'aprovado').length;
-      const pendentes = scopeTotal - aprovados;
+      const naoProcessados = scopeDocs.filter(d => d.status === 'nao_processado' || safeString(d.status_conferencia).toLowerCase() === 'nao_processado').length;
+      const aprovados = scopeDocs.filter(d => d.status !== 'nao_processado' && safeString(d.status_conferencia || 'pendente').toLowerCase() === 'aprovado').length;
+      const pendentes = scopeTotal - aprovados - naoProcessados;
 
       document.getElementById('count-todos').innerText = scopeTotal;
       document.getElementById('count-pendente').innerText = pendentes;
       document.getElementById('count-aprovado').innerText = aprovados;
+      const cntNaoProc = document.getElementById('count-nao_processado');
+      if (cntNaoProc) cntNaoProc.innerText = naoProcessados;
 
       document.getElementById('filterResultCount').innerText = `${filteredDocs.length} de ${total}`;
       
@@ -1586,8 +1597,10 @@
       if (activeTipoFilter) label.push(activeTipoFilter);
       document.getElementById('activeFilterLabel').innerText = label.length > 0 ? `(${label.join(' • ')})` : '';
 
-      const pct = total > 0 ? Math.round((aprovados / total) * 100) : 0;
-      document.getElementById('progressText').innerText = `${aprovados} / ${total} (${pct}%)`;
+      const totalProcessados = total - documents.filter(d => d.status === 'nao_processado').length;
+      const totalAprovados = documents.filter(d => d.status !== 'nao_processado' && safeString(d.status_conferencia).toLowerCase() === 'aprovado').length;
+      const pct = totalProcessados > 0 ? Math.round((totalAprovados / totalProcessados) * 100) : 0;
+      document.getElementById('progressText').innerText = `${totalAprovados} / ${totalProcessados} revisados (${pct}%)`;
       document.getElementById('progressBar').style.width = `${pct}%`;
     }
 
@@ -1679,28 +1692,38 @@
 
       filteredDocs.forEach((doc, idx) => {
         const isSelected = idx === currentIndex;
-        const isApproved = safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
+        const isNaoProcessado = doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado';
+        const isApproved = !isNaoProcessado && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
         
         const card = document.createElement('div');
         card.className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 ${
           isSelected 
             ? 'bg-slate-800/95 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30' 
-            : 'bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400'
+            : (isNaoProcessado ? 'bg-slate-900/40 hover:bg-slate-800/50 border-slate-800/60 text-slate-400' : 'bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400')
         }`;
 
         card.onclick = () => selectDocument(idx);
 
-        const statusBadge = isApproved 
-          ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1"><i class="fa-solid fa-check text-[9px]"></i> OK</span>`
-          : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0">Pendente</span>`;
+        let statusBadge = '';
+        if (isNaoProcessado) {
+          statusBadge = `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1"><i class="fa-solid fa-file-circle-question text-[9px]"></i> Não Lido</span>`;
+        } else if (isApproved) {
+          statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1"><i class="fa-solid fa-check text-[9px]"></i> OK</span>`;
+        } else {
+          statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0">Pendente</span>`;
+        }
 
-        const naturezaBadge = getNaturezaBadge(doc.natureza_curso);
-        const tipoBadge = getTipoBadge(doc.tipo_documento);
+        const naturezaBadge = isNaoProcessado
+          ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1"><i class="fa-solid fa-hourglass-start text-[9px]"></i>Aguardando</span>`
+          : getNaturezaBadge(doc.natureza_curso);
+        const tipoBadge = isNaoProcessado
+          ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1"><i class="fa-regular fa-file-pdf text-[9px]"></i>PDF</span>`
+          : getTipoBadge(doc.tipo_documento);
         const md5Short = safeString(doc.md5).substring(0, 10);
-        const nome = safeString(doc.beneficiario) || 'Sem nome informado';
+        const nome = safeString(doc.beneficiario) || (isNaoProcessado ? (doc.nome_arquivo || 'Arquivo PDF não lido') : 'Sem nome informado');
         const cpf = safeString(doc.cpf);
         const rg = safeString(doc.rg);
-        const curso = safeString(doc.curso) || 'Curso não informado';
+        const curso = safeString(doc.curso) || (isNaoProcessado ? (doc.caminho_relativo || 'Clique em Classificar para extrair dados') : 'Curso não informado');
 
         card.innerHTML = `
           <div class="flex items-center justify-between gap-1">
@@ -1852,6 +1875,7 @@
       badge.innerText = "Nenhum documento";
 
       document.getElementById('jsonViewer').innerText = '{}';
+      if (typeof updateClassificationButtonsState === 'function') updateClassificationButtonsState();
       isDirty = false;
     }
 
@@ -1877,7 +1901,7 @@
       document.getElementById('field_data_criacao').innerText = safeString(doc.data_criacao) || '-';
       document.getElementById('field_data_modificacao').innerText = safeString(doc.data_modificacao) || '-';
       const fMetodo = document.getElementById('field_metodo_leitura');
-      if (fMetodo) fMetodo.innerText = safeString(doc.metodo_leitura) || 'texto_digital';
+      if (fMetodo) fMetodo.innerText = safeString(doc.metodo_leitura) || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital');
       const fTentativa = document.getElementById('field_tentativa_ocr');
       if (fTentativa) fTentativa.innerText = doc.tentativa_ocr_llm ? 'Sim' : 'Não';
 
@@ -1913,9 +1937,13 @@
       document.getElementById('input_obs').value = safeString(doc.observacoes_conferencia);
 
       // Atualiza badge de status
-      const isApproved = safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
+      const isNaoProcessado = doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado';
+      const isApproved = !isNaoProcessado && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
       const badge = document.getElementById('currentStatusBadge');
-      if (isApproved) {
+      if (isNaoProcessado) {
+        badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-rose-500/10 text-rose-400 border-rose-500/20";
+        badge.innerText = "Não Lido / Não Processado";
+      } else if (isApproved) {
         badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
         badge.innerText = "Aprovado / Conferido";
       } else {
@@ -1926,6 +1954,9 @@
       updateJsonView();
       if (!skipSidebarUpdate) {
         updateSidebarSelection();
+      }
+      if (typeof updateClassificationButtonsState === 'function') {
+        updateClassificationButtonsState();
       }
       isDirty = false;
     }
@@ -2030,10 +2061,13 @@
       }
     }
 
-    function updateOcrButtonsState() {
-      const btn1 = document.getElementById('btnOcrLlm');
-      const btn2 = document.getElementById('btnOcrLlmHeader');
+    function updateClassificationButtonsState() {
+      const btn1 = document.getElementById('btnProcessarDoc') || document.getElementById('btnOcrLlm');
+      const btn2 = document.getElementById('btnProcessarDocHeader') || document.getElementById('btnOcrLlmHeader');
       if (!btn1 && !btn2) return;
+
+      const doc = (filteredDocs && currentIndex >= 0 && currentIndex < filteredDocs.length) ? filteredDocs[currentIndex] : null;
+      const isUnprocessed = doc ? (doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado') : false;
 
       const prov = (currentAiProvider || systemConfig?.visualizador?.provider || 'ollama').toLowerCase();
 
@@ -2048,38 +2082,61 @@
         modelName = (sel && sel.value === '__custom__' ? custom?.value : sel?.value) || systemConfig?.visualizador?.model || 'gemma4:e4b';
       }
 
+      const shortModel = modelName.length > 14 ? modelName.substring(0, 12) + '..' : modelName;
+
       if (prov === 'openai') {
         if (btn2) {
           btn2.className = "px-2.5 py-1 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm";
-          btn2.title = `Re-analisar e extrair dados deste documento com OCR visual via OpenAI API (${modelName})`;
-          btn2.innerHTML = '<i class="fa-solid fa-cloud text-cyan-400"></i> <span>OCR (OpenAI)</span>';
+          if (isUnprocessed) {
+            btn2.title = `Classificar este documento pela primeira vez com OCR visual via OpenAI API (${modelName})`;
+            btn2.innerHTML = `<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Classificar (${shortModel})</span>`;
+          } else {
+            btn2.title = `Re-executar leitura e classificação completa deste documento com OCR visual via OpenAI API (${modelName})`;
+            btn2.innerHTML = `<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Reclassificar (${shortModel})</span>`;
+          }
         }
         if (btn1) {
           btn1.className = "py-1.5 px-3 bg-cyan-600/15 hover:bg-cyan-600/25 text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0";
-          btn1.title = `Re-analisar e extrair dados deste documento com OCR visual via OpenAI API (${modelName})`;
-          btn1.innerHTML = '<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Re-analisar OCR (OpenAI)</span>';
+          if (isUnprocessed) {
+            btn1.title = `Classificar este documento pela primeira vez com OCR visual via OpenAI API (${modelName})`;
+            btn1.innerHTML = `<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Classificar com OCR (OpenAI)</span>`;
+          } else {
+            btn1.title = `Re-executar leitura e classificação completa deste documento com OCR visual via OpenAI API (${modelName})`;
+            btn1.innerHTML = `<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Reclassificar com OCR (OpenAI)</span>`;
+          }
         }
       } else {
         if (btn2) {
           btn2.className = "px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm";
-          btn2.title = `Re-analisar e extrair dados deste documento com OCR multimodal via Ollama Local (${modelName})`;
-          btn2.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>OCR (Ollama)</span>';
+          if (isUnprocessed) {
+            btn2.title = `Classificar este documento pela primeira vez com OCR multimodal via Ollama Local (${modelName})`;
+            btn2.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Classificar (${shortModel})</span>`;
+          } else {
+            btn2.title = `Re-executar leitura e classificação completa deste documento com OCR multimodal via Ollama Local (${modelName})`;
+            btn2.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Reclassificar (${shortModel})</span>`;
+          }
         }
         if (btn1) {
           btn1.className = "py-1.5 px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0";
-          btn1.title = `Re-analisar e extrair dados deste documento com OCR multimodal via Ollama Local (${modelName})`;
-          btn1.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Re-analisar OCR</span>';
+          if (isUnprocessed) {
+            btn1.title = `Classificar este documento pela primeira vez com OCR multimodal via Ollama Local (${modelName})`;
+            btn1.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Classificar com OCR</span>`;
+          } else {
+            btn1.title = `Re-executar leitura e classificação completa deste documento com OCR multimodal via Ollama Local (${modelName})`;
+            btn1.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Reclassificar com OCR</span>`;
+          }
         }
       }
     }
 
-    async function triggerOcrLlm() {
+    async function triggerProcessarDocumento() {
       if (!filteredDocs || filteredDocs.length === 0 || currentIndex < 0 || currentIndex >= filteredDocs.length) {
-        showToast('Nenhum documento selecionado para OCR.', 'error');
+        showToast('Nenhum documento selecionado para classificação.', 'error');
         return;
       }
       const doc = filteredDocs[currentIndex];
       const targetMd5 = doc.md5;
+      const isUnprocessed = doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado';
 
       const prov = (currentAiProvider || systemConfig?.visualizador?.provider || 'ollama').toLowerCase();
 
@@ -2103,32 +2160,35 @@
         return;
       }
 
-      const btn1 = document.getElementById('btnOcrLlm');
-      const btn2 = document.getElementById('btnOcrLlmHeader');
+      const btn1 = document.getElementById('btnProcessarDoc') || document.getElementById('btnOcrLlm');
+      const btn2 = document.getElementById('btnProcessarDocHeader') || document.getElementById('btnOcrLlmHeader');
       const originalHtml1 = btn1 ? btn1.innerHTML : '';
       const originalHtml2 = btn2 ? btn2.innerHTML : '';
 
       const spinColor = prov === 'openai' ? 'text-cyan-400' : 'text-purple-400';
       const provLabel = prov === 'openai' ? 'OpenAI API' : 'Ollama';
+      const actionVerb = isUnprocessed ? 'Classificando' : 'Reclassificando';
 
       if (btn1) {
         btn1.disabled = true;
-        btn1.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin ${spinColor}"></i> Executando OCR (${provLabel})...`;
+        btn1.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin ${spinColor}"></i> ${actionVerb} (${provLabel})...`;
         btn1.classList.add('opacity-75', 'cursor-not-allowed');
       }
       if (btn2) {
         btn2.disabled = true;
-        btn2.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin ${spinColor}"></i> <span>Executando...</span>`;
+        btn2.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin ${spinColor}"></i> <span>${actionVerb}...</span>`;
         btn2.classList.add('opacity-75', 'cursor-not-allowed');
       }
 
-      showToast(`Enviando documento para OCR visual via ${provLabel} (${modelName})...`, 'info');
+      showToast(`Executando leitura e classificação com OCR via ${provLabel} (${modelName})...`, 'info');
 
       try {
         const payload = {
           md5: targetMd5,
+          nome_arquivo: doc.nome_arquivo,
           provider: prov,
-          model: modelName
+          model: modelName,
+          force_ocr: true
         };
         if (openaiKeyInput) {
           payload.openai_key = openaiKeyInput;
@@ -2142,7 +2202,7 @@
           payload.ollama_url = customOllamaUrl;
         }
 
-        const resp = await fetch('/api/ocr', {
+        const resp = await fetch('/api/processar-documento', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -2150,7 +2210,7 @@
 
         const resData = await resp.json();
         if (!resp.ok || resData.status !== 'sucesso') {
-          throw new Error(resData.mensagem || resData.erro || `Falha ao executar OCR via ${provLabel}.`);
+          throw new Error(resData.mensagem || resData.erro || `Falha ao processar documento via ${provLabel}.`);
         }
 
         const novoItem = resData.item;
@@ -2158,17 +2218,19 @@
         const idxDocs = documents.findIndex(d => d.md5 === targetMd5);
         if (idxDocs !== -1) {
           documents[idxDocs] = novoItem;
+        } else {
+          documents.push(novoItem);
         }
         // Atualiza no array filtrado
         filteredDocs[currentIndex] = novoItem;
 
         // Atualiza formulário e JSON viewer com os dados atualizados
         selectDocument(currentIndex, true);
-        applyFilters(false);
-        showToast(resData.mensagem || `OCR via ${provLabel} concluído com sucesso!`, 'success');
+        applyFilter(true);
+        showToast(resData.mensagem || `Documento classificado com sucesso via ${provLabel}!`, 'success');
       } catch (err) {
-        console.error(`Erro no OCR via ${provLabel}:`, err);
-        showToast(`Erro no OCR: ${err.message}`, 'error');
+        console.error(`Erro na classificação via ${provLabel}:`, err);
+        showToast(`Erro ao classificar: ${err.message}`, 'error');
       } finally {
         if (btn1) {
           btn1.disabled = false;
@@ -2180,9 +2242,13 @@
           btn2.innerHTML = originalHtml2;
           btn2.classList.remove('opacity-75', 'cursor-not-allowed');
         }
-        updateOcrButtonsState();
+        updateClassificationButtonsState();
       }
     }
+
+    // Aliases para compatibilidade reversa
+    const triggerOcrLlm = triggerProcessarDocumento;
+    const updateOcrButtonsState = updateClassificationButtonsState;
 
     function navigateDoc(direction) {
       if (!filteredDocs || filteredDocs.length === 0) return;

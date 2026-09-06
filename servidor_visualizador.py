@@ -520,20 +520,18 @@ class ConferenciaServer:
         return client
 
     def build_pdf_index(self):
-        """Indexa os arquivos PDFs da pasta mapeando seus MD5."""
+        """Indexa os arquivos PDFs da pasta (inclusive subpastas) mapeando seus MD5."""
         self.md5_to_file.clear()
         if not self.pdf_dir.exists():
             print(f"[Aviso] Pasta de PDFs não encontrada: {self.pdf_dir}")
             return
 
-        pdf_set = set(self.pdf_dir.glob("*.pdf")) | set(self.pdf_dir.glob("*.PDF"))
-        if not pdf_set:
-            pdf_set = set(self.pdf_dir.rglob("*.pdf")) | set(self.pdf_dir.rglob("*.PDF"))
+        pdf_set = set(self.pdf_dir.rglob("*.pdf")) | set(self.pdf_dir.rglob("*.PDF"))
         pdf_files = sorted(pdf_set)
         print(f"[*] Indexando {len(pdf_files)} PDFs na pasta {self.pdf_dir}...")
         for p in pdf_files:
             try:
-                h = calculate_md5(p)
+                h = calculate_md5(p).strip().lower()
                 self.md5_to_file[h] = p
             except Exception as e:
                 print(f"[Erro] Falha ao ler {p.name}: {e}")
@@ -547,10 +545,12 @@ class ConferenciaServer:
                 with open(self.json_path, "r", encoding="utf-8") as f:
                     loaded = json.load(f)
                     if isinstance(loaded, list):
-                        data = loaded
-                        for item in data:
-                            if isinstance(item, dict) and "md5" in item:
-                                existing_by_md5[item["md5"]] = item
+                        for item in loaded:
+                            if isinstance(item, dict) and item.get("md5"):
+                                h = str(item["md5"]).strip().lower()
+                                item["md5"] = h
+                                existing_by_md5[h] = item
+                                data.append(item)
             except Exception as e:
                 print(f"[Erro] Falha ao ler JSON: {e}")
                 data = []
@@ -562,12 +562,13 @@ class ConferenciaServer:
             try:
                 for entry in os.scandir(indiv_dir):
                     if entry.is_file() and entry.name.endswith(".json") and not entry.name.startswith("."):
-                        h = entry.name[:-5].lower()
+                        h = entry.name[:-5].strip().lower()
                         if h not in existing_by_md5:
                             try:
                                 with open(entry.path, "r", encoding="utf-8") as f:
                                     item = json.load(f)
                                     if isinstance(item, dict) and item.get("md5"):
+                                        item["md5"] = str(item["md5"]).strip().lower()
                                         existing_by_md5[item["md5"]] = item
                                         data.append(item)
                                         recovered += 1
@@ -580,16 +581,57 @@ class ConferenciaServer:
                 print(f"[*] Visualizador sincronizou {recovered} documento(s) da pasta 'individuais/' para o relatório consolidado.")
                 self.save_data(data)
 
+        # Complementa com arquivos PDFs indexados da pasta que ainda não foram processados
+        for h, pdf_file in self.md5_to_file.items():
+            if h not in existing_by_md5:
+                try:
+                    stat = pdf_file.stat()
+                    dt_mod = datetime.fromtimestamp(stat.st_mtime).isoformat()
+                    try:
+                        dt_cre = datetime.fromtimestamp(stat.st_birthtime).isoformat()
+                    except AttributeError:
+                        dt_cre = dt_mod
+                except Exception:
+                    dt_mod = None
+                    dt_cre = None
+
+                rel_path = str(pdf_file.relative_to(self.pdf_dir)) if self.pdf_dir in pdf_file.parents else pdf_file.name
+                unprocessed_doc = {
+                    "md5": h,
+                    "nome_arquivo": pdf_file.name,
+                    "caminho_relativo": rel_path,
+                    "data_criacao": dt_cre,
+                    "data_modificacao": dt_mod,
+                    "data": None,
+                    "beneficiario": None,
+                    "cpf": None,
+                    "rg": None,
+                    "curso": None,
+                    "natureza_curso": None,
+                    "carga_horaria": None,
+                    "faculdade": None,
+                    "tipo_documento": None,
+                    "status": "nao_processado",
+                    "status_conferencia": "nao_processado",
+                    "metodo_leitura": "nao_processado",
+                    "tentativa_ocr_llm": False,
+                    "processado_em": None
+                }
+                existing_by_md5[h] = unprocessed_doc
+                data.append(unprocessed_doc)
+
         return data
 
     def save_data(self, data):
         self.json_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_json = self.json_path.parent / f".tmp_{self.json_path.name}"
+        # No arquivo consolidado em disco, salva apenas os documentos que já foram de fato processados
+        processed_data = [d for d in data if d.get("status") != "nao_processado"]
         with open(tmp_json, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(processed_data, f, ensure_ascii=False, indent=2)
         tmp_json.replace(self.json_path)
         # Atualiza também o relatório TXT consolidado correspondente
-        self.update_txt_report(data)
+        self.update_txt_report(processed_data)
 
     def update_txt_report(self, results):
         txt_path = self.json_path.with_suffix(".txt")
@@ -1023,9 +1065,9 @@ def create_handler(server_ctx: ConferenciaServer):
                     self.send_error(404, f"Documento MD5 {target_md5} não encontrado.")
                 return
 
-            # Re-análise via OCR Multimodal com LLM sob demanda (Ollama ou OpenAI)
-            if path == "/api/ocr":
-                target_md5 = payload.get("md5")
+            # Leitura e Classificação completa sob demanda (com OCR multimodal forçado)
+            if path in ["/api/processar-documento", "/api/ocr"]:
+                target_md5 = str(payload.get("md5") or "").strip().lower()
                 if not target_md5:
                     self.send_error(400, "MD5 do documento não informado.")
                     return
@@ -1036,7 +1078,16 @@ def create_handler(server_ctx: ConferenciaServer):
                     pdf_file = server_ctx.md5_to_file.get(target_md5)
 
                 if not pdf_file or not pdf_file.exists():
-                    self.send_error(404, f"Arquivo PDF com MD5 {target_md5} não encontrado na pasta de PDFs.")
+                    # Tenta localizar por nome de arquivo se fornecido
+                    fname = payload.get("nome_arquivo")
+                    if fname:
+                        for p in server_ctx.pdf_dir.rglob(fname):
+                            if p.is_file():
+                                pdf_file = p
+                                break
+
+                if not pdf_file or not pdf_file.exists():
+                    self.send_error(404, f"Arquivo PDF com MD5 {target_md5} não encontrado na pasta de PDFs ({server_ctx.pdf_dir}).")
                     return
 
                 try:
@@ -1053,6 +1104,8 @@ def create_handler(server_ctx: ConferenciaServer):
                         openai_base_url=req_base,
                         ollama_url=req_ollama_url
                     )
+
+                    # Executa a leitura e classificação completa do documento forçando OCR
                     novo_doc = process_single_pdf(pdf_file, client, force_ocr=True)
 
                     # Sanitiza listas para strings para compatibilidade com o visualizador
@@ -1064,15 +1117,20 @@ def create_handler(server_ctx: ConferenciaServer):
                     dados_atuais = server_ctx.load_data()
                     found = False
                     for idx, doc in enumerate(dados_atuais):
-                        if doc.get("md5") == target_md5:
-                            if "status_conferencia" in doc:
-                                novo_doc["status_conferencia"] = doc["status_conferencia"]
-                            if "observacoes_conferencia" in doc:
+                        if doc.get("md5", "").strip().lower() == target_md5:
+                            prev_conf = doc.get("status_conferencia")
+                            if prev_conf in ["aprovado", "pendente"]:
+                                novo_doc["status_conferencia"] = prev_conf
+                            else:
+                                novo_doc["status_conferencia"] = "pendente"
+
+                            if "observacoes_conferencia" in doc and doc["observacoes_conferencia"]:
                                 novo_doc["observacoes_conferencia"] = doc["observacoes_conferencia"]
                             dados_atuais[idx] = novo_doc
                             found = True
                             break
                     if not found:
+                        novo_doc["status_conferencia"] = "pendente"
                         dados_atuais.append(novo_doc)
 
                     server_ctx.save_data(dados_atuais)
@@ -1088,7 +1146,7 @@ def create_handler(server_ctx: ConferenciaServer):
                             pass
 
                     active_prov = req_prov or server_ctx.provider or "ollama"
-                    provider_label = "OpenAI API" if active_prov == "openai" else "Ollama (LLM Local)"
+                    provider_label = "OpenAI API" if active_prov == "openai" else "Ollama"
                     model_used = getattr(client, "model", req_model or server_ctx.model)
 
                     resp = json.dumps({
@@ -1096,7 +1154,7 @@ def create_handler(server_ctx: ConferenciaServer):
                         "item": novo_doc,
                         "provider": active_prov,
                         "model": model_used,
-                        "mensagem": f"OCR via {provider_label} ({model_used}) concluído com sucesso!"
+                        "mensagem": f"Documento lido e classificado com sucesso via {provider_label} ({model_used})!"
                     }, ensure_ascii=False).encode("utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -1105,8 +1163,8 @@ def create_handler(server_ctx: ConferenciaServer):
                     self.wfile.write(resp)
                     return
                 except Exception as e:
-                    err_msg = f"Erro ao executar OCR: {e}"
-                    print(f"[Erro OCR API] {err_msg}")
+                    err_msg = f"Erro ao classificar documento: {e}"
+                    print(f"[Erro Classificação API] {err_msg}")
                     resp = json.dumps({"status": "erro", "mensagem": err_msg}, ensure_ascii=False).encode("utf-8")
                     self.send_response(500)
                     self.send_header("Content-Type", "application/json; charset=utf-8")
