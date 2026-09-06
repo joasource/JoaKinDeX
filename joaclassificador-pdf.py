@@ -11,6 +11,7 @@ import os
 import sys
 import json
 import re
+import time
 import hashlib
 import argparse
 import warnings
@@ -676,24 +677,35 @@ class OpenAIClient(BaseLLMClient):
         )
 
     def generate_json(self, prompt: str) -> Dict[str, Any]:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Você é um assistente especialista em analisar e extrair dados "
-                        "estruturados de documentos acadêmicos e diplomas. "
-                        "Responda estritamente em formato JSON válido."
-                    )
-                },
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.0
-        )
-        raw_response = response.choices[0].message.content or "{}"
-        return clean_and_parse_json(raw_response)
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Você é um assistente especialista em analisar e extrair dados "
+                                "estruturados de documentos acadêmicos e diplomas. "
+                                "Responda estritamente em formato JSON válido."
+                            )
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.0
+                )
+                raw_response = response.choices[0].message.content or "{}"
+                return clean_and_parse_json(raw_response)
+            except Exception as e:
+                err_msg = str(e).lower()
+                is_rate_limit = "429" in err_msg or "rate limit" in err_msg or "tokens per min" in err_msg
+                if is_rate_limit and attempt < max_retries - 1:
+                    sleep_s = (attempt + 1) * 3
+                    time.sleep(sleep_s)
+                    continue
+                raise e
 
     def generate_json_with_images(self, prompt: str, images: List[str]) -> Dict[str, Any]:
         content: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
@@ -705,24 +717,35 @@ class OpenAIClient(BaseLLMClient):
                 }
             })
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Você é um assistente especialista em analisar visualmente e extrair dados "
-                        "estruturados de documentos acadêmicos e diplomas via OCR. "
-                        "Responda estritamente em formato JSON válido."
-                    )
-                },
-                {"role": "user", "content": content}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.0
-        )
-        raw_response = response.choices[0].message.content or "{}"
-        return clean_and_parse_json(raw_response)
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Você é um assistente especialista em analisar visualmente e extrair dados "
+                                "estruturados de documentos acadêmicos e diplomas via OCR. "
+                                "Responda estritamente em formato JSON válido."
+                            )
+                        },
+                        {"role": "user", "content": content}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.0
+                )
+                raw_response = response.choices[0].message.content or "{}"
+                return clean_and_parse_json(raw_response)
+            except Exception as e:
+                err_msg = str(e).lower()
+                is_rate_limit = "429" in err_msg or "rate limit" in err_msg or "tokens per min" in err_msg
+                if is_rate_limit and attempt < max_retries - 1:
+                    sleep_s = (attempt + 1) * 4
+                    time.sleep(sleep_s)
+                    continue
+                raise e
 
 
 # ---------------------------------------------------------------------------
