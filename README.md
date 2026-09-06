@@ -153,11 +153,24 @@ Se você informar os parâmetros na chamada do comando, ele executa **diretament
 ```
 
 #### Com a API da OpenAI (Paralelismo em Nuvem):
-```bash
-export OPENAI_API_KEY="sk-sua-chave-aqui"
 
-./joaclassificador-pdf -i ./meus_pdfs -o ./saida -p openai -m gpt-4o-mini -w 4
-```
+A chave da OpenAI pode ser fornecida de **4 formas simples**:
+
+1. **Direto no Menu Interativo**: Ao escolher a opção `2) OpenAI`, o menu solicita a chave e a máscara com segurança se já existir no ambiente.
+2. **Via Linha de Comando (CLI)** usando o parâmetro `-k` ou `--openai-key`:
+   ```bash
+   ./joaclassificador-pdf -i ./meus_pdfs -o ./saida -p openai -m gpt-4o-mini -k "sk-proj-sua-chave" -w 4
+   ```
+3. **No arquivo `.env`** (recomendado para persistência):
+   Basta criar um arquivo `.env` na raiz do projeto:
+   ```env
+   OPENAI_API_KEY=sk-proj-sua-chave-aqui
+   ```
+4. **Via variável de ambiente no terminal**:
+   ```bash
+   export OPENAI_API_KEY="sk-proj-sua-chave-aqui"
+   ./joaclassificador-pdf -i ./meus_pdfs -o ./saida -p openai -m gpt-4o-mini -w 4
+   ```
 
 #### Forçar Menu Interativo ou Modo Batch:
 ```bash
@@ -178,9 +191,10 @@ export OPENAI_API_KEY="sk-sua-chave-aqui"
 | `-o`, `--output-dir` | Diretório onde os relatórios serão salvos | `./saida` |
 | `-p`, `--provider` | Provedor de IA (`ollama` ou `openai`) | `ollama` |
 | `-m`, `--model` | Nome do modelo (`gemma4:e4b`, `gpt-4o-mini`, etc.) | Auto-detecta / padrão do provedor |
+| `-k`, `--key`, `--openai-key` | Chave de API da OpenAI (lê de `OPENAI_API_KEY` ou `.env`) | `None` |
+| `--openai-base-url`, `--base-url` | URL base personalizada para OpenAI (Groq, OpenRouter, vLLM) | `None` |
 | `--docker` | Nome do container Docker do Ollama | Auto-detecta (`open-webui`) |
 | `--ollama-url` | URL da API HTTP do Ollama | `http://localhost:11434` |
-| `--openai-key` | Chave de API da OpenAI | Lê de `OPENAI_API_KEY` |
 | `-w`, `--workers` | Número de threads concorrentes | `1` (Ollama) / `4+` (OpenAI) |
 | `--max-pages` | Máximo de páginas a ler por documento | `4` |
 | `-f`, `--force` | Força o reprocessamento de todos os PDFs | `False` |

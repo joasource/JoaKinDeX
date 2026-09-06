@@ -54,6 +54,37 @@ except ImportError:
     OpenAI = None
 
 
+def load_dotenv_if_present(env_path: Optional[Path] = None):
+    """
+    Carrega automaticamente variáveis do arquivo .env para os.environ sem dependências externas.
+    """
+    candidates = [
+        env_path,
+        Path(".env"),
+        Path(__file__).parent / ".env",
+        Path.cwd() / ".env"
+    ] if env_path else [Path(".env"), Path(__file__).parent / ".env", Path.cwd() / ".env"]
+
+    for p in candidates:
+        if p and p.exists() and p.is_file():
+            try:
+                for line in p.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip("'\"")
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+            except Exception:
+                pass
+            break
+
+# Carrega .env automaticamente
+load_dotenv_if_present()
+
+
 # ---------------------------------------------------------------------------
 # Metadados do Arquivo (MD5, Criação, Modificação)
 # ---------------------------------------------------------------------------
@@ -454,9 +485,20 @@ class OpenAIClient(BaseLLMClient):
         if OpenAI is None:
             raise ImportError("O pacote 'openai' não está instalado. Execute: pip install openai")
 
+        resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
+        if not resolved_key:
+            raise ValueError(
+                "\n[ERRO] Chave de API da OpenAI não encontrada!\n"
+                "Você pode informá-la de 4 formas simples:\n"
+                "  1. No menu interativo ao selecionar OpenAI\n"
+                "  2. Via linha de comando: ./joaclassificador-pdf -p openai -k sk-proj-...\n"
+                "  3. No arquivo .env: OPENAI_API_KEY=sk-proj-...\n"
+                "  4. No terminal: export OPENAI_API_KEY=sk-proj-...\n"
+            )
+
         self.model = model
         self.client = OpenAI(
-            api_key=api_key or os.environ.get("OPENAI_API_KEY"),
+            api_key=resolved_key,
             base_url=base_url or os.environ.get("OPENAI_BASE_URL")
         )
 
@@ -1009,15 +1051,48 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
             args.model = resp_mod if resp_mod else default_model
             break
 
-        env_key = os.environ.get("OPENAI_API_KEY", "")
-        if not env_key and not args.openai_key:
+        # Chave da OpenAI
+        current_key = args.openai_key or os.environ.get("OPENAI_API_KEY", "")
+        if current_key:
+            masked = (current_key[:7] + "..." + current_key[-4:]) if len(current_key) > 12 else "********"
+            prompt_key_str = f"🔑 Chave de API OpenAI [{masked} - ENTER para manter]: "
+        else:
+            prompt_key_str = "🔑 Chave de API OpenAI (sk-...): "
+
+        while True:
             try:
-                resp_key = input("🔑 Chave de API OpenAI (OPENAI_API_KEY): ").strip()
-                if resp_key:
-                    args.openai_key = resp_key
+                resp_key = input(prompt_key_str).strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n[Operação cancelada pelo usuário]")
                 sys.exit(0)
+
+            if resp_key:
+                args.openai_key = resp_key
+                break
+            elif current_key:
+                args.openai_key = current_key
+                break
+            else:
+                print("   ⚠️  Aviso: O uso da OpenAI requer uma chave de API válida.")
+                try:
+                    conf_no_key = input("   Deseja continuar sem informar a chave agora? (s/N): ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    sys.exit(0)
+                if conf_no_key in ["s", "sim", "y", "yes"]:
+                    break
+
+        # Base URL opcional (para compatibilidade com Groq, OpenRouter, vLLM, etc.)
+        current_base_url = args.openai_base_url or os.environ.get("OPENAI_BASE_URL", "")
+        default_url_desc = current_base_url if current_base_url else "padrão oficial OpenAI"
+        try:
+            resp_base = input(f"🌐 OpenAI Base URL (opcional para Groq/OpenRouter) [{default_url_desc}]: ").strip()
+            if resp_base:
+                args.openai_base_url = resp_base
+            elif current_base_url:
+                args.openai_base_url = current_base_url
+        except (EOFError, KeyboardInterrupt):
+            print("\n[Operação cancelada pelo usuário]")
+            sys.exit(0)
 
     # 5. Threads de processamento (Workers)
     default_workers = args.workers if (args.workers and args.workers > 1) else (4 if args.provider == "openai" else 1)
@@ -1096,7 +1171,14 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
     print("=" * 70)
     print(f"• Entrada      : {args.input} ({pdf_qtd} arquivo(s) PDF)")
     print(f"• Saída        : {args.output_dir}")
-    print(f"• Provedor     : {args.provider.upper()} (Modelo: {args.model})")
+    if args.provider == "openai":
+        k_val = args.openai_key or os.environ.get("OPENAI_API_KEY", "")
+        masked_k = (k_val[:7] + "..." + k_val[-4:]) if (k_val and len(k_val) > 12) else ("Configurada" if k_val else "Não informada")
+        print(f"• Provedor     : OPENAI (Modelo: {args.model} | Chave: {masked_k})")
+        if args.openai_base_url:
+            print(f"• Base URL     : {args.openai_base_url}")
+    else:
+        print(f"• Provedor     : OLLAMA (Modelo: {args.model})")
     print(f"• Concorrência : {args.workers} thread(s)")
     print(f"• OCR com LLM  : {ocr_desc}")
     print(f"• Execução     : {mode_desc}")
@@ -1159,16 +1241,18 @@ def main():
         help="URL base da API do Ollama (padrão: http://localhost:11434)."
     )
     parser.add_argument(
-        "--openai-key",
+        "-k", "--key", "--openai-key",
+        dest="openai_key",
         type=str,
         default=None,
-        help="Chave de API da OpenAI (se omitido, lê de OPENAI_API_KEY)."
+        help="Chave de API da OpenAI (se omitido, lê de OPENAI_API_KEY ou do arquivo .env)."
     )
     parser.add_argument(
-        "--openai-base-url",
+        "--openai-base-url", "--base-url",
+        dest="openai_base_url",
         type=str,
         default=None,
-        help="URL base personalizada para OpenAI ou endpoints compatíveis."
+        help="URL base personalizada para OpenAI ou endpoints compatíveis (Groq, OpenRouter, vLLM)."
     )
     parser.add_argument(
         "-w", "--workers",
