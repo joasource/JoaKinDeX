@@ -18,6 +18,7 @@ pdf/
 
 # Logs e configurações locais
 *.log
+.env
 .DS_Store
 .idea/
 .vscode/
