@@ -475,34 +475,45 @@
       </div>
 
       <!-- RODAPÉ FIXO DE AÇÕES -->
-      <div class="bg-slate-900 border-t border-slate-800 p-3 flex items-center justify-between shrink-0">
+      <div class="bg-slate-900/95 border-t border-slate-800 px-3.5 py-2.5 shrink-0 space-y-2">
+        <!-- Linha 1: Ferramentas Complementares (Copiar Ficha Visual Law e OCR) -->
         <div class="flex items-center gap-2">
-          <button id="btnSalvar" onclick="saveCurrentDoc()"
-                  class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
-            <i class="fa-solid fa-floppy-disk"></i>
-            Salvar (Ctrl+S)
+          <button type="button" id="btnCopyAllFooter" onclick="copyAllExtractedData(this)" title="Copiar ficha de qualificação em padrão Visual Law para colar diretamente no Word ou em petições"
+                  class="flex-1 py-1.5 px-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 hover:text-emerald-300 border border-slate-700/80 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm">
+            <i class="fa-solid fa-paste text-emerald-400"></i>
+            <span>Copiar Ficha (Visual Law)</span>
           </button>
-          <button onclick="resetDocChanges()" title="Reverter alterações deste documento"
-                  class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition border border-slate-700">
-            Reverter
-          </button>
-          <button id="btnOcrLlm" onclick="triggerOcrLlm()" title="Re-analisar e extrair dados deste documento com OCR multimodal via LLM"
-                  class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
+
+          <button type="button" id="btnOcrLlm" onclick="triggerOcrLlm()" title="Re-analisar e extrair dados deste documento com OCR multimodal via LLM"
+                  class="py-1.5 px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0">
             <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
-            Re-analisar OCR (LLM)
-          </button>
-          <button type="button" id="btnCopyAllFooter" onclick="copyAllExtractedData(this)" title="Copiar ficha completa em formato Visual Law para Word/Petições"
-                  class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
-            <i class="fa-solid fa-paste"></i>
-            Copiar Tudo (Visual Law)
+            <span>Re-analisar OCR</span>
           </button>
         </div>
 
-        <button id="btnAprovar" onclick="approveAndNext()"
-                class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
-          <i class="fa-solid fa-circle-check"></i>
-          Aprovar & Próximo (Ctrl+Enter)
-        </button>
+        <!-- Linha 2: Ações de Conferência (Salvar, Reverter e Aprovação com Destaque) -->
+        <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-800/60">
+          <div class="flex items-center gap-1.5">
+            <button id="btnSalvar" onclick="saveCurrentDoc()" title="Salvar alterações deste documento (Ctrl+S)"
+                    class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>Salvar</span>
+              <kbd class="hidden sm:inline text-[9px] bg-blue-700/80 px-1 py-0.5 rounded text-blue-200 font-mono">^S</kbd>
+            </button>
+            <button onclick="resetDocChanges()" title="Reverter alterações deste documento"
+                    class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-slate-100 rounded text-xs transition border border-slate-700 flex items-center gap-1">
+              <i class="fa-solid fa-rotate-left text-slate-400"></i>
+              <span>Reverter</span>
+            </button>
+          </div>
+
+          <button id="btnAprovar" onclick="approveAndNext()" title="Aprovar conferência deste documento e avançar (Ctrl+Enter)"
+                  class="flex-1 max-w-[210px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Aprovar & Próximo</span>
+            <kbd class="hidden sm:inline text-[9px] bg-emerald-700/80 px-1 py-0.5 rounded text-emerald-200 font-mono">↵</kbd>
+          </button>
+        </div>
       </div>
     </section>
 
