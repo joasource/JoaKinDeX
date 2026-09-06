@@ -281,12 +281,31 @@
         <!-- Campos Principais do Documento -->
         <div class="space-y-3">
           
+          <!-- Cabeçalho dos Dados Extraídos & Botão Copiar Tudo (Visual Law) -->
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-file-invoice text-emerald-400"></i>
+              Dados Extraídos do Documento
+            </label>
+            <button type="button" id="btnCopyAll" onclick="copyAllExtractedData(this)" title="Copiar todos os dados em formato Visual Law para colar diretamente no Word ou em petições"
+                    class="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
+              <i class="fa-solid fa-paste"></i>
+              <span>Copiar Tudo (Visual Law)</span>
+            </button>
+          </div>
+
           <!-- Beneficiário -->
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-              <span>Nome do Beneficiário / Titular</span>
-              <span class="text-[10px] text-slate-500 font-mono">beneficiario</span>
-            </label>
+            <div class="flex items-center justify-between mb-1">
+              <label for="input_beneficiario" class="text-xs font-medium text-slate-300">Nome do Beneficiário / Titular</label>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-slate-500 font-mono">beneficiario</span>
+                <button type="button" onclick="copyFieldValue('input_beneficiario', 'Beneficiário', this)" title="Copiar Beneficiário"
+                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+            </div>
             <input type="text" id="input_beneficiario" oninput="markDirty()"
                    class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
           </div>
@@ -294,18 +313,30 @@
           <!-- CPF e RG do Beneficiário lado a lado -->
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-                <span>CPF</span>
-                <span class="text-[10px] text-slate-500 font-mono">cpf</span>
-              </label>
+              <div class="flex items-center justify-between mb-1">
+                <label for="input_cpf" class="text-xs font-medium text-slate-300">CPF</label>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-slate-500 font-mono">cpf</span>
+                  <button type="button" onclick="copyFieldValue('input_cpf', 'CPF', this)" title="Copiar CPF"
+                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+              </div>
               <input type="text" id="input_cpf" oninput="markDirty()" placeholder="000.000.000-00"
                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-                <span>RG / Identidade</span>
-                <span class="text-[10px] text-slate-500 font-mono">rg</span>
-              </label>
+              <div class="flex items-center justify-between mb-1">
+                <label for="input_rg" class="text-xs font-medium text-slate-300">RG / Identidade</label>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-slate-500 font-mono">rg</span>
+                  <button type="button" onclick="copyFieldValue('input_rg', 'RG', this)" title="Copiar RG"
+                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+              </div>
               <input type="text" id="input_rg" oninput="markDirty()" placeholder="Ex: 2030359 SSP-ES"
                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
@@ -313,13 +344,19 @@
 
           <!-- Natureza do Curso -->
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-              <span class="flex items-center gap-1.5">
+            <div class="flex items-center justify-between mb-1">
+              <label for="select_natureza_curso" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
                 <i class="fa-solid fa-award text-amber-400"></i>
                 Natureza / Nível do Curso
-              </span>
-              <span class="text-[10px] text-slate-500 font-mono">natureza_curso</span>
-            </label>
+              </label>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-slate-500 font-mono">natureza_curso</span>
+                <button type="button" onclick="copyFieldValue('select_natureza_curso', 'Natureza do Curso', this)" title="Copiar Natureza do Curso"
+                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+            </div>
             <select id="select_natureza_curso" onchange="markDirty()"
                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
               <option value="">Não identificada / Não se aplica</option>
@@ -334,10 +371,16 @@
 
           <!-- Nome do Curso -->
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-              <span>Nome do Curso</span>
-              <span class="text-[10px] text-slate-500 font-mono">curso</span>
-            </label>
+            <div class="flex items-center justify-between mb-1">
+              <label for="input_curso" class="text-xs font-medium text-slate-300">Nome do Curso</label>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-slate-500 font-mono">curso</span>
+                <button type="button" onclick="copyFieldValue('input_curso', 'Nome do Curso', this)" title="Copiar Nome do Curso"
+                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+            </div>
             <textarea id="input_curso" oninput="markDirty()" rows="2"
                       class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
           </div>
@@ -345,18 +388,30 @@
           <!-- Carga Horária e Data do Documento lado a lado -->
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-                <span>Carga Horária</span>
-                <span class="text-[10px] text-slate-500 font-mono">carga_horaria</span>
-              </label>
+              <div class="flex items-center justify-between mb-1">
+                <label for="input_carga_horaria" class="text-xs font-medium text-slate-300">Carga Horária</label>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-slate-500 font-mono">carga_horaria</span>
+                  <button type="button" onclick="copyFieldValue('input_carga_horaria', 'Carga Horária', this)" title="Copiar Carga Horária"
+                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+              </div>
               <input type="text" id="input_carga_horaria" oninput="markDirty()" placeholder="Ex: 750 h/aulas"
                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-                <span>Data do Documento</span>
-                <span class="text-[10px] text-slate-500 font-mono">data</span>
-              </label>
+              <div class="flex items-center justify-between mb-1">
+                <label for="input_data" class="text-xs font-medium text-slate-300">Data do Documento</label>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-slate-500 font-mono">data</span>
+                  <button type="button" onclick="copyFieldValue('input_data', 'Data do Documento', this)" title="Copiar Data do Documento"
+                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+              </div>
               <input type="text" id="input_data" oninput="markDirty()" placeholder="Ex: 18 de dezembro de 2023"
                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
@@ -364,20 +419,32 @@
 
           <!-- Instituição / Faculdade -->
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-              <span>Faculdade / Instituição Emissora</span>
-              <span class="text-[10px] text-slate-500 font-mono">faculdade</span>
-            </label>
+            <div class="flex items-center justify-between mb-1">
+              <label for="input_faculdade" class="text-xs font-medium text-slate-300">Faculdade / Instituição Emissora</label>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-slate-500 font-mono">faculdade</span>
+                <button type="button" onclick="copyFieldValue('input_faculdade', 'Faculdade', this)" title="Copiar Faculdade"
+                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+            </div>
             <input type="text" id="input_faculdade" oninput="markDirty()"
                    class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
           </div>
 
           <!-- Tipo de Documento -->
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-              <span>Tipo de Documento</span>
-              <span class="text-[10px] text-slate-500 font-mono">tipo_documento</span>
-            </label>
+            <div class="flex items-center justify-between mb-1">
+              <label for="select_tipo_documento" class="text-xs font-medium text-slate-300">Tipo de Documento</label>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-slate-500 font-mono">tipo_documento</span>
+                <button type="button" onclick="copyFieldValue('select_tipo_documento', 'Tipo de Documento', this)" title="Copiar Tipo de Documento"
+                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+            </div>
             <select id="select_tipo_documento" onchange="markDirty()"
                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
               <option value="Certificado">Certificado</option>
@@ -423,6 +490,11 @@
                   class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
             <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
             Re-analisar OCR (LLM)
+          </button>
+          <button type="button" id="btnCopyAllFooter" onclick="copyAllExtractedData(this)" title="Copiar ficha completa em formato Visual Law para Word/Petições"
+                  class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
+            <i class="fa-solid fa-paste"></i>
+            Copiar Tudo (Visual Law)
           </button>
         </div>
 
@@ -1571,6 +1643,162 @@
       navigator.clipboard.writeText(md5);
       showToast('Hash MD5 copiado!', 'info');
     }
+
+    function copyFieldValue(elementId, label, btnEl) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      let val = '';
+      if (el.tagName === 'SELECT') {
+        val = el.value || '';
+      } else {
+        val = el.value || '';
+      }
+      val = val.trim();
+      if (!val) {
+        showToast(`O campo "${label}" está vazio neste documento.`, 'info');
+        return;
+      }
+
+      const updateBtnVisual = () => {
+        if (btnEl) {
+          const origHtml = btnEl.innerHTML;
+          btnEl.innerHTML = '<i class="fa-solid fa-check text-emerald-400"></i> Copiado';
+          btnEl.classList.add('text-emerald-400');
+          setTimeout(() => {
+            btnEl.innerHTML = origHtml;
+            btnEl.classList.remove('text-emerald-400');
+          }, 1400);
+        }
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(val).then(() => {
+          showToast(`"${label}" copiado!`, 'success');
+          updateBtnVisual();
+        }).catch(() => {
+          copyTextFallback(val);
+          showToast(`"${label}" copiado!`, 'success');
+          updateBtnVisual();
+        });
+      } else {
+        copyTextFallback(val);
+        showToast(`"${label}" copiado!`, 'success');
+        updateBtnVisual();
+      }
+    }
+
+    async function copyAllExtractedData(btnEl) {
+      if (!filteredDocs || filteredDocs.length === 0 || currentIndex < 0 || currentIndex >= filteredDocs.length) {
+        showToast('Nenhum documento selecionado para cópia.', 'info');
+        return;
+      }
+
+      const beneficiario = (document.getElementById('input_beneficiario')?.value || '').trim();
+      const cpf = (document.getElementById('input_cpf')?.value || '').trim();
+      const rg = (document.getElementById('input_rg')?.value || '').trim();
+      const selectNat = document.getElementById('select_natureza_curso');
+      const natureza = (selectNat?.value || '').trim();
+      const curso = (document.getElementById('input_curso')?.value || '').trim();
+      const cargaHoraria = (document.getElementById('input_carga_horaria')?.value || '').trim();
+      const dataDoc = (document.getElementById('input_data')?.value || '').trim();
+      const faculdade = (document.getElementById('input_faculdade')?.value || '').trim();
+      const tipoDoc = (document.getElementById('select_tipo_documento')?.value || '').trim();
+
+      // Monta dados estruturados excluindo metadados de sistema e observações
+      const items = [];
+      if (beneficiario) items.push({ label: 'Titular / Beneficiário', val: beneficiario, highlight: true });
+      if (cpf) items.push({ label: 'CPF', val: cpf, mono: true });
+      if (rg) items.push({ label: 'RG / Identidade', val: rg });
+      if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
+      if (curso) items.push({ label: 'Curso', val: curso, highlight: true });
+      if (natureza) items.push({ label: 'Nível / Natureza', val: natureza });
+      if (faculdade) items.push({ label: 'Instituição de Ensino', val: faculdade });
+      if (cargaHoraria) items.push({ label: 'Carga Horária', val: cargaHoraria });
+      if (dataDoc) items.push({ label: 'Data do Documento', val: dataDoc });
+
+      if (items.length === 0) {
+        showToast('Nenhum dado extraído disponível para copiar.', 'info');
+        return;
+      }
+
+      // --- 1. Formatação Visual Law para Rich Text (Word / Google Docs / LibreOffice) ---
+      // Estilo de Visual Law: Callout box institucional com barra lateral azul marinho (#1e40af),
+      // fundo neutro suave (#f8fafc), tipografia executiva (Calibri/Segoe UI) e tabela limpa.
+      let htmlContent = `<div style="font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 11pt; color: #1e293b; background-color: #f8fafc; border-left: 4.5px solid #1e40af; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; border-radius: 4px; padding: 12px 18px; margin: 12px 0; max-width: 680px;">
+  <div style="font-size: 11.5pt; font-weight: bold; color: #1e3a8a; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; letter-spacing: 0.5px;">
+    COMPROVAÇÃO DE QUALIFICAÇÃO / DOCUMENTO ACADÊMICO
+  </div>
+  <table style="width: 100%; border-collapse: collapse; font-size: 10.5pt; line-height: 1.55;">`;
+
+      items.forEach(it => {
+        const valStyle = it.highlight ? 'font-weight: 600; color: #0f172a;' : (it.mono ? 'font-family: Consolas, monospace; color: #0f172a;' : 'color: #1e293b;');
+        htmlContent += `
+    <tr>
+      <td style="padding: 3px 12px 3px 0; font-weight: bold; color: #475569; width: 190px; vertical-align: top; white-space: nowrap;">${it.label}:</td>
+      <td style="padding: 3px 0; vertical-align: top; ${valStyle}">${it.val}</td>
+    </tr>`;
+      });
+
+      htmlContent += `
+  </table>
+</div>`;
+
+      // --- 2. Formatação Visual Law para Plain Text (Notepad / WhatsApp / Petições em texto simples) ---
+      const maxLabelLen = Math.max(...items.map(it => it.label.length));
+      let plainContent = 'COMPROVAÇÃO DE QUALIFICAÇÃO / DOCUMENTO ACADÊMICO\n';
+      plainContent += '─'.repeat(60) + '\n';
+      items.forEach(it => {
+        const paddedLabel = it.label.padEnd(maxLabelLen, ' ');
+        plainContent += `• ${paddedLabel} : ${it.val}\n`;
+      });
+      plainContent += '─'.repeat(60);
+
+      const updateBtnVisual = () => {
+        if (btnEl) {
+          const origHtml = btnEl.innerHTML;
+          btnEl.innerHTML = '<i class="fa-solid fa-check text-emerald-300"></i> <span>Copiado para o Word!</span>';
+          setTimeout(() => { btnEl.innerHTML = origHtml; }, 2000);
+        }
+      };
+
+      try {
+        if (navigator.clipboard && window.ClipboardItem) {
+          const blobText = new Blob([plainContent], { type: 'text/plain' });
+          const blobHtml = new Blob([htmlContent], { type: 'text/html' });
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'text/plain': blobText,
+              'text/html': blobHtml
+            })
+          ]);
+        } else {
+          await navigator.clipboard.writeText(plainContent);
+        }
+        showToast('Ficha completa copiada! Pronta para colar no Word/Petição.', 'success');
+        updateBtnVisual();
+      } catch (err) {
+        console.warn('Fallback para cópia em texto simples:', err);
+        copyTextFallback(plainContent);
+        showToast('Ficha copiada em texto simples!', 'success');
+        updateBtnVisual();
+      }
+    }
+
+    function copyTextFallback(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch (e) {
+        console.error('Falha ao copiar:', e);
+      }
+      document.body.removeChild(ta);
+    }
+
 
     function exportJSON() {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(documents, null, 2));
