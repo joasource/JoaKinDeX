@@ -585,17 +585,31 @@
             <!-- Pasta de PDFs -->
             <div class="space-y-1">
               <label class="block text-[11px] font-medium text-slate-300">Pasta dos PDFs de Entrada:</label>
-              <input type="text" id="cfgInputPdfDir" placeholder="./pdf ou /caminho/completo"
-                     class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
-              <p class="text-[10px] text-slate-400">Local onde estão os documentos originais a serem classificados e visualizados.</p>
+              <div class="flex gap-2">
+                <input type="text" id="cfgInputPdfDir" placeholder="./pdf ou /caminho/completo"
+                       class="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
+                <button type="button" onclick="openFolderPicker('pdf')" title="Selecionar pasta navegando pelo computador / servidor"
+                        class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded text-xs flex items-center gap-1.5 transition font-medium shrink-0">
+                  <i class="fa-solid fa-folder-open text-amber-400"></i>
+                  <span>Selecionar Pasta...</span>
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-400">Local onde estão os documentos originais a serem classificados e visualizados (edição manual ou seleção via caixa).</p>
             </div>
 
             <!-- Pasta de Saída / Arquivo JSON -->
             <div class="space-y-1">
               <label class="block text-[11px] font-medium text-slate-300">Pasta de Saída / Arquivo JSON:</label>
-              <input type="text" id="cfgInputJsonPath" placeholder="./saida/classificacao_diplomas.json"
-                     class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
-              <p class="text-[10px] text-slate-400">Caminho do arquivo consolidado (e onde fica a subpasta de individuais).</p>
+              <div class="flex gap-2">
+                <input type="text" id="cfgInputJsonPath" placeholder="./saida/classificacao_diplomas.json"
+                       class="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
+                <button type="button" onclick="openFolderPicker('json')" title="Selecionar pasta navegando pelo computador / servidor"
+                        class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded text-xs flex items-center gap-1.5 transition font-medium shrink-0">
+                  <i class="fa-solid fa-folder-open text-amber-400"></i>
+                  <span>Selecionar Pasta...</span>
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-400">Caminho do arquivo consolidado ou pasta de saída (edição manual ou seleção via caixa).</p>
             </div>
 
             <!-- Indicadores em tempo real -->
@@ -878,6 +892,108 @@
                   class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-emerald-900/40">
             <i class="fa-solid fa-play"></i>
             <span>Iniciar Processamento em Lote</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  <!-- MODAL: SELETOR DE PASTAS (EXPLORADOR / CAIXA SELECIONÁVEL) -->
+  <div id="folderPickerModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[60] flex items-center justify-center p-3 sm:p-6 transition-all duration-200 hidden">
+    <div class="w-full max-w-3xl max-h-[88vh] flex flex-col bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      
+      <!-- Cabeçalho do Seletor -->
+      <div class="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="bg-amber-500/15 text-amber-400 p-2 rounded-lg border border-amber-500/30">
+            <i class="fa-solid fa-folder-tree text-base"></i>
+          </div>
+          <div>
+            <h2 id="folderPickerTitle" class="text-sm font-semibold text-white flex items-center gap-2">
+              Selecionar Pasta
+            </h2>
+            <p id="folderPickerSubtitle" class="text-xs text-slate-400">Navegue pelas pastas ou utilize os atalhos rápidos</p>
+          </div>
+        </div>
+        <button onclick="closeFolderPicker()" title="Fechar (Esc)" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Barra de Atalhos Rápidos -->
+      <div class="bg-slate-950/60 px-4 py-2 border-b border-slate-800/80 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
+        <div class="flex items-center gap-1.5 text-xs flex-wrap" id="folderPickerQuickAccess">
+          <!-- Atalhos gerados dinamicamente (Projeto, Home, Mídia, Raiz) -->
+        </div>
+        <button id="btnFolderPickerNative" onclick="pickNativeFolder()" title="Abrir caixa de diálogo nativa do sistema operacional (Zenity/Linux)"
+                class="hidden px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded text-xs flex items-center gap-1.5 transition shrink-0 font-medium">
+          <i class="fa-solid fa-display text-indigo-400"></i>
+          <span class="hidden sm:inline">Diálogo do Sistema (OS)</span>
+        </button>
+      </div>
+
+      <!-- Barra de Endereço e Ações de Pasta -->
+      <div class="p-3 bg-slate-900 border-b border-slate-800 flex items-center gap-2 shrink-0">
+        <button onclick="folderPickerGoUp()" id="btnFolderPickerUp" title="Subir um nível (pasta pai)"
+                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition shrink-0">
+          <i class="fa-solid fa-arrow-up text-amber-400"></i>
+          <span class="hidden sm:inline">Subir</span>
+        </button>
+        <button onclick="refreshFolderPicker()" title="Recarregar pasta atual"
+                class="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 text-xs transition shrink-0">
+          <i class="fa-solid fa-arrows-rotate"></i>
+        </button>
+
+        <!-- Campo com o caminho atual -->
+        <div class="flex-1 relative flex items-center min-w-0">
+          <i class="fa-regular fa-folder absolute left-2.5 text-xs text-slate-500"></i>
+          <input type="text" id="folderPickerCurrentPathInput" onkeydown="if(event.key==='Enter') navigateToFolder(this.value)"
+                 class="w-full bg-slate-950 border border-slate-700 rounded pl-7 pr-12 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-emerald-500">
+          <button onclick="navigateToFolder(document.getElementById('folderPickerCurrentPathInput').value)"
+                  class="absolute right-1 px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 rounded font-medium">
+            Ir
+          </button>
+        </div>
+
+        <!-- Botão Criar Nova Pasta -->
+        <button onclick="promptCreateFolder()" title="Criar uma nova subpasta neste diretório"
+                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition shrink-0">
+          <i class="fa-solid fa-plus text-emerald-400"></i>
+          <span class="hidden sm:inline">Nova Pasta</span>
+        </button>
+      </div>
+
+      <!-- Barra de Filtro de Subpastas -->
+      <div class="px-4 py-2 bg-slate-950/40 border-b border-slate-800/60 flex items-center justify-between text-xs shrink-0">
+        <div class="relative flex-1 max-w-xs">
+          <i class="fa-solid fa-filter absolute left-2.5 top-2 text-[10px] text-slate-500"></i>
+          <input type="text" id="folderPickerFilterInput" oninput="filterFolderList()" placeholder="Filtrar pastas listadas..."
+                 class="w-full bg-slate-900 border border-slate-800 rounded pl-6 pr-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+        </div>
+        <span id="folderPickerCountLabel" class="text-[11px] text-slate-400 ml-2">0 pastas</span>
+      </div>
+
+      <!-- Área de Listagem das Subpastas -->
+      <div id="folderPickerList" class="flex-1 overflow-y-auto p-3 space-y-1 min-h-[260px] max-h-[400px]">
+        <!-- Itens inseridos dinamicamente -->
+      </div>
+
+      <!-- Rodapé com Confirmação e Seleção -->
+      <div class="px-5 py-3 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+        <div class="text-xs text-slate-300 truncate max-w-md">
+          <span class="text-slate-500">Pasta selecionada:</span>
+          <span id="folderPickerSelectedPreview" class="font-mono text-emerald-400 font-semibold ml-1">...</span>
+        </div>
+
+        <div class="flex items-center gap-2 justify-end">
+          <button type="button" onclick="closeFolderPicker()"
+                  class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 text-xs transition">
+            Cancelar
+          </button>
+          <button type="button" onclick="confirmFolderSelection()" id="btnConfirmFolderSelection"
+                  class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-emerald-900/30">
+            <i class="fa-solid fa-check"></i>
+            <span>Confirmar e Usar Esta Pasta</span>
           </button>
         </div>
       </div>
@@ -2279,6 +2395,11 @@
         const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
 
         if (e.key === 'Escape') {
+          const picker = document.getElementById('folderPickerModal');
+          if (picker && !picker.classList.contains('hidden')) {
+            closeFolderPicker();
+            return;
+          }
           const modal = document.getElementById('configModal');
           if (modal && !modal.classList.contains('hidden')) {
             closeConfigModal();
@@ -2956,6 +3077,313 @@
       }
 
       lastBatchStatus = status;
+    }
+
+    // =========================================================================
+    // SELETOR DE PASTAS / EXPLORADOR DE DIRETÓRIOS (CAIXA SELECIONÁVEL)
+    // =========================================================================
+    let folderPickerTarget = 'pdf'; // 'pdf' | 'json'
+    let folderPickerCurrentPath = '';
+    let folderPickerSelectedPath = '';
+    let folderPickerParentPath = null;
+    let folderPickerDirs = [];
+
+    function openFolderPicker(target = 'pdf') {
+      folderPickerTarget = target;
+      const modal = document.getElementById('folderPickerModal');
+      const titleEl = document.getElementById('folderPickerTitle');
+      const subTitleEl = document.getElementById('folderPickerSubtitle');
+
+      if (target === 'pdf') {
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-folder-open text-amber-400 mr-1.5"></i> Selecionar Pasta dos PDFs de Entrada';
+        if (subTitleEl) subTitleEl.innerText = 'Navegue pelas pastas onde estão os arquivos PDF para classificar e visualizar.';
+      } else {
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-folder-open text-amber-400 mr-1.5"></i> Selecionar Pasta de Saída / Arquivo JSON';
+        if (subTitleEl) subTitleEl.innerText = 'Navegue até a pasta onde deseja salvar os arquivos JSON consolidados e individuais.';
+      }
+
+      let startPath = '';
+      if (target === 'pdf') {
+        startPath = (document.getElementById('cfgInputPdfDir')?.value || '').trim();
+      } else {
+        startPath = (document.getElementById('cfgInputJsonPath')?.value || '').trim();
+      }
+
+      if (modal) modal.classList.remove('hidden');
+      const filterInput = document.getElementById('folderPickerFilterInput');
+      if (filterInput) filterInput.value = '';
+
+      fetchFolderList(startPath);
+    }
+
+    function closeFolderPicker() {
+      const modal = document.getElementById('folderPickerModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function fetchFolderList(targetPath = '') {
+      const listContainer = document.getElementById('folderPickerList');
+      if (listContainer) {
+        listContainer.innerHTML = `
+          <div class="flex flex-col items-center justify-center p-8 text-slate-400 space-y-2">
+            <i class="fa-solid fa-circle-notch fa-spin text-emerald-400 text-xl"></i>
+            <span class="text-xs">Carregando diretórios...</span>
+          </div>
+        `;
+      }
+
+      try {
+        const query = new URLSearchParams();
+        if (targetPath) query.set('path', targetPath);
+        query.set('mode', folderPickerTarget);
+
+        const res = await fetch(`/api/browse/dirs?${query.toString()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        folderPickerCurrentPath = data.current_path || '';
+        folderPickerParentPath = data.parent_path || null;
+        folderPickerSelectedPath = data.current_path || '';
+        folderPickerDirs = data.directories || [];
+
+        // Atualiza barra de caminho
+        const pathInput = document.getElementById('folderPickerCurrentPathInput');
+        if (pathInput) pathInput.value = folderPickerCurrentPath;
+
+        // Botão subir
+        const btnUp = document.getElementById('btnFolderPickerUp');
+        if (btnUp) {
+          btnUp.disabled = !folderPickerParentPath;
+          if (!folderPickerParentPath) {
+            btnUp.classList.add('opacity-40', 'cursor-not-allowed');
+          } else {
+            btnUp.classList.remove('opacity-40', 'cursor-not-allowed');
+          }
+        }
+
+        // Atalhos rápidos
+        renderFolderPickerQuickAccess(data.quick_access || []);
+
+        // Botão Nativo Zenity
+        const btnNative = document.getElementById('btnFolderPickerNative');
+        if (btnNative) {
+          if (data.zenity_available) {
+            btnNative.classList.remove('hidden');
+          } else {
+            btnNative.classList.add('hidden');
+          }
+        }
+
+        // Renderiza lista
+        renderFolderList();
+        updateFolderPickerPreview(folderPickerCurrentPath);
+
+      } catch (err) {
+        if (listContainer) {
+          listContainer.innerHTML = `
+            <div class="p-6 text-center text-rose-400 text-xs bg-rose-950/20 border border-rose-900/40 rounded-lg">
+              <i class="fa-solid fa-triangle-exclamation text-base mb-1 block"></i>
+              Erro ao carregar diretório: ${escapeHtml(err.message)}
+            </div>
+          `;
+        }
+      }
+    }
+
+    function renderFolderPickerQuickAccess(shortcuts) {
+      const container = document.getElementById('folderPickerQuickAccess');
+      if (!container) return;
+
+      container.innerHTML = shortcuts.map(s => {
+        const safePath = escapeHtml(s.path.replace(/\\/g, '\\\\'));
+        return `
+          <button type="button" onclick="navigateToFolder('${safePath}')"
+                  class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-800 hover:border-slate-700 text-[11px] flex items-center gap-1.5 transition">
+            <i class="fa-solid ${s.icon || 'fa-folder'} text-amber-400/90 text-xs"></i>
+            <span>${escapeHtml(s.name)}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderFolderList() {
+      const listContainer = document.getElementById('folderPickerList');
+      const countLabel = document.getElementById('folderPickerCountLabel');
+      const filterInput = document.getElementById('folderPickerFilterInput');
+      const query = (filterInput?.value || '').trim().toLowerCase();
+
+      if (!listContainer) return;
+
+      const filtered = folderPickerDirs.filter(d => {
+        if (!query) return true;
+        return d.name.toLowerCase().includes(query);
+      });
+
+      if (countLabel) {
+        countLabel.innerText = `${filtered.length} pasta${filtered.length !== 1 ? 's' : ''}`;
+      }
+
+      if (filtered.length === 0) {
+        listContainer.innerHTML = `
+          <div class="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-800 rounded-lg space-y-2">
+            <i class="fa-regular fa-folder-open text-2xl text-slate-600"></i>
+            <div>Nenhuma subpasta encontrada aqui.</div>
+            <div class="text-[11px] text-slate-500">
+              Você pode clicar em <strong class="text-emerald-400">"Confirmar e Usar Esta Pasta"</strong> abaixo para selecionar este local, ou criar uma nova subpasta.
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      listContainer.innerHTML = filtered.map(d => {
+        const isSelected = (folderPickerSelectedPath === d.path);
+        const activeClass = isSelected
+          ? 'bg-emerald-500/15 border-emerald-500/60 text-white shadow-sm'
+          : 'bg-slate-950/50 hover:bg-slate-800/80 border-slate-800/80 text-slate-200';
+
+        let badge = '';
+        if (folderPickerTarget === 'pdf' && d.pdf_count > 0) {
+          badge = `<span class="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800/60 px-1.5 py-0.5 rounded font-mono font-medium">${d.pdf_count} PDFs</span>`;
+        }
+
+        const safePath = escapeHtml(d.path.replace(/\\/g, '\\\\'));
+        return `
+          <div onclick="selectFolderItem('${safePath}')" ondblclick="navigateToFolder('${safePath}')"
+               class="group flex items-center justify-between px-3 py-2 rounded-lg border ${activeClass} transition cursor-pointer text-xs">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+              <i class="fa-solid fa-folder text-amber-400 text-sm group-hover:scale-110 transition shrink-0"></i>
+              <span class="font-medium truncate">${escapeHtml(d.name)}</span>
+              ${badge}
+            </div>
+            <div class="flex items-center gap-1 shrink-0 ml-2">
+              <button type="button" onclick="event.stopPropagation(); navigateToFolder('${safePath}')" title="Entrar nesta pasta"
+                      class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded border border-slate-700 text-[11px] flex items-center gap-1 transition">
+                <span>Abrir</span>
+                <i class="fa-solid fa-arrow-right text-[10px] text-slate-400"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectFolderItem(pathStr) {
+      folderPickerSelectedPath = pathStr;
+      renderFolderList();
+      updateFolderPickerPreview(pathStr);
+    }
+
+    function navigateToFolder(pathStr) {
+      if (!pathStr) return;
+      fetchFolderList(pathStr);
+    }
+
+    function folderPickerGoUp() {
+      if (folderPickerParentPath) {
+        fetchFolderList(folderPickerParentPath);
+      }
+    }
+
+    function refreshFolderPicker() {
+      fetchFolderList(folderPickerCurrentPath);
+    }
+
+    function filterFolderList() {
+      renderFolderList();
+    }
+
+    function updateFolderPickerPreview(pathStr) {
+      const previewEl = document.getElementById('folderPickerSelectedPreview');
+      if (previewEl) {
+        previewEl.innerText = pathStr || 'Nenhuma selecionada';
+        previewEl.title = pathStr;
+      }
+    }
+
+    async function promptCreateFolder() {
+      const name = prompt(`Criar nova subpasta dentro de:\n${folderPickerCurrentPath}\n\nDigite o nome da nova pasta:`);
+      if (!name || !name.trim()) return;
+
+      try {
+        const res = await fetch('/api/browse/mkdir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parent: folderPickerCurrentPath, name: name.trim() })
+        });
+        const data = await res.json();
+        if (!res.ok || data.status !== 'sucesso') {
+          throw new Error(data.mensagem || 'Falha ao criar pasta');
+        }
+        showToast(`Pasta '${name.trim()}' criada com sucesso!`, 'success');
+        await fetchFolderList(folderPickerCurrentPath);
+        if (data.path) selectFolderItem(data.path);
+      } catch (err) {
+        showToast('Erro ao criar pasta: ' + err.message, 'error');
+      }
+    }
+
+    async function pickNativeFolder() {
+      const btnNative = document.getElementById('btnFolderPickerNative');
+      const origHtml = btnNative ? btnNative.innerHTML : '';
+      if (btnNative) {
+        btnNative.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-indigo-300"></i> Abrindo...';
+        btnNative.disabled = true;
+      }
+
+      try {
+        const res = await fetch('/api/browse/native', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            initial_path: folderPickerCurrentPath,
+            title: folderPickerTarget === 'pdf' ? 'Selecione a Pasta de PDFs' : 'Selecione a Pasta de Saída'
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'sucesso' && data.path) {
+          folderPickerSelectedPath = data.path;
+          confirmFolderSelection();
+        } else if (data.status === 'cancelado') {
+          showToast('Seleção cancelada pelo usuário.', 'info');
+        } else if (data.status === 'erro') {
+          showToast(data.mensagem || 'Erro ao abrir diálogo nativo.', 'error');
+        }
+      } catch (err) {
+        showToast('Erro no diálogo do sistema: ' + err.message, 'error');
+      } finally {
+        if (btnNative) {
+          btnNative.innerHTML = origHtml;
+          btnNative.disabled = false;
+        }
+      }
+    }
+
+    async function confirmFolderSelection() {
+      const chosen = folderPickerSelectedPath || folderPickerCurrentPath;
+      if (!chosen) {
+        showToast('Nenhuma pasta selecionada!', 'error');
+        return;
+      }
+
+      if (folderPickerTarget === 'pdf') {
+        const inPdf = document.getElementById('cfgInputPdfDir');
+        if (inPdf) inPdf.value = chosen;
+      } else {
+        const inJson = document.getElementById('cfgInputJsonPath');
+        if (inJson) {
+          if (chosen.toLowerCase().endsWith('.json')) {
+            inJson.value = chosen;
+          } else {
+            const trimmed = chosen.replace(/\/+$/, '');
+            inJson.value = `${trimmed}/classificacao_diplomas.json`;
+          }
+        }
+      }
+
+      closeFolderPicker();
+      showToast('Pasta atualizada!', 'success');
+      await testAndRefreshFolders();
     }
   </script>
 </body>
