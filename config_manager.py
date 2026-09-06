@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """
+joaclassificador - Gerenciador de Configurações Persistentes
+Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
+
 Módulo de gerenciamento de configurações persistentes para o joaclassificador-pdf e servidor_visualizador.
 Permite salvar opções alteradas pelos usuários, manter padrões de fábrica neutros
 e restaurar configurações tanto interativamente quanto via CLI (--reset-config).
 """
+
+__project__ = "joaclassificador"
+__author__ = "Joaquim Ferreira Silva Neto"
+__email__ = "joaquimfsneto@gmail.com"
+__version__ = "1.0.0"
 
 import json
 import os

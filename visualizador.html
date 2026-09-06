@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conferência Humana: Diplomas & Certificados</title>
+  <title>joaclassificador - Conferência de Diplomas & Certificados</title>
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -43,11 +43,14 @@
       </div>
       <div>
         <h1 class="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-          Conferência de Diplomas & Certificados
+          joaclassificador
+          <span class="text-[11px] font-normal text-slate-400">| Conferência de Diplomas & Certificados</span>
           <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 font-mono">v2.2</span>
         </h1>
         <div class="flex items-center gap-2">
-          <p class="text-xs text-slate-400">Verificação do JSON extraído frente ao PDF original</p>
+          <p class="text-xs text-slate-400">
+            Criado por <strong class="text-slate-200">Joaquim Ferreira Silva Neto</strong> (<a href="mailto:joaquimfsneto@gmail.com" class="text-emerald-400 hover:underline">joaquimfsneto@gmail.com</a>)
+          </p>
           <span id="serverInfoBadge" class="hidden lg:inline-flex items-center gap-1.5 text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono truncate max-w-[320px]">
             <i class="fa-solid fa-folder-open text-amber-400/80"></i>
             <span id="serverInfoText" class="truncate">Carregando pastas...</span>
@@ -190,6 +193,17 @@
       <!-- Lista Rolável de Documentos -->
       <div id="docList" class="flex-1 overflow-y-auto p-2 space-y-1.5">
         <!-- Injetado via JS -->
+      </div>
+
+      <!-- Rodapé do Sidebar: Assinatura e Créditos Sempre Visíveis -->
+      <div class="px-3 py-2 bg-slate-950 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between shrink-0">
+        <div class="truncate">
+          <span class="font-semibold text-slate-200">joaclassificador</span>
+          <span class="text-slate-500 text-[10px] ml-1">por Joaquim F. S. Neto</span>
+        </div>
+        <a href="mailto:joaquimfsneto@gmail.com" class="text-emerald-400 hover:text-emerald-300 ml-1.5 shrink-0 text-xs" title="Contato: joaquimfsneto@gmail.com">
+          <i class="fa-solid fa-envelope"></i>
+        </a>
       </div>
     </aside>
 
@@ -868,12 +882,15 @@
 
       <!-- Rodapé do Modal com Botões de Ação -->
       <div class="px-5 py-3.5 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div>
+        <div class="flex items-center gap-2.5">
           <button type="button" onclick="resetToFactoryDefaults()" title="Restaurar para os padrões de fábrica neutros"
                   class="px-3 py-1.5 bg-slate-900 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 rounded border border-slate-800 hover:border-rose-900/50 text-xs flex items-center gap-1.5 transition">
             <i class="fa-solid fa-rotate-left"></i>
             <span>Padrão de Fábrica</span>
           </button>
+          <span class="hidden md:inline text-[11px] text-slate-500">
+            joaclassificador • Criado por <strong class="text-slate-400">Joaquim Ferreira Silva Neto</strong> (<a href="mailto:joaquimfsneto@gmail.com" class="text-emerald-400 hover:underline">joaquimfsneto@gmail.com</a>)
+          </span>
         </div>
 
         <div class="flex items-center gap-2.5">

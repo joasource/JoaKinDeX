@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """
-Servidor Web Local para Conferência Humana de Diplomas e Certificados.
+joaclassificador - Servidor Web Local para Conferência Humana de Diplomas e Certificados
+Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
+
 Permite visualizar o PDF lado a lado com o JSON extraído, editar dados e salvar alterações.
 """
+
+__project__ = "joaclassificador"
+__author__ = "Joaquim Ferreira Silva Neto"
+__email__ = "joaquimfsneto@gmail.com"
+__version__ = "1.0.0"
 
 import os
 import sys
@@ -93,7 +100,8 @@ def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, defa
     as pastas de entrada de PDFs e de saída de JSONs antes de iniciar o servidor.
     """
     print("\n" + "=" * 70)
-    print("⚙️  CONFIGURAÇÃO DO VISUALIZADOR DE DIPLOMAS E CERTIFICADOS")
+    print("⚙️  JOACLASSIFICADOR - CONFIGURAÇÃO DO VISUALIZADOR")
+    print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
     print("=" * 70)
     print("Pressione ENTER para aceitar o valor padrão sugerido entre colchetes.\n")
 
@@ -652,7 +660,8 @@ class ConferenciaServer:
 
         lines = [
             "=" * 80,
-            "RELATÓRIO CONSOLIDADO DE CLASSIFICAÇÃO DE DIPLOMAS E CERTIFICADOS (REVISADO)",
+            "JOACLASSIFICADOR - RELATÓRIO DE CLASSIFICAÇÃO E CONFERÊNCIA (REVISADO)",
+            "Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>",
             f"Data/Hora de Revisão : {now_str}",
             f"Total de Documentos  : {total}",
             f"Classificados com OK : {sucesso}",
@@ -1596,7 +1605,8 @@ def main():
     httpd = ThreadingHTTPServer(server_address, handler)
 
     print("\n" + "=" * 70)
-    print("🚀 VISUALIZADOR DE CONFERÊNCIA HUMANA INICIADO!")
+    print("🚀 JOACLASSIFICADOR - VISUALIZADOR DE CONFERÊNCIA HUMANA")
+    print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
     print(f"👉 Acesse no seu navegador: http://localhost:{port_final}")
     print(f"   (ou pelo IP da máquina: http://127.0.0.1:{port_final})")
     print(f"📄 Arquivo JSON monitorado : {ctx.json_path}")

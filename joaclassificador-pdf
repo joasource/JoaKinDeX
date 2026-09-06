@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# CLI executável joaclassificador-pdf
+# joaclassificador - CLI executável
+# Criado por Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do

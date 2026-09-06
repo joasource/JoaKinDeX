@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """
-Classificador de PDFs em Massa (Diplomas, Certificados e Documentos Acadêmicos)
+joaclassificador - Classificador de Documentos Acadêmicos em Massa (Diplomas/Certificados)
+Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
+
 Identificação por Hash MD5, Datas de Criação e Modificação do Arquivo,
 Extração do CPF do Beneficiário e Natureza/Nível do Curso.
 Suporta Ollama (Local / Docker) e OpenAI API.
 Gera saídas consolidadas e individuais em JSON e TXT.
 """
+
+__project__ = "joaclassificador"
+__author__ = "Joaquim Ferreira Silva Neto"
+__email__ = "joaquimfsneto@gmail.com"
+__version__ = "1.0.0"
 
 import os
 import sys
@@ -1093,7 +1100,8 @@ def generate_consolidated_txt(
 
     lines = [
         "=" * 80,
-        "RELATÓRIO CONSOLIDADO DE CLASSIFICAÇÃO DE DIPLOMAS E CERTIFICADOS",
+        "JOACLASSIFICADOR - RELATÓRIO CONSOLIDADO DE CLASSIFICAÇÃO",
+        "Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>",
         f"Data/Hora de Geração : {now_str}",
         f"Provedor LLM         : {provider_name.upper()} (Modelo: {model_name})",
         f"Total de Documentos  : {total}",
@@ -1198,7 +1206,8 @@ def get_available_ollama_models(
 
 def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
     print("\n" + "=" * 70)
-    print("🎓 JOACLASSIFICADOR-PDF - MENU INTERATIVO DE CLASSIFICAÇÃO")
+    print("🎓 JOACLASSIFICADOR - MENU INTERATIVO DE CLASSIFICAÇÃO")
+    print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
     print("=" * 70)
     print("Pressione ENTER para aceitar o valor padrão sugerido entre colchetes [ ].")
 
@@ -2168,6 +2177,10 @@ def main():
     if should_prompt:
         args = prompt_interactive_menu(args)
     else:
+        print("\n" + "=" * 70)
+        print("🎓 JOACLASSIFICADOR - CLASSIFICAÇÃO DE DOCUMENTOS EM MASSA")
+        print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
+        print("=" * 70)
         # Salva opções configuradas via CLI para persistência
         save_classifier_config({
             "input": str(args.input),
