@@ -1619,6 +1619,30 @@
       return formatTitlePt(text);
     }
 
+    function classifyNatureza(val) {
+      const raw = normalizeText(safeString(val));
+      if (!raw) return 'Não identificada';
+      if (raw.includes('stricto') || raw.includes('mestrado') || raw.includes('doutorado')) {
+        return 'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)';
+      }
+      if (raw.includes('lato sensu') || raw.includes('especializacao') || raw.includes('mba') || raw.includes('pos-graduacao') || raw.includes('pos graduacao')) {
+        return 'Pós-Graduação Lato Sensu (Especialização/MBA)';
+      }
+      if (raw.includes('graduacao') || raw.includes('superior') || raw.includes('bacharel') || raw.includes('licenciatura') || raw.includes('tecnologo')) {
+        return 'Graduação / Curso Superior';
+      }
+      if (raw.includes('tecnico') || raw.includes('profissionalizante')) {
+        return 'Curso Técnico / Profissionalizante';
+      }
+      if (raw.includes('extensao') || raw.includes('aperfeicoamento') || raw.includes('capacitacao')) {
+        return 'Curso de Extensão / Aperfeiçoamento';
+      }
+      if (raw.includes('basica') || raw.includes('medio') || raw.includes('fundamental')) {
+        return 'Educação Básica';
+      }
+      return 'Não identificada';
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       loadDocuments();
       setupKeyboardShortcuts();
@@ -1866,7 +1890,7 @@
 
         if (activeNaturezaFilter) {
           const docNat = safeString(doc.natureza_curso).trim() || 'Não identificada';
-          if (docNat !== activeNaturezaFilter) return false;
+          if (docNat !== activeNaturezaFilter && classifyNatureza(docNat) !== activeNaturezaFilter) return false;
         }
 
         return matchDocumentSearch(doc, rawSearch);
@@ -2102,7 +2126,7 @@
         // 2. Filtro por Natureza do Curso
         if (activeNaturezaFilter) {
           const docNat = safeString(doc.natureza_curso).trim() || 'Não identificada';
-          if (docNat !== activeNaturezaFilter) return false;
+          if (docNat !== activeNaturezaFilter && classifyNatureza(docNat) !== activeNaturezaFilter) return false;
         }
 
         // 3. Filtro por Tipo de Documento
@@ -2159,7 +2183,7 @@
       const scopeDocs = documents.filter(doc => {
         if (activeNaturezaFilter) {
           const docNat = safeString(doc.natureza_curso).trim() || 'Não identificada';
-          if (docNat !== activeNaturezaFilter) return false;
+          if (docNat !== activeNaturezaFilter && classifyNatureza(docNat) !== activeNaturezaFilter) return false;
         }
         if (activeTipoFilter) {
           const docTipo = safeString(doc.tipo_documento).trim() || 'Não identificado';
@@ -4439,39 +4463,27 @@
 
     function renderChartNatureza(docs, total) {
       const counts = {
-        'Graduação / Curso Superior': 0,
         'Pós-Graduação Lato Sensu (Especialização/MBA)': 0,
-        'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)': 0,
         'Curso Técnico / Profissionalizante': 0,
-        'Extensão / Aperfeiçoamento': 0,
+        'Graduação / Curso Superior': 0,
+        'Curso de Extensão / Aperfeiçoamento': 0,
+        'Educação Básica': 0,
+        'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)': 0,
         'Não identificada': 0
       };
 
       docs.forEach(doc => {
-        const raw = normalizeText(safeString(doc.natureza_curso));
-        if (!raw) {
-          counts['Não identificada']++;
-        } else if (raw.includes('graduacao') || raw.includes('superior') || raw.includes('bacharel') || raw.includes('licenciatura') || raw.includes('tecnologo')) {
-          counts['Graduação / Curso Superior']++;
-        } else if (raw.includes('lato sensu') || raw.includes('especializacao') || raw.includes('mba')) {
-          counts['Pós-Graduação Lato Sensu (Especialização/MBA)']++;
-        } else if (raw.includes('stricto sensu') || raw.includes('mestrado') || raw.includes('doutorado')) {
-          counts['Pós-Graduação Stricto Sensu (Mestrado/Doutorado)']++;
-        } else if (raw.includes('tecnico') || raw.includes('profissionalizante')) {
-          counts['Curso Técnico / Profissionalizante']++;
-        } else if (raw.includes('extensao') || raw.includes('aperfeicoamento') || raw.includes('capacitacao')) {
-          counts['Extensão / Aperfeiçoamento']++;
-        } else {
-          counts['Não identificada']++;
-        }
+        const cat = classifyNatureza(doc.natureza_curso);
+        counts[cat] = (counts[cat] || 0) + 1;
       });
 
       const categories = [
-        { label: 'Graduação / Superior', key: 'Graduação / Curso Superior', color: '#a855f7' },
         { label: 'Pós Lato Sensu (MBA/Espec.)', key: 'Pós-Graduação Lato Sensu (Especialização/MBA)', color: '#0ea5e9' },
-        { label: 'Pós Stricto (Mestrado/Dout.)', key: 'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)', color: '#10b981' },
         { label: 'Técnico / Profissionalizante', key: 'Curso Técnico / Profissionalizante', color: '#f59e0b' },
-        { label: 'Extensão / Aperfeiçoamento', key: 'Extensão / Aperfeiçoamento', color: '#6366f1' },
+        { label: 'Graduação / Superior', key: 'Graduação / Curso Superior', color: '#a855f7' },
+        { label: 'Extensão / Aperfeiçoamento', key: 'Curso de Extensão / Aperfeiçoamento', color: '#6366f1' },
+        { label: 'Educação Básica', key: 'Educação Básica', color: '#ec4899' },
+        { label: 'Pós Stricto (Mestrado/Dout.)', key: 'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)', color: '#10b981' },
         { label: 'Não identificada', key: 'Não identificada', color: '#64748b' }
       ];
 
@@ -4943,11 +4955,12 @@
 
     function renderMatrixTable(docs, total) {
       const naturezas = [
-        'Graduação / Curso Superior',
         'Pós-Graduação Lato Sensu (Especialização/MBA)',
-        'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)',
         'Curso Técnico / Profissionalizante',
-        'Extensão / Aperfeiçoamento',
+        'Graduação / Curso Superior',
+        'Curso de Extensão / Aperfeiçoamento',
+        'Educação Básica',
+        'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)',
         'Não identificada'
       ];
 
@@ -4973,19 +4986,7 @@
 
       docs.forEach(doc => {
         // Classifica Natureza
-        const rawNat = normalizeText(safeString(doc.natureza_curso));
-        let matchedNat = 'Não identificada';
-        if (rawNat.includes('graduacao') || rawNat.includes('superior') || rawNat.includes('bacharel') || rawNat.includes('licenciatura') || rawNat.includes('tecnologo')) {
-          matchedNat = 'Graduação / Curso Superior';
-        } else if (rawNat.includes('lato sensu') || rawNat.includes('especializacao') || rawNat.includes('mba')) {
-          matchedNat = 'Pós-Graduação Lato Sensu (Especialização/MBA)';
-        } else if (rawNat.includes('stricto sensu') || rawNat.includes('mestrado') || rawNat.includes('doutorado')) {
-          matchedNat = 'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)';
-        } else if (rawNat.includes('tecnico') || rawNat.includes('profissionalizante')) {
-          matchedNat = 'Curso Técnico / Profissionalizante';
-        } else if (rawNat.includes('extensao') || rawNat.includes('aperfeicoamento') || rawNat.includes('capacitacao')) {
-          matchedNat = 'Extensão / Aperfeiçoamento';
-        }
+        const matchedNat = classifyNatureza(doc.natureza_curso);
 
         // Classifica Tipo
         const rawTipo = normalizeText(safeString(doc.tipo_documento));
@@ -5079,7 +5080,7 @@
 
       const countsNat = {};
       classifDocs.forEach(d => {
-        const n = safeString(d.natureza_curso).trim() || 'Não identificada';
+        const n = classifyNatureza(d.natureza_curso);
         countsNat[n] = (countsNat[n] || 0) + 1;
       });
       Object.entries(countsNat).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
@@ -5144,7 +5145,7 @@
       // Naturezas
       const countsNat = {};
       classifDocs.forEach(d => {
-        const n = safeString(d.natureza_curso).trim() || 'Não identificada';
+        const n = classifyNatureza(d.natureza_curso);
         countsNat[n] = (countsNat[n] || 0) + 1;
       });
       Object.entries(countsNat).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
