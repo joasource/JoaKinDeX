@@ -32,7 +32,7 @@
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
-    .split-pane { height: calc(100vh - 61px); }
+    .split-pane { flex: 1 1 0%; min-height: 0; }
 
     /* Estilos de Impressão para o Painel de BI */
     @media print {
@@ -46,138 +46,179 @@
 </head>
 <body class="h-full flex flex-col overflow-hidden select-none">
 
-  <!-- TOPO: Barra de Ações & Navegação -->
-  <header class="bg-slate-950 border-b border-slate-800 px-4 py-2 flex items-center justify-between z-20 shrink-0">
-    <div class="flex items-center gap-3">
-      <div class="bg-emerald-500/10 text-emerald-400 p-2 rounded-lg border border-emerald-500/20">
-        <i class="fa-solid fa-graduation-cap text-lg"></i>
-      </div>
-      <div>
-        <h1 class="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-          joaclassificador
-          <span class="text-[11px] font-normal text-slate-400">| Conferência de Diplomas & Certificados</span>
-          <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 font-mono">v2.2</span>
-        </h1>
-        <div class="flex items-center gap-2">
-          <p class="text-xs text-slate-400">
-            Criado por <strong class="text-slate-200">Joaquim Ferreira Silva Neto</strong> (<a href="mailto:joaquimfsneto@gmail.com" class="text-emerald-400 hover:underline">joaquimfsneto@gmail.com</a>)
-          </p>
-          <span id="serverInfoBadge" class="hidden lg:inline-flex items-center gap-1.5 text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono truncate max-w-[320px]">
-            <i class="fa-solid fa-folder-open text-amber-400/80"></i>
-            <span id="serverInfoText" class="truncate">Carregando pastas...</span>
-          </span>
+  <!-- TOPO: Barra de Navegação Superior (Identidade, Abas Principais & Ações Globais) -->
+  <header class="bg-slate-950 border-b border-slate-800 z-20 shrink-0 select-none">
+    <!-- LINHA 1: Identidade, Créditos, Abas e Ações do Sistema -->
+    <div class="px-4 py-2 flex items-center justify-between gap-4 border-b border-slate-900">
+      
+      <!-- Esquerda: Logo + Título + Versão + Autoria Joaquim -->
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="bg-emerald-500/10 text-emerald-400 p-2 rounded-lg border border-emerald-500/20 shrink-0">
+          <i class="fa-solid fa-graduation-cap text-base sm:text-lg"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-sm sm:text-base font-bold tracking-tight text-white flex items-center gap-1.5">
+              joaclassificador
+            </h1>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700 font-mono shrink-0">v2.2</span>
+            <span class="text-xs text-slate-400 hidden lg:inline truncate">| Conferência de Diplomas & Certificados</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+            <span class="truncate">
+              Criado por <strong class="text-slate-200 font-medium">Joaquim Ferreira Silva Neto</strong> 
+              <a href="mailto:joaquimfsneto@gmail.com" class="text-emerald-400 hover:text-emerald-300 hover:underline transition">&lt;joaquimfsneto@gmail.com&gt;</a>
+            </span>
+            <span id="serverInfoBadge" class="hidden xl:inline-flex items-center gap-1.5 text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono truncate max-w-[280px]">
+              <i class="fa-solid fa-folder-open text-amber-400/80"></i>
+              <span id="serverInfoText" class="truncate">Carregando pastas...</span>
+            </span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- SELETOR DE ABAS PRINCIPAIS: CONFERÊNCIA vs PAINEL DE BI -->
-    <div class="flex items-center bg-slate-900/90 p-1 rounded-lg border border-slate-800 shadow-inner shrink-0">
-      <button id="tabMainConferencia" onclick="switchMainTab('conferencia')"
-              class="px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition bg-emerald-600 text-white shadow">
-        <i class="fa-solid fa-table-columns text-emerald-100"></i>
-        <span>Conferência</span>
-      </button>
-      <button id="tabMainBI" onclick="switchMainTab('bi')"
-              class="px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
-        <i class="fa-solid fa-chart-pie text-cyan-400"></i>
-        <span>Painel de BI</span>
-        <span class="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded-full font-mono">Estatísticas</span>
-      </button>
-    </div>
-
-    <!-- Indicadores de Progresso (IA e Revisão Humana) -->
-    <div class="hidden xl:flex items-center gap-3 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 text-xs shrink-0">
-      <!-- Indicador IA -->
-      <div class="flex items-center gap-1.5" title="Total de documentos classificados com sucesso pela IA / Total de PDFs no lote">
-        <i class="fa-solid fa-robot text-cyan-400 text-[11px]"></i>
-        <span class="text-slate-400">Classificados (IA):</span>
-        <span id="aiClassifiedText" class="font-semibold text-cyan-300 font-mono">0 / 0 (0%)</span>
+      <!-- Centro: SELETOR DE ABAS PRINCIPAIS (CONFERÊNCIA vs PAINEL DE BI) -->
+      <div class="flex items-center bg-slate-900/90 p-1 rounded-lg border border-slate-800 shadow-inner shrink-0">
+        <button id="tabMainConferencia" onclick="switchMainTab('conferencia')"
+                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-emerald-600 text-white shadow">
+          <i class="fa-solid fa-table-columns text-emerald-100"></i>
+          <span>Conferência</span>
+        </button>
+        <button id="tabMainBI" onclick="switchMainTab('bi')"
+                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+          <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+          <span>Painel de BI</span>
+          <span class="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded-full font-mono">Estatísticas</span>
+        </button>
       </div>
 
-      <div class="h-3.5 w-px bg-slate-700"></div>
+      <!-- Direita: Ações Globais (Lote, Configuração & Exportar) -->
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- Indicador animado de lote rodando -->
+        <button id="batchHeaderBadge" onclick="openConfigModal('batch')" style="display: none;" title="Processamento em lote em andamento - Clique para ver detalhes"
+                class="px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 rounded-lg border border-amber-500/40 text-xs flex items-center gap-1.5 transition animate-pulse font-medium">
+          <i class="fa-solid fa-spinner fa-spin text-amber-400"></i>
+          <span id="batchHeaderBadgeText">Lote: 0%</span>
+        </button>
 
-      <!-- Indicador Revisão Humana -->
-      <div class="flex items-center gap-2" title="Total de documentos classificados que já foram revisados e aprovados por você (Ctrl+Enter)">
-        <div class="flex items-center gap-1.5">
-          <i class="fa-solid fa-user-check text-emerald-400 text-[11px]"></i>
-          <span class="text-slate-400">Revisão Humana:</span>
-          <span id="progressText" class="font-semibold text-emerald-400 font-mono">0 / 0 (0%)</span>
-        </div>
-        <div class="w-20 bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700/60" title="Progresso da conferência humana aprovada">
-          <div id="progressBar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"></div>
-        </div>
+        <!-- Botão Painel de Configurações & Lote -->
+        <button onclick="openConfigModal()" title="Configurações & Processamento em Lote"
+                class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
+          <i class="fa-solid fa-sliders text-emerald-400"></i>
+          <span class="hidden sm:inline">Configuração & Lote</span>
+        </button>
+
+        <!-- Botão Exportar JSON -->
+        <button onclick="exportJSON()" title="Exportar JSON Atualizado com as conferências realizadas"
+                class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition shrink-0">
+          <i class="fa-solid fa-download"></i>
+          <span>Exportar</span>
+        </button>
       </div>
     </div>
 
-    <!-- Controles de Navegação (Aba Conferência) -->
-    <div id="conferenciaNavControls" class="flex items-center gap-2">
-      <button id="btnPrev" onclick="navigateDoc(-1)" title="Documento Anterior (Seta Esquerda)"
-              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-chevron-left"></i>
-        <span class="hidden sm:inline">Anterior</span>
-      </button>
+    <!-- LINHA 2: Barra Secundária de Controles & Progresso (Toolbar Contextual) -->
+    <div class="bg-slate-900/95 border-t border-slate-900 px-4 py-1.5 flex items-center justify-between gap-4 text-xs">
+      
+      <!-- TOOLBAR CONFERÊNCIA -->
+      <div id="conferenciaToolbar" class="w-full flex items-center justify-between gap-4">
+        
+        <!-- Esquerda: Navegação entre Documentos -->
+        <div id="conferenciaNavControls" class="flex items-center gap-2 shrink-0">
+          <button id="btnPrev" onclick="navigateDoc(-1)" title="Documento Anterior (Atalho: Seta Esquerda)"
+                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+            <i class="fa-solid fa-chevron-left"></i>
+            <span>Anterior</span>
+            <kbd class="text-[9px] text-slate-400 bg-slate-900 px-1 py-0.2 rounded border border-slate-700 font-mono hidden md:inline">←</kbd>
+          </button>
 
-      <span id="navCounter" class="text-xs font-mono text-slate-300 px-2">0 de 0</span>
+          <span id="navCounter" class="text-xs font-mono font-bold text-slate-100 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800 min-w-[75px] text-center">0 de 0</span>
 
-      <button id="btnNext" onclick="navigateDoc(1)" title="Próximo Documento (Seta Direita)"
-              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
-        <span class="hidden sm:inline">Próximo</span>
-        <i class="fa-solid fa-chevron-right"></i>
-      </button>
-    </div>
+          <button id="btnNext" onclick="navigateDoc(1)" title="Próximo Documento (Atalho: Seta Direita)"
+                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+            <span>Próximo</span>
+            <kbd class="text-[9px] text-slate-400 bg-slate-900 px-1 py-0.2 rounded border border-slate-700 font-mono hidden md:inline">→</kbd>
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
 
-    <!-- Controles Específicos do BI (Aba Painel de BI) -->
-    <div id="biNavControls" class="hidden items-center gap-2">
-      <button onclick="refreshBIDashboard(true)" title="Recalcular e atualizar gráficos"
-              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-rotate text-cyan-400"></i>
-        <span class="hidden sm:inline">Atualizar BI</span>
-      </button>
-      <button onclick="exportBIReport()" title="Exportar Relatório Estatístico Consolidado (TXT)"
-              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-file-lines text-emerald-400"></i>
-        <span class="hidden sm:inline">Relatório TXT</span>
-      </button>
-      <button onclick="exportBICSV()" title="Exportar Tabela de Estatísticas (CSV)"
-              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-file-csv text-amber-400"></i>
-        <span class="hidden sm:inline">CSV</span>
-      </button>
-      <button onclick="window.print()" title="Imprimir ou Salvar Painel de BI em PDF"
-              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-print text-indigo-400"></i>
-        <span class="hidden sm:inline">Imprimir</span>
-      </button>
-    </div>
+          <div class="hidden lg:flex items-center gap-2 text-[11px] text-slate-400 pl-3 border-l border-slate-800">
+            <span class="inline-flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-300 font-mono">Ctrl+Enter</kbd>
+              <span>Aprovar</span>
+            </span>
+            <span class="text-slate-600">•</span>
+            <span class="inline-flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-300 font-mono">Ctrl+R</kbd>
+              <span>Reclassificar</span>
+            </span>
+          </div>
+        </div>
 
-    <!-- Controles Globais Compartilhados -->
-    <div class="flex items-center gap-2">
-      <div class="h-4 w-px bg-slate-800 mx-0.5"></div>
+        <!-- Direita: Indicadores de Progresso (IA e Revisão Humana) -->
+        <div class="flex items-center gap-3 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800 text-xs shrink-0">
+          <!-- Indicador IA -->
+          <div class="flex items-center gap-1.5" title="Total de documentos classificados com sucesso pela IA / Total de PDFs no lote">
+            <i class="fa-solid fa-robot text-cyan-400 text-xs"></i>
+            <span class="text-slate-400">Classificados (IA):</span>
+            <span id="aiClassifiedText" class="font-semibold text-cyan-300 font-mono">0 / 0 (0%)</span>
+          </div>
 
-      <!-- Indicador animado de lote rodando -->
-      <button id="batchHeaderBadge" onclick="openConfigModal('batch')" style="display: none;" title="Processamento em lote em andamento - Clique para ver detalhes"
-              class="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 rounded border border-amber-500/40 text-xs flex items-center gap-1.5 transition animate-pulse font-medium">
-        <i class="fa-solid fa-spinner fa-spin text-amber-400"></i>
-        <span id="batchHeaderBadgeText">Lote: 0%</span>
-      </button>
+          <div class="h-3.5 w-px bg-slate-700"></div>
 
-      <!-- Botão Painel de Configurações & Lote -->
-      <button onclick="openConfigModal()" title="Configurações & Processamento em Lote"
-              class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded border border-emerald-500/40 text-xs flex items-center gap-1.5 transition font-medium">
-        <i class="fa-solid fa-sliders"></i>
-        <span class="hidden sm:inline">Configuração & Lote</span>
-      </button>
+          <!-- Indicador Revisão Humana -->
+          <div class="flex items-center gap-2.5" title="Total de documentos revisados e conferidos por você">
+            <div class="flex items-center gap-1.5">
+              <i class="fa-solid fa-user-check text-emerald-400 text-xs"></i>
+              <span class="text-slate-400">Revisão Humana:</span>
+              <span id="progressText" class="font-semibold text-emerald-400 font-mono">0 / 0 (0%)</span>
+            </div>
+            <div class="w-24 sm:w-36 bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700/80" title="Progresso da conferência humana aprovada">
+              <div id="progressBar" class="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <button onclick="exportJSON()" title="Exportar JSON Atualizado"
-              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-download text-emerald-400"></i>
-        <span class="hidden sm:inline">Exportar</span>
-      </button>
+      <!-- TOOLBAR PAINEL DE BI -->
+      <div id="biToolbar" class="hidden w-full items-center justify-between gap-4">
+        <!-- Esquerda: Título do contexto -->
+        <div class="flex items-center gap-2 text-xs text-slate-300 font-medium">
+          <i class="fa-solid fa-chart-column text-cyan-400 text-sm"></i>
+          <span class="font-semibold text-slate-200">Painel Estatístico & Business Intelligence</span>
+          <span class="text-slate-600 hidden sm:inline">•</span>
+          <span class="text-slate-400 text-[11px] hidden sm:inline">Distribuição e métricas consolidadas de cursos, instituições e documentos</span>
+        </div>
+
+        <!-- Direita: Ações do BI -->
+        <div id="biNavControls" class="flex items-center gap-2 shrink-0">
+          <button onclick="refreshBIDashboard(true)" title="Recalcular e atualizar gráficos"
+                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+            <i class="fa-solid fa-rotate text-cyan-400"></i>
+            <span>Atualizar BI</span>
+          </button>
+          <button onclick="exportBIReport()" title="Exportar Relatório Estatístico Consolidado (TXT)"
+                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+            <i class="fa-solid fa-file-lines text-emerald-400"></i>
+            <span>Relatório TXT</span>
+          </button>
+          <button onclick="exportBICSV()" title="Exportar Tabela de Estatísticas (CSV)"
+                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+            <i class="fa-solid fa-file-csv text-amber-400"></i>
+            <span>CSV</span>
+          </button>
+          <button onclick="window.print()" title="Imprimir ou Salvar Painel de BI em PDF"
+                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+            <i class="fa-solid fa-print text-indigo-400"></i>
+            <span>Imprimir</span>
+          </button>
+        </div>
+      </div>
+
     </div>
   </header>
 
   <!-- CORPO PRINCIPAL: Lista Lateral + Divisão Lado a Lado (Conferência) -->
-  <main id="viewConferencia" class="flex-1 flex overflow-hidden split-pane">
+  <main id="viewConferencia" class="flex-1 min-h-0 flex overflow-hidden split-pane">
 
     <!-- 1. BARRA LATERAL ESQUERDA: LISTA DE DOCUMENTOS E FILTROS -->
     <aside id="sidebar" class="w-84 sm:w-96 bg-slate-950/70 border-r border-slate-800 flex flex-col shrink-0">
@@ -617,7 +658,7 @@
   <!-- ==================================================================== -->
   <!-- 2. PAINEL DE BUSINESS INTELLIGENCE (BI) & ANÁLISE ESTATÍSTICA -->
   <!-- ==================================================================== -->
-  <main id="viewBI" class="flex-1 overflow-y-auto split-pane bg-slate-950 p-4 sm:p-6 hidden space-y-6">
+  <main id="viewBI" class="flex-1 min-h-0 overflow-y-auto split-pane bg-slate-950 p-4 sm:p-6 hidden space-y-6">
 
     <!-- SUBHEADER / TOOLBAR DO BI -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-lg bi-card">
@@ -4218,18 +4259,28 @@
       const btnBI = document.getElementById('tabMainBI');
       const viewConf = document.getElementById('viewConferencia');
       const viewBI = document.getElementById('viewBI');
+      const confToolbar = document.getElementById('conferenciaToolbar');
+      const biToolbar = document.getElementById('biToolbar');
       const confNav = document.getElementById('conferenciaNavControls');
       const biNav = document.getElementById('biNavControls');
 
       if (tabName === 'conferencia') {
         if (btnConf) {
-          btnConf.className = 'px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition bg-emerald-600 text-white shadow';
+          btnConf.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-emerald-600 text-white shadow';
         }
         if (btnBI) {
-          btnBI.className = 'px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+          btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
         }
         if (viewConf) viewConf.classList.remove('hidden');
         if (viewBI) viewBI.classList.add('hidden');
+        if (confToolbar) {
+          confToolbar.classList.remove('hidden');
+          confToolbar.classList.add('flex');
+        }
+        if (biToolbar) {
+          biToolbar.classList.add('hidden');
+          biToolbar.classList.remove('flex');
+        }
         if (confNav) confNav.classList.remove('hidden');
         if (biNav) {
           biNav.classList.add('hidden');
@@ -4237,13 +4288,21 @@
         }
       } else {
         if (btnConf) {
-          btnConf.className = 'px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+          btnConf.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
         }
         if (btnBI) {
-          btnBI.className = 'px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition bg-cyan-600 text-white shadow';
+          btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-cyan-600 text-white shadow';
         }
         if (viewConf) viewConf.classList.add('hidden');
         if (viewBI) viewBI.classList.remove('hidden');
+        if (confToolbar) {
+          confToolbar.classList.add('hidden');
+          confToolbar.classList.remove('flex');
+        }
+        if (biToolbar) {
+          biToolbar.classList.remove('hidden');
+          biToolbar.classList.add('flex');
+        }
         if (confNav) confNav.classList.add('hidden');
         if (biNav) {
           biNav.classList.remove('hidden');
