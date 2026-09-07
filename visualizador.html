@@ -690,6 +690,13 @@
           <i class="fa-solid fa-arrows-rotate text-cyan-400"></i>
           <span>Atualizar</span>
         </button>
+
+        <!-- Botão Uniformizar Instituições -->
+        <button type="button" onclick="confirmarUniformizacaoInstituicoes()" title="Uniformizar permanentemente os nomes e siglas de instituições em toda a base sem reprocessar PDFs"
+                class="px-3 py-1.5 bg-gradient-to-r from-amber-500/10 to-amber-600/20 hover:from-amber-500/20 hover:to-amber-600/30 text-amber-300 rounded-lg border border-amber-500/40 transition flex items-center gap-1.5 shadow-sm text-xs font-semibold">
+          <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+          <span>Uniformizar Instituições</span>
+        </button>
       </div>
     </div>
 
@@ -1457,6 +1464,161 @@
       return str.replace(/\D/g, '');
     }
 
+    function formatTitlePt(str) {
+      if (!str) return '';
+      const connectives = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'para', 'com', 'no', 'na', 'nos', 'nas', 'a', 'o', 'as', 'os']);
+      const knownAcronyms = new Set(['FIVAR', 'FAB', 'CETEC', 'CTEC', 'CEITEC', 'CEIC', 'CEIT', 'CEEC', 'FACI', 'FAD', 'FAP', 'UESC', 'IASES', 'UGF', 'SENAC', 'UNIFTB', 'UNIFENAS', 'UNIFIL', 'FABRANI', 'FABAVI', 'NEJA', 'DETRAN', 'CEUFTB', 'UNIP', 'USP', 'UFRJ', 'UFBA', 'UFMG', 'UNIFESP', 'PUC']);
+      
+      const mPar = str.match(/\s*\(([A-Za-z0-9\s\-]+)\)$/);
+      let parenSigla = '';
+      let body = str;
+      if (mPar) {
+        parenSigla = ` (${mPar[1].trim().toUpperCase()})`;
+        body = str.substring(0, mPar.index).trim();
+      }
+
+      const words = body.split(/\s+/);
+      const res = words.map((w, idx) => {
+        const wl = w.toLowerCase();
+        const wu = w.toUpperCase();
+        if (knownAcronyms.has(wu)) return wu;
+        if (idx > 0 && connectives.has(wl)) return wl;
+        if (wl.startsWith('(') && wl.endsWith(')')) return w.toUpperCase();
+        if (w.length <= 5 && w === wu && /^[A-Z]+$/.test(w) && !connectives.has(wl)) return wu;
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      });
+      return res.join(' ') + parenSigla;
+    }
+
+    function normalizeInstitution(raw) {
+      if (!raw || typeof raw !== 'string') return null;
+      let text = raw.trim();
+      if (!text) return null;
+      const lower = text.toLowerCase();
+      if (['null', 'none', 'nao informada', 'nao informado', 'não informada', 'não informado', 'n/a', 'desconhecida', 'desconhecido', 'sem instituicao', 'universidade', 'faculdade'].includes(lower)) {
+        return null;
+      }
+
+      text = text.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, '-');
+      text = text.replace(/[\"\'\`´]/g, '');
+      text = text.replace(/\s+/g, ' ').trim();
+      text = text.replace(/\b(LTDA|S\/?A|EIRELI|ME|EPP)\b\.?/gi, '').trim();
+      text = text.replace(/\s*-\s*$/g, '').trim();
+
+      const semAcento = normalizeText(text);
+      const compact = semAcento.replace(/[^a-z0-9]/g, '');
+
+      // 1. Dicionário canônico de alta frequência
+      if (semAcento.includes('vale do rio') || semAcento.includes('fivar') || compact.includes('fivar')) {
+        if (semAcento.includes('itarare') && !semAcento.includes('vale do rio')) {
+          return 'Faculdades Integradas de Itararé';
+        }
+        return 'Faculdades Integradas Vale do Rio Verde (FIVAR)';
+      }
+
+      if (semAcento.includes('uniftb') || semAcento.includes('tobias barreto') || semAcento.includes('ceuftb')) {
+        return 'Faculdade UNIFTB';
+      }
+
+      if (
+        ((semAcento.includes('alfa') || semAcento.includes('alffa') || semAcento.includes('afpa') || semAcento.includes('fauldaffe') || semAcento.includes('fauldae')) &&
+         (semAcento.includes('brasil') || semAcento.includes('fab'))) ||
+        compact === 'fab' || compact === 'faculdadefab'
+      ) {
+        return 'Faculdade Alfa do Brasil (FAB)';
+      }
+
+      if ((semAcento.includes('cetec') || semAcento.includes('ctec') || semAcento.includes('ceitec') || semAcento.includes('ceic') || semAcento.includes('ceit') || semAcento.includes('ceec')) && semAcento.includes('capacitacao')) {
+        return 'Centro Técnico de Capacitação (CETEC)';
+      }
+      if (semAcento.includes('centro tecnico de capacitacao')) {
+        return 'Centro Técnico de Capacitação (CETEC)';
+      }
+
+      if (semAcento.includes('impacto') || semAcento.includes('impracto') || (semAcento.includes('faci') && (semAcento.includes('faculdade') || semAcento.includes('faculdades')))) {
+        return 'Faculdades Impactos Brasil (FACI)';
+      }
+
+      if (semAcento.includes('domini') || semAcento.includes('dominus')) {
+        return 'Faculdade Dominius (FAD)';
+      }
+
+      if ((semAcento.includes('parana') || semAcento.includes('jarani')) && (semAcento.includes('faculdade') || semAcento.includes('fap'))) {
+        return 'Faculdade Paraná (FAP)';
+      }
+
+      if (semAcento.includes('itarare') || semAcento.includes('itarae')) {
+        return 'Faculdades Integradas de Itararé';
+      }
+
+      if (semAcento.includes('famart')) {
+        return 'Faculdade Famart';
+      }
+
+      if (semAcento.includes('santa cruz') && (semAcento.includes('universidade') || semAcento.includes('uesc'))) {
+        return 'Universidade Estadual de Santa Cruz (UESC)';
+      }
+
+      if (semAcento.includes('iases') || semAcento.includes('socioeducativo')) {
+        return 'Instituto de Atendimento Socioeducativo do Espírito Santo (IASES)';
+      }
+
+      if (semAcento.includes('gama filho')) {
+        return 'Universidade Gama Filho (UGF)';
+      }
+
+      if (semAcento.includes('wenceslau braz')) {
+        return 'Faculdade de Ciências de Wenceslau Braz';
+      }
+
+      if (semAcento.includes('scardua') || semAcento.includes('scarda')) {
+        return 'Scardua Educacional';
+      }
+
+      if (semAcento.includes('sao geraldo')) {
+        return 'Faculdade São Geraldo (Multivix)';
+      }
+
+      if (semAcento.includes('faculdade do v ale') || semAcento.includes('faculdade do vale')) {
+        return 'Faculdade do Vale';
+      }
+
+      // Regras estruturais genéricas de inversão
+      // Caso A: SIGLA - Nome Extenso
+      const mSiglaIni = text.match(/^([A-Z0-9]{2,8})\s*[-–—:/|]\s*(.+)$/);
+      if (mSiglaIni) {
+        const sigla = mSiglaIni[1].trim();
+        const resto = mSiglaIni[2].replace(/^[-–—:/|]\s*/, '').trim();
+        return `${formatTitlePt(resto)} (${sigla})`;
+      }
+
+      // Caso B: Nome Extenso - SIGLA
+      const mSiglaFim = text.match(/^(.+?)\s*[-–—:/|]\s*([A-Z0-9]{2,8})$/);
+      if (mSiglaFim) {
+        const resto = mSiglaFim[1].trim();
+        const sigla = mSiglaFim[2].trim();
+        return `${formatTitlePt(resto)} (${sigla})`;
+      }
+
+      // Caso C: (SIGLA) Nome Extenso
+      const mParenIni = text.match(/^\((.+?)\)\s*(.+)$/);
+      if (mParenIni) {
+        const p1 = mParenIni[1].trim();
+        const p2 = mParenIni[2].trim();
+        if (p1.length <= 8) return `${formatTitlePt(p2)} (${p1.toUpperCase()})`;
+      }
+
+      // Caso D: Nome (SIGLA)
+      const mParenFim = text.match(/^(.+?)\s*\(([A-Za-z0-9\s\-]+)\)$/);
+      if (mParenFim) {
+        const nomeExt = mParenFim[1].trim();
+        const sigla = mParenFim[2].trim();
+        if (sigla.length <= 8) return `${formatTitlePt(nomeExt)} (${sigla.toUpperCase()})`;
+      }
+
+      return formatTitlePt(text);
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       loadDocuments();
       setupKeyboardShortcuts();
@@ -1842,13 +2004,14 @@
       const rgDigits = extractDigits(doc.rg);
       const curso = normalizeText(doc.curso);
       const faculdade = normalizeText(doc.faculdade);
+      const faculdadeNorm = normalizeText(normalizeInstitution(doc.faculdade));
       const natureza = normalizeText(doc.natureza_curso);
       const tipo = normalizeText(doc.tipo_documento);
       const obs = normalizeText(doc.observacoes_conferencia);
       const data = normalizeText(doc.data);
       const carga = normalizeText(doc.carga_horaria);
 
-      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${curso} ${faculdade} ${natureza} ${tipo} ${data} ${carga} ${obs}`;
+      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${data} ${carga} ${obs}`;
 
       return tokens.every(token => {
         // 1. Busca textual direta na junção de todos os campos
@@ -4224,7 +4387,7 @@
         elKpiAprPct.innerText = `${pct}%`;
       }
 
-      const instSet = new Set(classifDocs.map(d => safeString(d.faculdade).trim()).filter(Boolean));
+      const instSet = new Set(classifDocs.map(d => normalizeInstitution(d.faculdade) || safeString(d.faculdade).trim()).filter(Boolean));
       const elKpiInst = document.getElementById('kpiInstituicoes');
       if (elKpiInst) elKpiInst.innerText = instSet.size.toLocaleString('pt-BR');
 
@@ -4487,7 +4650,7 @@
     function renderChartFaculdades(docs, total) {
       const counts = {};
       docs.forEach(doc => {
-        const fac = safeString(doc.faculdade).trim();
+        const fac = normalizeInstitution(doc.faculdade) || safeString(doc.faculdade).trim();
         if (fac) {
           counts[fac] = (counts[fac] || 0) + 1;
         } else {
@@ -4522,6 +4685,15 @@
           options: {
             ...biChartDarkOptions,
             indexAxis: 'y',
+            onClick: (evt, elements) => {
+              if (elements && elements.length > 0) {
+                const idx = elements[0].index;
+                const instName = fullLabels[idx];
+                if (instName && instName !== 'Não informada') {
+                  applyBIFilterToConference('faculdade', instName);
+                }
+              }
+            },
             scales: {
               x: {
                 grid: { color: 'rgba(255, 255, 255, 0.06)', drawBorder: false },
@@ -4545,7 +4717,7 @@
                   label: function(ctx) {
                     const val = ctx.raw || 0;
                     const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
-                    return ` ${val.toLocaleString('pt-BR')} documentos (${pct}% do acervo analisado)`;
+                    return ` ${val.toLocaleString('pt-BR')} documentos (${pct}% do acervo analisado) - Clique p/ filtrar`;
                   }
                 }
               }
@@ -4935,7 +5107,7 @@
       lines.push('-'.repeat(80));
       const countsFac = {};
       classifDocs.forEach(d => {
-        const f = safeString(d.faculdade).trim() || 'Não informada';
+        const f = normalizeInstitution(d.faculdade) || safeString(d.faculdade).trim() || 'Não informada';
         countsFac[f] = (countsFac[f] || 0) + 1;
       });
       Object.entries(countsFac).sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([k, v], i) => {
@@ -4994,7 +5166,7 @@
       // Top Instituições
       const countsFac = {};
       classifDocs.forEach(d => {
-        const f = safeString(d.faculdade).trim() || 'Não informada';
+        const f = normalizeInstitution(d.faculdade) || safeString(d.faculdade).trim() || 'Não informada';
         countsFac[f] = (countsFac[f] || 0) + 1;
       });
       Object.entries(countsFac).sort((a, b) => b[1] - a[1]).slice(0, 15).forEach(([k, v]) => {
@@ -5013,6 +5185,52 @@
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       showToast('Tabela estatística CSV baixada com sucesso!', 'success');
+    }
+
+    async function confirmarUniformizacaoInstituicoes() {
+      const confirmMsg = `✨ UNIFORMIZAÇÃO INTELIGENTE DE INSTITUIÇÕES DE ENSINO\n\n` +
+        `Deseja unificar nomes e variações de ordem em toda a base de dados?\n\n` +
+        `• Converte variações (ex: 'SIGLA - Nome' e 'Nome - SIGLA') para o padrão canônico 'Nome por Extenso (SIGLA)'.\n` +
+        `• Unifica siglas e nomes fragmentados (FIVAR, UNIFTB, FAB, CETEC, FACI, Dominius, etc.).\n` +
+        `• Atualiza permanentemente o JSON consolidado, o relatório TXT e as fichas individuais.\n` +
+        `• NÃO é necessário reprocessar nenhum PDF: o processo dura apenas 1 a 2 segundos.\n\n` +
+        `Deseja prosseguir com a consolidação da base?`;
+
+      if (!confirm(confirmMsg)) return;
+
+      const notifId = showToast('Uniformizando instituições na base de dados...', 'info', 0);
+      try {
+        const resp = await fetch('/api/uniformizar_instituicoes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({}));
+          throw new Error(errData.mensagem || `Erro HTTP ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        removeToast(notifId);
+
+        const msgSucesso = `✓ Base de dados uniformizada com sucesso!\n\n` +
+          `• Total de registros analisados: ${data.total_registros}\n` +
+          `• Documentos ajustados: ${data.total_modificados}\n` +
+          `• Fichas individuais salvas: ${data.individuais_atualizados}\n` +
+          `• Instituições únicas: de ${data.instituicoes_antes} para ${data.instituicoes_depois}\n` +
+          `• Fragmentações eliminadas: ${data.reducao_fragmentacao} variações unificadas!`;
+
+        alert(msgSucesso);
+        showToast(`Instituições consolidadas: ${data.instituicoes_depois} entidades únicas!`, 'success');
+
+        await loadDocuments();
+        refreshBIDashboard(true);
+      } catch (e) {
+        removeToast(notifId);
+        alert(`Falha ao uniformizar instituições: ${e.message}`);
+        showToast(`Erro na uniformização: ${e.message}`, 'error');
+      }
     }
   </script>
 </body>

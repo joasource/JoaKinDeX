@@ -80,6 +80,12 @@ except ImportError:
         get_factory_defaults
     )
 
+try:
+    from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
+
 
 
 def load_dotenv_if_present(env_path: Optional[Path] = None):
@@ -805,7 +811,7 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
     * "Educação Básica" (Fundamental / Médio)
     * Ou null se não for possível determinar ou não for curso.
 - "carga_horaria": Carga horária total do curso (ex: "750 h/aulas", "360 horas", "750h"). Se não encontrar, retorne null.
-- "faculdade": Nome completo da faculdade, universidade ou instituição de ensino emissora. Se não encontrar, retorne null.
+- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato canônico "Nome Completo por Extenso (SIGLA)" (ex: "Faculdades Integradas Vale do Rio Verde (FIVAR)", "Universidade de São Paulo (USP)"). Sempre coloque o nome por extenso primeiro e a sigla entre parênteses ao final. Se não encontrar, retorne null.
 - "tipo_documento": Classificação do documento (ex: "Diploma", "Certificado", "Histórico Escolar", "Declaração", "Currículo", "Outro"). Se mesmo após análise visual não for possível classificar, informe "Não identificado".
 
 REGRAS:
@@ -837,7 +843,7 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
     * "Educação Básica" (Fundamental / Médio)
     * Ou null se não for possível determinar ou não for curso.
 - "carga_horaria": Carga horária total do curso (ex: "750 h/aulas", "360 horas", "750h"). Se não encontrar, retorne null.
-- "faculdade": Nome completo da faculdade, universidade ou instituição de ensino emissora (ex: "Faculdades Integradas Vale do Rio Verde - FIVAR"). Se não encontrar, retorne null.
+- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato canônico "Nome Completo por Extenso (SIGLA)" (ex: "Faculdades Integradas Vale do Rio Verde (FIVAR)", "Universidade de São Paulo (USP)"). Sempre coloque o nome por extenso primeiro e a sigla entre parênteses ao final. Se não encontrar, retorne null.
 - "tipo_documento": Classificação do documento (ex: "Diploma", "Certificado", "Currículo", "Histórico Escolar", "Declaração", "Outro").
 
 REGRAS:
@@ -960,7 +966,7 @@ def process_single_pdf(
         res_dict["curso"] = _clean_str(extracted_data.get("curso"))
         res_dict["natureza_curso"] = _clean_str(extracted_data.get("natureza_curso"))
         res_dict["carga_horaria"] = _clean_str(extracted_data.get("carga_horaria"))
-        res_dict["faculdade"] = _clean_str(extracted_data.get("faculdade"))
+        res_dict["faculdade"] = normalizar_instituicao(_clean_str(extracted_data.get("faculdade")))
         res_dict["tipo_documento"] = _clean_str(extracted_data.get("tipo_documento"))
 
         # ---------------------------------------------------------------------
@@ -1030,7 +1036,7 @@ def process_single_pdf(
                     if not res_dict["carga_horaria"] and ocr_data.get("carga_horaria"):
                         res_dict["carga_horaria"] = _clean_str(ocr_data.get("carga_horaria"))
                     if not res_dict["faculdade"] and ocr_data.get("faculdade"):
-                        res_dict["faculdade"] = _clean_str(ocr_data.get("faculdade"))
+                        res_dict["faculdade"] = normalizar_instituicao(_clean_str(ocr_data.get("faculdade")))
                     if not res_dict["data"] and ocr_data.get("data"):
                         res_dict["data"] = _clean_str(ocr_data.get("data"))
             except Exception:
@@ -2132,6 +2138,12 @@ def main():
         action="store_true",
         help="Restaura todas as configurações salvas para os padrões de fábrica neutros."
     )
+    parser.add_argument(
+        "--uniformizar-instituicoes", "--normalizar-instituicoes",
+        dest="uniformizar_instituicoes",
+        action="store_true",
+        help="Executa a uniformização e consolidação inteligente de nomes de instituições na base de dados sem reprocessar PDFs."
+    )
 
     # Carrega configurações salvas prévias como padrões do parser
     saved_cfg = get_classifier_config()
@@ -2162,10 +2174,35 @@ def main():
         for k, v in defaults.items():
             setattr(args, k, v)
 
+    if getattr(args, "uniformizar_instituicoes", False):
+        print("\n" + "=" * 70)
+        print("🎓 JOACLASSIFICADOR - UNIFORMIZAÇÃO INTELIGENTE DE INSTITUIÇÕES")
+        print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
+        print("=" * 70)
+        out_target = args.output_dir or "./saida"
+        print(f"\n[✨] Processando arquivo e fichas em: {out_target}")
+        res = uniformizar_base_dados(out_target, atualizar_individuais=not args.no_individual)
+        if res.get("status") == "sucesso":
+            print(f"[✓] Base de dados consolidada com sucesso!")
+            print(f"    • Total de registros analisados : {res.get('total_registros')}")
+            print(f"    • Documentos normalizados       : {res.get('total_modificados')}")
+            print(f"    • Fichas individuais salvas     : {res.get('individuais_atualizados')}")
+            print(f"    • Instituições únicas (antes)   : {res.get('instituicoes_antes')}")
+            print(f"    • Instituições canônicas (após) : {res.get('instituicoes_depois')}")
+            print(f"    • Variações unificadas          : {res.get('reducao_fragmentacao')}")
+            if res.get("amostra_normalizacoes"):
+                print("\n[Exemplos de unificações aplicadas]:")
+                for orig, norm in list(res.get("amostra_normalizacoes").items())[:8]:
+                    print(f"  • '{orig}' ➔ '{norm}'")
+        else:
+            print(f"[x] Erro: {res.get('mensagem')}")
+            sys.exit(1)
+        sys.exit(0)
+
     # Detecta se foram passados argumentos explícitos via CLI
     explicit_cli_args = [
         arg for arg in sys.argv[1:]
-        if arg not in ["--prompt", "--interativo", "-y", "--no-prompt", "--batch", "--reset-config", "--reset", "--factory-reset"]
+        if arg not in ["--prompt", "--interativo", "-y", "--no-prompt", "--batch", "--reset-config", "--reset", "--factory-reset", "--uniformizar-instituicoes", "--normalizar-instituicoes"]
     ]
     is_tty = sys.stdin.isatty()
     should_prompt = args.force_prompt or (

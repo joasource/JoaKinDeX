@@ -71,6 +71,12 @@ except ImportError:
         get_factory_defaults
     )
 
+try:
+    from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
+
 
 def resolve_pdf_dir(specified_dir: str = None) -> str:
     """Retorna o diretório de PDFs padrão neutro ou o caminho especificado."""
@@ -1027,6 +1033,8 @@ def create_handler(server_ctx: ConferenciaServer):
                 dados_atuais = server_ctx.load_data()
                 item_editado = payload.get("item")
                 if item_editado and "md5" in item_editado:
+                    if item_editado.get("faculdade"):
+                        item_editado["faculdade"] = normalizar_instituicao(item_editado.get("faculdade"))
                     target_md5 = item_editado["md5"]
                     found = False
                     for idx, doc in enumerate(dados_atuais):
@@ -1132,6 +1140,9 @@ def create_handler(server_ctx: ConferenciaServer):
                         v = novo_doc.get(k)
                         if isinstance(v, list):
                             novo_doc[k] = ", ".join(str(x) for x in v if x)
+
+                    if novo_doc.get("faculdade"):
+                        novo_doc["faculdade"] = normalizar_instituicao(novo_doc.get("faculdade"))
 
                     dados_atuais = server_ctx.load_data()
                     found = False
@@ -1437,6 +1448,30 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.wfile.write(resp)
                 return
 
+            # Uniformizar nomes de instituições em toda a base sem reprocessar PDFs
+            if path == "/api/uniformizar_instituicoes":
+                try:
+                    res = uniformizar_base_dados(
+                        str(server_ctx.json_path),
+                        atualizar_individuais=True
+                    )
+                    server_ctx.load_data()
+                    resp = json.dumps(res, ensure_ascii=False).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(resp)))
+                    self.end_headers()
+                    self.wfile.write(resp)
+                    return
+                except Exception as ex_uni:
+                    err_resp = json.dumps({"status": "erro", "mensagem": str(ex_uni)}, ensure_ascii=False).encode("utf-8")
+                    self.send_response(500)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(err_resp)))
+                    self.end_headers()
+                    self.wfile.write(err_resp)
+                    return
+
             self.send_error(404, "Endpoint não encontrado")
 
     return RequestHandler
@@ -1522,6 +1557,12 @@ def main():
         action="store_true",
         help="Restaura todas as configurações salvas do visualizador para os padrões de fábrica neutros."
     )
+    parser.add_argument(
+        "--uniformizar-instituicoes", "--normalizar-instituicoes",
+        dest="uniformizar_instituicoes",
+        action="store_true",
+        help="Executa a uniformização e consolidação inteligente de nomes de instituições na base de dados e sai."
+    )
 
     # Carrega configurações salvas prévias como padrões do parser
     saved_cfg = get_visualizer_config()
@@ -1553,6 +1594,31 @@ def main():
         for k, v in defaults.items():
             setattr(args, k, v)
 
+    if getattr(args, "uniformizar_instituicoes", False):
+        target_json = resolve_json_path(args.json_path)
+        print("\n" + "=" * 70)
+        print("🎓 JOACLASSIFICADOR - UNIFORMIZAÇÃO INTELIGENTE DE INSTITUIÇÕES")
+        print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
+        print("=" * 70)
+        print(f"\n[✨] Processando arquivo em: {target_json}")
+        res = uniformizar_base_dados(target_json, atualizar_individuais=True)
+        if res.get("status") == "sucesso":
+            print(f"[✓] Base de dados consolidada com sucesso!")
+            print(f"    • Total de registros analisados : {res.get('total_registros')}")
+            print(f"    • Documentos normalizados       : {res.get('total_modificados')}")
+            print(f"    • Fichas individuais salvas     : {res.get('individuais_atualizados')}")
+            print(f"    • Instituições únicas (antes)   : {res.get('instituicoes_antes')}")
+            print(f"    • Instituições canônicas (após) : {res.get('instituicoes_depois')}")
+            print(f"    • Variações unificadas          : {res.get('reducao_fragmentacao')}")
+            if res.get("amostra_normalizacoes"):
+                print("\n[Exemplos de unificações aplicadas]:")
+                for orig, norm in list(res.get("amostra_normalizacoes").items())[:8]:
+                    print(f"  • '{orig}' ➔ '{norm}'")
+        else:
+            print(f"[x] Erro: {res.get('mensagem')}")
+            sys.exit(1)
+        sys.exit(0)
+
     default_pdf = resolve_pdf_dir(args.pdf_dir)
     default_json = resolve_json_path(args.json_path)
     default_port = args.port
@@ -1560,7 +1626,7 @@ def main():
     is_interactive = sys.stdin.isatty()
     explicit_cli_args = [
         arg for arg in sys.argv[1:]
-        if arg not in ["--prompt", "--interativo", "-interactive", "-y", "--no-prompt", "--batch", "--reset-config", "--reset", "--factory-reset"]
+        if arg not in ["--prompt", "--interativo", "-interactive", "-y", "--no-prompt", "--batch", "--reset-config", "--reset", "--factory-reset", "--uniformizar-instituicoes", "--normalizar-instituicoes"]
     ]
     should_prompt = args.force_prompt or (
         is_interactive
