@@ -137,12 +137,12 @@ def normalizar_instituicao(nome: Optional[str]) -> Optional[str]:
     if "uniftb" in sem_acento or "tobias barreto" in sem_acento or "ceuftb" in sem_acento:
         return "Faculdade UNIFTB"
 
-    # FAB / Faculdade Alfa do Brasil
+    # FAB / Faculdade Alffa do Brasil
     if (
         ("alfa" in sem_acento or "alffa" in sem_acento or "afpa" in sem_acento or "fauldaffe" in sem_acento or "fauldae" in sem_acento)
         and ("brasil" in sem_acento or "fab" in sem_acento)
     ) or sem_acento_compact in ["fab", "faculdadefab"]:
-        return "Faculdade Alfa do Brasil (FAB)"
+        return "Faculdade Alffa do Brasil (FAB)"
 
     # CETEC / CTEC / CEITEC / Centro Técnico de Capacitação
     if any(k in sem_acento for k in ["cetec", "ctec", "ceitec", "ceic", "ceit", "ceec"]) and "capacitacao" in sem_acento:
