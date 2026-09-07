@@ -48,6 +48,13 @@ O projeto é focado em privacidade, conformidade e auditoria: identifica os arqu
 - **Exportação e Visual Law Prontos para Word e Petições**:
   - Botões de cópia rápida em cada campo lido (CPF, Beneficiário, Curso, RG, Instituição, etc.).
   - **Copiar Ficha Completa (Visual Law)**: Gera um card institucional com borda lateral executiva e tabela limpa em Rich Text (HTML) pronto para colar no Microsoft Word, LibreOffice ou Google Docs, com fallback inteligente para texto puro.
+- **Painel de Business Intelligence (BI) & Estatísticas Interativas**:
+  - Nova aba dedicada no visualizador com gráficos interativos (`Chart.js`) e indicadores executivos (KPIs).
+  - Distribuições de quantidades absolutas (Nº) e relativas (%) por Nível/Natureza do Curso e Tipos de Documento.
+  - Ranking das Top 10 Instituições/Faculdades Emissoras e distribuição por Faixas de Carga Horária.
+  - Linha do tempo histórica de emissão/conclusão e índices de integridade/qualidade dos metadados extraídos.
+  - Matriz cruzada analítica (Natureza vs Tipo de Documento), exportação de relatórios em TXT e planilhas CSV.
+  - Interatividade bidirecional: clique em qualquer categoria do BI para navegar à Conferência com o filtro pré-aplicado!
 - **Acesso Remoto Seguro via Cloudflare Tunnel (Docker)**:
   - Configuração opcional via `docker-compose.yml` para expor o visualizador com certificado SSL/HTTPS via Cloudflare Zero Trust (ex: `https://documentos.seu-dominio.com.br`), garantindo suporte total às APIs de Área de Transferência em qualquer computador da rede.
 

@@ -7,6 +7,8 @@
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js para Painel de BI & Estatísticas -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -31,6 +33,15 @@
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
     .split-pane { height: calc(100vh - 61px); }
+
+    /* Estilos de Impressão para o Painel de BI */
+    @media print {
+      body { overflow: auto !important; background: #ffffff !important; color: #000000 !important; }
+      header, #viewConferencia, #configModal, #folderPickerModal, .no-print { display: none !important; }
+      #viewBI { display: block !important; height: auto !important; overflow: visible !important; padding: 0 !important; background: #ffffff !important; color: #000000 !important; }
+      .bi-card { border: 1px solid #cbd5e1 !important; background: #ffffff !important; color: #0f172a !important; break-inside: avoid; box-shadow: none !important; }
+      .bi-table-text { color: #0f172a !important; }
+    }
   </style>
 </head>
 <body class="h-full flex flex-col overflow-hidden select-none">
@@ -59,8 +70,23 @@
       </div>
     </div>
 
+    <!-- SELETOR DE ABAS PRINCIPAIS: CONFERÊNCIA vs PAINEL DE BI -->
+    <div class="flex items-center bg-slate-900/90 p-1 rounded-lg border border-slate-800 shadow-inner shrink-0">
+      <button id="tabMainConferencia" onclick="switchMainTab('conferencia')"
+              class="px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition bg-emerald-600 text-white shadow">
+        <i class="fa-solid fa-table-columns text-emerald-100"></i>
+        <span>Conferência</span>
+      </button>
+      <button id="tabMainBI" onclick="switchMainTab('bi')"
+              class="px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+        <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+        <span>Painel de BI</span>
+        <span class="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded-full font-mono">Estatísticas</span>
+      </button>
+    </div>
+
     <!-- Indicadores de Progresso (IA e Revisão Humana) -->
-    <div class="hidden md:flex items-center gap-3 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 text-xs shrink-0">
+    <div class="hidden xl:flex items-center gap-3 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 text-xs shrink-0">
       <!-- Indicador IA -->
       <div class="flex items-center gap-1.5" title="Total de documentos classificados com sucesso pela IA / Total de PDFs no lote">
         <i class="fa-solid fa-robot text-cyan-400 text-[11px]"></i>
@@ -83,8 +109,8 @@
       </div>
     </div>
 
-    <!-- Controles de Navegação -->
-    <div class="flex items-center gap-2">
+    <!-- Controles de Navegação (Aba Conferência) -->
+    <div id="conferenciaNavControls" class="flex items-center gap-2">
       <button id="btnPrev" onclick="navigateDoc(-1)" title="Documento Anterior (Seta Esquerda)"
               class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
         <i class="fa-solid fa-chevron-left"></i>
@@ -98,8 +124,35 @@
         <span class="hidden sm:inline">Próximo</span>
         <i class="fa-solid fa-chevron-right"></i>
       </button>
+    </div>
 
-      <div class="h-4 w-px bg-slate-800 mx-1"></div>
+    <!-- Controles Específicos do BI (Aba Painel de BI) -->
+    <div id="biNavControls" class="hidden items-center gap-2">
+      <button onclick="refreshBIDashboard(true)" title="Recalcular e atualizar gráficos"
+              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-rotate text-cyan-400"></i>
+        <span class="hidden sm:inline">Atualizar BI</span>
+      </button>
+      <button onclick="exportBIReport()" title="Exportar Relatório Estatístico Consolidado (TXT)"
+              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-file-lines text-emerald-400"></i>
+        <span class="hidden sm:inline">Relatório TXT</span>
+      </button>
+      <button onclick="exportBICSV()" title="Exportar Tabela de Estatísticas (CSV)"
+              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-file-csv text-amber-400"></i>
+        <span class="hidden sm:inline">CSV</span>
+      </button>
+      <button onclick="window.print()" title="Imprimir ou Salvar Painel de BI em PDF"
+              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-print text-indigo-400"></i>
+        <span class="hidden sm:inline">Imprimir</span>
+      </button>
+    </div>
+
+    <!-- Controles Globais Compartilhados -->
+    <div class="flex items-center gap-2">
+      <div class="h-4 w-px bg-slate-800 mx-0.5"></div>
 
       <!-- Indicador animado de lote rodando -->
       <button id="batchHeaderBadge" onclick="openConfigModal('batch')" style="display: none;" title="Processamento em lote em andamento - Clique para ver detalhes"
@@ -123,8 +176,8 @@
     </div>
   </header>
 
-  <!-- CORPO PRINCIPAL: Lista Lateral + Divisão Lado a Lado -->
-  <main class="flex-1 flex overflow-hidden split-pane">
+  <!-- CORPO PRINCIPAL: Lista Lateral + Divisão Lado a Lado (Conferência) -->
+  <main id="viewConferencia" class="flex-1 flex overflow-hidden split-pane">
 
     <!-- 1. BARRA LATERAL ESQUERDA: LISTA DE DOCUMENTOS E FILTROS -->
     <aside id="sidebar" class="w-84 sm:w-96 bg-slate-950/70 border-r border-slate-800 flex flex-col shrink-0">
@@ -561,6 +614,336 @@
 
   </main>
 
+  <!-- ==================================================================== -->
+  <!-- 2. PAINEL DE BUSINESS INTELLIGENCE (BI) & ANÁLISE ESTATÍSTICA -->
+  <!-- ==================================================================== -->
+  <main id="viewBI" class="flex-1 overflow-y-auto split-pane bg-slate-950 p-4 sm:p-6 hidden space-y-6">
+
+    <!-- SUBHEADER / TOOLBAR DO BI -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-lg bi-card">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2.5">
+          <div class="bg-cyan-500/15 text-cyan-400 p-2 rounded-lg border border-cyan-500/30">
+            <i class="fa-solid fa-chart-pie text-lg"></i>
+          </div>
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+              Painel de BI & Análise Estatística de Documentos
+              <span class="text-[11px] bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 px-2 py-0.5 rounded-full font-mono font-medium">Interativo</span>
+            </h2>
+            <p class="text-xs text-slate-400">
+              Métricas consolidadas, distribuições absolutas e relativas de cursos, tipos de documentos e indicadores de integridade
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controles de Filtro e Unidade do BI -->
+      <div class="flex flex-wrap items-center gap-2.5 text-xs no-print">
+        <!-- Filtro de Escopo -->
+        <div class="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+          <span class="text-[11px] text-slate-400 px-2 flex items-center gap-1">
+            <i class="fa-solid fa-filter text-slate-500"></i> Escopo:
+          </span>
+          <button type="button" id="biScopeClassificados" onclick="setBIScope('classificados')"
+                  class="px-2.5 py-1 rounded text-xs font-medium transition bg-slate-800 text-slate-100 border border-slate-700 shadow-sm"
+                  title="Apenas documentos com dados extraídos pela IA">
+            Classificados
+          </button>
+          <button type="button" id="biScopeTodos" onclick="setBIScope('todos')"
+                  class="px-2.5 py-1 rounded text-xs font-medium transition text-slate-400 hover:text-slate-200"
+                  title="Todos os PDFs do repositório, incluindo com erro de OCR">
+            Todos
+          </button>
+          <button type="button" id="biScopeAprovados" onclick="setBIScope('aprovados')"
+                  class="px-2.5 py-1 rounded text-xs font-medium transition text-slate-400 hover:text-slate-200"
+                  title="Apenas documentos já revisados e aprovados por um humano">
+            Aprovados
+          </button>
+        </div>
+
+        <!-- Modo de Exibição das Unidades -->
+        <div class="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+          <span class="text-[11px] text-slate-400 px-2 flex items-center gap-1">
+            <i class="fa-solid fa-calculator text-slate-500"></i> Valores:
+          </span>
+          <button type="button" id="biUnitAmbos" onclick="setBIUnitMode('ambos')"
+                  class="px-2 py-1 rounded text-xs font-medium transition bg-cyan-600/30 text-cyan-200 border border-cyan-500/40"
+                  title="Exibir quantidades absolutas (Nº) e relativas (%)">
+            Nº e %
+          </button>
+          <button type="button" id="biUnitAbsoluto" onclick="setBIUnitMode('absoluto')"
+                  class="px-2 py-1 rounded text-xs font-medium transition text-slate-400 hover:text-slate-200"
+                  title="Exibir apenas quantidades absolutas (Nº)">
+            Nº
+          </button>
+          <button type="button" id="biUnitRelativo" onclick="setBIUnitMode('relativo')"
+                  class="px-2 py-1 rounded text-xs font-medium transition text-slate-400 hover:text-slate-200"
+                  title="Exibir apenas quantidades relativas (%)">
+            %
+          </button>
+        </div>
+
+        <!-- Botão Atualizar Rápido -->
+        <button type="button" onclick="refreshBIDashboard(true)" title="Recalcular métricas e gráficos"
+                class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-arrows-rotate text-cyan-400"></i>
+          <span>Atualizar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 1. CARTÕES DE INDICADORES CHAVE (KPIS) -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5">
+      <!-- KPI 1: Total do Acervo -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm bi-card">
+        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <span>Acervo Total</span>
+          <i class="fa-solid fa-folder-open text-indigo-400 text-sm"></i>
+        </div>
+        <div id="kpiTotalDocs" class="text-xl sm:text-2xl font-bold text-white font-mono">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+          <span>PDFs no diretório</span>
+          <span class="text-indigo-400 font-semibold font-mono">100%</span>
+        </div>
+      </div>
+
+      <!-- KPI 2: Classificados com Sucesso -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm bi-card">
+        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <span>Classificados IA</span>
+          <i class="fa-solid fa-robot text-cyan-400 text-sm"></i>
+        </div>
+        <div id="kpiClassificados" class="text-xl sm:text-2xl font-bold text-cyan-400 font-mono">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+          <span>Dados extraídos</span>
+          <span id="kpiClassificadosPct" class="text-cyan-300 font-semibold font-mono">0%</span>
+        </div>
+      </div>
+
+      <!-- KPI 3: Pendentes / Erro OCR -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm bi-card">
+        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <span>Requerem OCR</span>
+          <i class="fa-solid fa-triangle-exclamation text-rose-400 text-sm"></i>
+        </div>
+        <div id="kpiErrosOCR" class="text-xl sm:text-2xl font-bold text-rose-400 font-mono">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+          <span>Sem texto nativo</span>
+          <span id="kpiErrosOCRPct" class="text-rose-300 font-semibold font-mono">0%</span>
+        </div>
+      </div>
+
+      <!-- KPI 4: Aprovados na Revisão Humana -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm bi-card">
+        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <span>Revisão Humana</span>
+          <i class="fa-solid fa-user-check text-emerald-400 text-sm"></i>
+        </div>
+        <div id="kpiAprovados" class="text-xl sm:text-2xl font-bold text-emerald-400 font-mono">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+          <span>Aprovados via split</span>
+          <span id="kpiAprovadosPct" class="text-emerald-300 font-semibold font-mono">0%</span>
+        </div>
+      </div>
+
+      <!-- KPI 5: Instituições Únicas -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm bi-card">
+        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <span>Instituições</span>
+          <i class="fa-solid fa-building-columns text-amber-400 text-sm"></i>
+        </div>
+        <div id="kpiInstituicoes" class="text-xl sm:text-2xl font-bold text-amber-300 font-mono">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+          <span>Faculdades distintas</span>
+          <span class="text-amber-400/80 font-semibold">Mapeadas</span>
+        </div>
+      </div>
+
+      <!-- KPI 6: Cursos Únicos -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm bi-card">
+        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <span>Cursos Únicos</span>
+          <i class="fa-solid fa-award text-purple-400 text-sm"></i>
+        </div>
+        <div id="kpiCursos" class="text-xl sm:text-2xl font-bold text-purple-300 font-mono">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+          <span>Cursos catalogados</span>
+          <span class="text-purple-400/80 font-semibold">Títulos</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. GRID DE GRÁFICOS: LINHA 1 (NATUREZA DO CURSO & TIPO DE DOCUMENTO) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <!-- CARD GRÁFICO 1: NÍVEL / NATUREZA DO CURSO -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col bi-card">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-graduation-cap text-indigo-400"></i>
+            <h3 class="text-sm font-semibold text-white">Distribuição por Nível / Natureza do Curso</h3>
+          </div>
+          <span class="text-[11px] text-slate-400 font-mono" id="labelNaturezaTotal">0 docs</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center flex-1">
+          <div class="md:col-span-5 flex items-center justify-center relative min-h-[220px]">
+            <canvas id="chartNatureza"></canvas>
+          </div>
+          <div class="md:col-span-7 overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="text-[11px] text-slate-400 border-b border-slate-800">
+                  <th class="pb-1.5 font-medium">Nível / Natureza</th>
+                  <th class="pb-1.5 font-medium text-right">Absoluto</th>
+                  <th class="pb-1.5 font-medium text-right">Relativo</th>
+                  <th class="pb-1.5 font-medium text-right no-print">Ação</th>
+                </tr>
+              </thead>
+              <tbody id="tableNaturezaBody" class="divide-y divide-slate-800/60 font-mono text-[11px]">
+                <!-- Injetado via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD GRÁFICO 2: TIPOS DE DOCUMENTO -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col bi-card">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-file-contract text-teal-400"></i>
+            <h3 class="text-sm font-semibold text-white">Distribuição por Tipo de Documento</h3>
+          </div>
+          <span class="text-[11px] text-slate-400 font-mono" id="labelTipoTotal">0 docs</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center flex-1">
+          <div class="md:col-span-5 flex items-center justify-center relative min-h-[220px]">
+            <canvas id="chartTipoDoc"></canvas>
+          </div>
+          <div class="md:col-span-7 overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="text-[11px] text-slate-400 border-b border-slate-800">
+                  <th class="pb-1.5 font-medium">Tipo</th>
+                  <th class="pb-1.5 font-medium text-right">Absoluto</th>
+                  <th class="pb-1.5 font-medium text-right">Relativo</th>
+                  <th class="pb-1.5 font-medium text-right no-print">Ação</th>
+                </tr>
+              </thead>
+              <tbody id="tableTipoBody" class="divide-y divide-slate-800/60 font-mono text-[11px]">
+                <!-- Injetado via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. GRID DE GRÁFICOS: LINHA 2 (TOP INSTITUIÇÕES & FAIXAS DE CARGA HORÁRIA) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <!-- CARD GRÁFICO 3: TOP INSTITUIÇÕES EMISSORAS -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col bi-card">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-building-columns text-amber-400"></i>
+            <h3 class="text-sm font-semibold text-white">Top 10 Faculdades / Universidades Emissoras</h3>
+          </div>
+          <span class="text-[11px] text-slate-400">Por volume de emissão</span>
+        </div>
+        <div class="relative min-h-[240px] flex-1">
+          <canvas id="chartFaculdades"></canvas>
+        </div>
+      </div>
+
+      <!-- CARD GRÁFICO 4: FAIXAS DE CARGA HORÁRIA -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col bi-card">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-clock text-sky-400"></i>
+            <h3 class="text-sm font-semibold text-white">Distribuição por Faixa de Carga Horária</h3>
+          </div>
+          <span class="text-[11px] text-slate-400">Horas registradas</span>
+        </div>
+        <div class="relative min-h-[240px] flex-1">
+          <canvas id="chartCargaHoraria"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. GRID DE GRÁFICOS: LINHA 3 (LINHA DO TEMPO & ÍNDICE DE QUALIDADE DOS DADOS) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <!-- CARD GRÁFICO 5: EVOLUÇÃO TEMPORAL (ANOS DE CONCLUSÃO/EMISSÃO) -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col bi-card">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-calendar-days text-emerald-400"></i>
+            <h3 class="text-sm font-semibold text-white">Linha do Tempo: Volume por Ano de Conclusão / Emissão</h3>
+          </div>
+          <span class="text-[11px] text-slate-400">Histórico temporal</span>
+        </div>
+        <div class="relative min-h-[220px] flex-1">
+          <canvas id="chartAnos"></canvas>
+        </div>
+      </div>
+
+      <!-- CARD GRÁFICO 6: ÍNDICE DE QUALIDADE E INTEGRIDADE DOS METADADOS EXTRAÍDOS -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col bi-card">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+            <h3 class="text-sm font-semibold text-white">Índice de Preenchimento & Conformidade de Metadados</h3>
+          </div>
+          <span class="text-[11px] text-slate-400">Auditoria cadastral</span>
+        </div>
+        <div class="relative min-h-[220px] flex-1">
+          <canvas id="chartQualidade"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. TABELA ANALÍTICA AVANÇADA (MATRIZ CRUZADA: NATUREZA DO CURSO x TIPO DE DOCUMENTO) -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm bi-card">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-slate-800/80 mb-3">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-table-cells text-purple-400"></i>
+          <div>
+            <h3 class="text-sm font-semibold text-white">Matriz Cruzada Analítica: Natureza do Curso vs Tipo de Documento</h3>
+            <p class="text-xs text-slate-400">Cruzamento de frequências absolutas e relativas entre categorias acadêmicas</p>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 no-print flex items-center gap-2">
+          <span>Legenda:</span>
+          <span class="inline-flex items-center gap-1 text-slate-300"><span class="w-2.5 h-2.5 rounded bg-emerald-500/20 border border-emerald-500/40"></span> Alta incidência</span>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse" id="matrixTable">
+          <thead>
+            <tr class="text-[11px] text-slate-300 border-b border-slate-800 bg-slate-950/60">
+              <th class="p-2.5 font-semibold">Nível / Natureza</th>
+              <th class="p-2.5 font-semibold text-center">Diploma</th>
+              <th class="p-2.5 font-semibold text-center">Certificado</th>
+              <th class="p-2.5 font-semibold text-center">Histórico</th>
+              <th class="p-2.5 font-semibold text-center">Declaração</th>
+              <th class="p-2.5 font-semibold text-center">Outros</th>
+              <th class="p-2.5 font-semibold text-right bg-slate-950/90 text-white">Total Geral</th>
+            </tr>
+          </thead>
+          <tbody id="matrixTableBody" class="divide-y divide-slate-800/70 font-mono text-[11.5px]">
+            <!-- Injetado via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RODAPÉ DA ABA DE BI -->
+    <div class="pt-2 pb-4 text-center text-xs text-slate-500 flex items-center justify-between border-t border-slate-800/60">
+      <span>joaclassificador • Módulo de Business Intelligence & Estatística</span>
+      <span>Criado por <strong>Joaquim Ferreira Silva Neto</strong> (<a href="mailto:joaquimfsneto@gmail.com" class="text-emerald-400 hover:underline">joaquimfsneto@gmail.com</a>)</span>
+    </div>
+
+  </main>
+
   <!-- MODAL DE CONFIGURAÇÃO & PROCESSAMENTO EM LOTE -->
   <div id="configModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 transition-all duration-200 hidden">
     <div class="w-full max-w-4xl max-h-[92vh] flex flex-col bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -928,6 +1311,7 @@
       </div>
 
     </div>
+  </div>
 
   <!-- MODAL: SELETOR DE PASTAS (EXPLORADOR / CAIXA SELECIONÁVEL) -->
   <div id="folderPickerModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[60] flex items-center justify-center p-3 sm:p-6 transition-all duration-200 hidden">
@@ -1110,6 +1494,9 @@
         
         initMasterFilterLists();
         applyFilter(false);
+        if (typeof currentMainTab !== 'undefined' && currentMainTab === 'bi') {
+          renderBIDashboard();
+        }
       } catch (err) {
         console.error('Erro ao carregar documentos:', err);
         showToast('Erro ao carregar documentos: ' + err.message, 'error');
@@ -1663,6 +2050,10 @@
       const barElem = document.getElementById('progressBar');
       if (barElem) {
         barElem.style.width = `${pctHumano}%`;
+      }
+
+      if (typeof currentMainTab !== 'undefined' && currentMainTab === 'bi') {
+        renderBIDashboard();
       }
     }
 
@@ -3622,6 +4013,1006 @@
       closeFolderPicker();
       showToast('Pasta atualizada!', 'success');
       await testAndRefreshFolders();
+    }
+
+    // =========================================================================
+    // MÓDULO DE BUSINESS INTELLIGENCE (BI) & ESTATÍSTICAS INTERATIVAS
+    // =========================================================================
+    let currentMainTab = 'conferencia'; // 'conferencia' | 'bi'
+    let biState = {
+      scope: 'classificados', // 'classificados' | 'todos' | 'aprovados'
+      unitMode: 'ambos'       // 'ambos' | 'absoluto' | 'relativo'
+    };
+    let biChartInstances = {};
+
+    function switchMainTab(tabName) {
+      currentMainTab = tabName;
+      const btnConf = document.getElementById('tabMainConferencia');
+      const btnBI = document.getElementById('tabMainBI');
+      const viewConf = document.getElementById('viewConferencia');
+      const viewBI = document.getElementById('viewBI');
+      const confNav = document.getElementById('conferenciaNavControls');
+      const biNav = document.getElementById('biNavControls');
+
+      if (tabName === 'conferencia') {
+        if (btnConf) {
+          btnConf.className = 'px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition bg-emerald-600 text-white shadow';
+        }
+        if (btnBI) {
+          btnBI.className = 'px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+        }
+        if (viewConf) viewConf.classList.remove('hidden');
+        if (viewBI) viewBI.classList.add('hidden');
+        if (confNav) confNav.classList.remove('hidden');
+        if (biNav) {
+          biNav.classList.add('hidden');
+          biNav.classList.remove('flex');
+        }
+      } else {
+        if (btnConf) {
+          btnConf.className = 'px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+        }
+        if (btnBI) {
+          btnBI.className = 'px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition bg-cyan-600 text-white shadow';
+        }
+        if (viewConf) viewConf.classList.add('hidden');
+        if (viewBI) viewBI.classList.remove('hidden');
+        if (confNav) confNav.classList.add('hidden');
+        if (biNav) {
+          biNav.classList.remove('hidden');
+          biNav.classList.add('flex');
+        }
+        renderBIDashboard();
+      }
+    }
+
+    function setBIScope(scope) {
+      biState.scope = scope;
+      ['classificados', 'todos', 'aprovados'].forEach(s => {
+        const id = 'biScope' + s.charAt(0).toUpperCase() + s.slice(1);
+        const el = document.getElementById(id);
+        if (el) {
+          if (s === scope) {
+            el.className = 'px-2.5 py-1 rounded text-xs font-medium transition bg-slate-800 text-slate-100 border border-slate-700 shadow-sm';
+          } else {
+            el.className = 'px-2.5 py-1 rounded text-xs font-medium transition text-slate-400 hover:text-slate-200';
+          }
+        }
+      });
+      renderBIDashboard();
+    }
+
+    function setBIUnitMode(mode) {
+      biState.unitMode = mode;
+      ['ambos', 'absoluto', 'relativo'].forEach(m => {
+        const id = 'biUnit' + m.charAt(0).toUpperCase() + m.slice(1);
+        const el = document.getElementById(id);
+        if (el) {
+          if (m === mode) {
+            el.className = 'px-2 py-1 rounded text-xs font-medium transition bg-cyan-600/30 text-cyan-200 border border-cyan-500/40';
+          } else {
+            el.className = 'px-2 py-1 rounded text-xs font-medium transition text-slate-400 hover:text-slate-200';
+          }
+        }
+      });
+      renderBIDashboard();
+    }
+
+    function formatBIVal(val, total) {
+      const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0.0';
+      if (biState.unitMode === 'absoluto') return `${val}`;
+      if (biState.unitMode === 'relativo') return `${pct}%`;
+      return `${val} (${pct}%)`;
+    }
+
+    function destroyBIChart(chartKey) {
+      if (biChartInstances[chartKey]) {
+        try {
+          biChartInstances[chartKey].destroy();
+        } catch (e) {
+          console.warn('Erro ao destruir gráfico:', e);
+        }
+        delete biChartInstances[chartKey];
+      }
+    }
+
+    function isCpfValid(cpfRaw) {
+      if (!cpfRaw) return false;
+      const digits = String(cpfRaw).replace(/\D/g, '');
+      if (digits.length !== 11) return false;
+      if (/^(\d)\1{10}$/.test(digits)) return false;
+      let sum = 0, rest;
+      for (let i = 1; i <= 9; i++) sum += parseInt(digits.substring(i - 1, i)) * (11 - i);
+      rest = (sum * 10) % 11;
+      if (rest === 10 || rest === 11) rest = 0;
+      if (rest !== parseInt(digits.substring(9, 10))) return false;
+      sum = 0;
+      for (let i = 1; i <= 10; i++) sum += parseInt(digits.substring(i - 1, i)) * (12 - i);
+      rest = (sum * 10) % 11;
+      if (rest === 10 || rest === 11) rest = 0;
+      if (rest !== parseInt(digits.substring(10, 11))) return false;
+      return true;
+    }
+
+    function extractHours(ch) {
+      if (!ch) return null;
+      const str = String(ch).toLowerCase();
+      const m = str.match(/(\d[\d\.\,]*)\s*(h|hora|hr)/i) || str.match(/\b(\d+)\b/);
+      if (m) {
+        const clean = m[1].replace(/\./g, '').replace(',', '.');
+        const n = parseFloat(clean);
+        if (!isNaN(n) && n > 0 && n < 20000) return n;
+      }
+      return null;
+    }
+
+    function extractYear(dt) {
+      if (!dt) return null;
+      const str = String(dt);
+      const m = str.match(/\b(19\d\d|20\d\d)\b/);
+      if (m) {
+        const y = parseInt(m[1]);
+        if (y >= 1970 && y <= 2035) return y;
+      }
+      return null;
+    }
+
+    function escapeHtmlAttr(str) {
+      return String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function filterFromBI(filterType, filterVal) {
+      switchMainTab('conferencia');
+      if (filterType === 'natureza') {
+        activeNaturezaFilter = filterVal;
+        const sel = document.getElementById('selectNaturezaFilter');
+        if (sel) sel.value = filterVal;
+      } else if (filterType === 'tipo') {
+        activeTipoFilter = filterVal;
+        const sel = document.getElementById('selectTipoFilter');
+        if (sel) sel.value = filterVal;
+      } else if (filterType === 'faculdade' || filterType === 'busca') {
+        const inp = document.getElementById('searchInput');
+        if (inp) {
+          inp.value = filterVal;
+          onSearchInput();
+        }
+      }
+      applyFilter(false);
+      showToast(`Filtro ativado no modo conferência: ${filterVal}`, 'info');
+    }
+
+    function refreshBIDashboard(showNotification = false) {
+      renderBIDashboard();
+      if (showNotification) {
+        showToast('Painel de BI e gráficos atualizados com sucesso!', 'success');
+      }
+    }
+
+    function renderBIDashboard() {
+      const allDocs = documents || [];
+      const totalAcervo = allDocs.length;
+      const unprocDocs = allDocs.filter(d => isDocumentUnprocessed(d));
+      const classifDocs = allDocs.filter(d => !isDocumentUnprocessed(d));
+      const aprovDocs = classifDocs.filter(d => safeString(d.status_conferencia).toLowerCase() === 'aprovado');
+
+      // 1. Atualiza KPIs
+      const elKpiTotal = document.getElementById('kpiTotalDocs');
+      if (elKpiTotal) elKpiTotal.innerText = totalAcervo.toLocaleString('pt-BR');
+
+      const elKpiClass = document.getElementById('kpiClassificados');
+      const elKpiClassPct = document.getElementById('kpiClassificadosPct');
+      if (elKpiClass) elKpiClass.innerText = classifDocs.length.toLocaleString('pt-BR');
+      if (elKpiClassPct) {
+        const pct = totalAcervo > 0 ? ((classifDocs.length / totalAcervo) * 100).toFixed(1) : '0.0';
+        elKpiClassPct.innerText = `${pct}%`;
+      }
+
+      const elKpiErro = document.getElementById('kpiErrosOCR');
+      const elKpiErroPct = document.getElementById('kpiErrosOCRPct');
+      if (elKpiErro) elKpiErro.innerText = unprocDocs.length.toLocaleString('pt-BR');
+      if (elKpiErroPct) {
+        const pct = totalAcervo > 0 ? ((unprocDocs.length / totalAcervo) * 100).toFixed(1) : '0.0';
+        elKpiErroPct.innerText = `${pct}%`;
+      }
+
+      const elKpiApr = document.getElementById('kpiAprovados');
+      const elKpiAprPct = document.getElementById('kpiAprovadosPct');
+      if (elKpiApr) elKpiApr.innerText = aprovDocs.length.toLocaleString('pt-BR');
+      if (elKpiAprPct) {
+        const pct = classifDocs.length > 0 ? ((aprovDocs.length / classifDocs.length) * 100).toFixed(1) : '0.0';
+        elKpiAprPct.innerText = `${pct}%`;
+      }
+
+      const instSet = new Set(classifDocs.map(d => safeString(d.faculdade).trim()).filter(Boolean));
+      const elKpiInst = document.getElementById('kpiInstituicoes');
+      if (elKpiInst) elKpiInst.innerText = instSet.size.toLocaleString('pt-BR');
+
+      const cursoSet = new Set(classifDocs.map(d => safeString(d.curso).trim()).filter(Boolean));
+      const elKpiCurso = document.getElementById('kpiCursos');
+      if (elKpiCurso) elKpiCurso.innerText = cursoSet.size.toLocaleString('pt-BR');
+
+      // 2. Determina o subconjunto de documentos conforme o escopo selecionado
+      let targetDocs = classifDocs;
+      if (biState.scope === 'todos') targetDocs = allDocs;
+      else if (biState.scope === 'aprovados') targetDocs = aprovDocs;
+      const targetTotal = targetDocs.length;
+
+      // 3. Renderiza Gráficos e Tabelas
+      renderChartNatureza(targetDocs, targetTotal);
+      renderChartTipoDoc(targetDocs, targetTotal);
+      renderChartFaculdades(targetDocs, targetTotal);
+      renderChartCargaHoraria(targetDocs, targetTotal);
+      renderChartAnos(targetDocs, targetTotal);
+      renderChartQualidade(targetDocs, targetTotal);
+      renderMatrixTable(targetDocs, targetTotal);
+    }
+
+    // Configurações e temas escuros padrão para Chart.js
+    const biChartDarkOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: {
+            color: '#cbd5e1',
+            font: { size: 11, family: 'system-ui, -apple-system, sans-serif' },
+            boxWidth: 12,
+            padding: 10
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          borderColor: 'rgba(51, 65, 85, 0.8)',
+          borderWidth: 1,
+          titleColor: '#f8fafc',
+          bodyColor: '#cbd5e1',
+          padding: 10,
+          cornerRadius: 8,
+          boxPadding: 4
+        }
+      }
+    };
+
+    function renderChartNatureza(docs, total) {
+      const counts = {
+        'Graduação / Curso Superior': 0,
+        'Pós-Graduação Lato Sensu (Especialização/MBA)': 0,
+        'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)': 0,
+        'Curso Técnico / Profissionalizante': 0,
+        'Extensão / Aperfeiçoamento': 0,
+        'Não identificada': 0
+      };
+
+      docs.forEach(doc => {
+        const raw = normalizeText(safeString(doc.natureza_curso));
+        if (!raw) {
+          counts['Não identificada']++;
+        } else if (raw.includes('graduacao') || raw.includes('superior') || raw.includes('bacharel') || raw.includes('licenciatura') || raw.includes('tecnologo')) {
+          counts['Graduação / Curso Superior']++;
+        } else if (raw.includes('lato sensu') || raw.includes('especializacao') || raw.includes('mba')) {
+          counts['Pós-Graduação Lato Sensu (Especialização/MBA)']++;
+        } else if (raw.includes('stricto sensu') || raw.includes('mestrado') || raw.includes('doutorado')) {
+          counts['Pós-Graduação Stricto Sensu (Mestrado/Doutorado)']++;
+        } else if (raw.includes('tecnico') || raw.includes('profissionalizante')) {
+          counts['Curso Técnico / Profissionalizante']++;
+        } else if (raw.includes('extensao') || raw.includes('aperfeicoamento') || raw.includes('capacitacao')) {
+          counts['Extensão / Aperfeiçoamento']++;
+        } else {
+          counts['Não identificada']++;
+        }
+      });
+
+      const categories = [
+        { label: 'Graduação / Superior', key: 'Graduação / Curso Superior', color: '#a855f7' },
+        { label: 'Pós Lato Sensu (MBA/Espec.)', key: 'Pós-Graduação Lato Sensu (Especialização/MBA)', color: '#0ea5e9' },
+        { label: 'Pós Stricto (Mestrado/Dout.)', key: 'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)', color: '#10b981' },
+        { label: 'Técnico / Profissionalizante', key: 'Curso Técnico / Profissionalizante', color: '#f59e0b' },
+        { label: 'Extensão / Aperfeiçoamento', key: 'Extensão / Aperfeiçoamento', color: '#6366f1' },
+        { label: 'Não identificada', key: 'Não identificada', color: '#64748b' }
+      ];
+
+      const dataPoints = categories.map(c => counts[c.key] || 0);
+      const totalFiltered = dataPoints.reduce((a, b) => a + b, 0);
+
+      const labelEl = document.getElementById('labelNaturezaTotal');
+      if (labelEl) labelEl.innerText = `${totalFiltered.toLocaleString('pt-BR')} documentos`;
+
+      // Atualiza tabela
+      const tbody = document.getElementById('tableNaturezaBody');
+      if (tbody) {
+        tbody.innerHTML = categories.map(c => {
+          const count = counts[c.key] || 0;
+          const pct = totalFiltered > 0 ? ((count / totalFiltered) * 100).toFixed(1) : '0.0';
+          return `
+            <tr class="hover:bg-slate-800/40 transition">
+              <td class="py-1.5 pr-2 text-slate-200 flex items-center gap-1.5 truncate max-w-[150px]" title="${c.key}">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${c.color}"></span>
+                <span class="truncate">${c.label}</span>
+              </td>
+              <td class="py-1.5 px-2 text-right text-slate-300 font-semibold">${count.toLocaleString('pt-BR')}</td>
+              <td class="py-1.5 px-2 text-right text-cyan-300">${pct}%</td>
+              <td class="py-1.5 pl-2 text-right no-print">
+                <button type="button" onclick="filterFromBI('natureza', '${escapeHtmlAttr(c.key)}')"
+                        class="text-[10px] text-indigo-400 hover:text-indigo-300 hover:underline inline-flex items-center gap-0.5">
+                  Filtrar <i class="fa-solid fa-arrow-right text-[8px]"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // Renderiza Gráfico Doughnut
+      destroyBIChart('natureza');
+      const canvas = document.getElementById('chartNatureza');
+      if (canvas && typeof Chart !== 'undefined') {
+        biChartInstances['natureza'] = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels: categories.map(c => c.label),
+            datasets: [{
+              data: dataPoints,
+              backgroundColor: categories.map(c => c.color),
+              borderColor: '#0f172a',
+              borderWidth: 2,
+              hoverOffset: 4
+            }]
+          },
+          options: {
+            ...biChartDarkOptions,
+            cutout: '65%',
+            plugins: {
+              ...biChartDarkOptions.plugins,
+              legend: { display: false },
+              tooltip: {
+                ...biChartDarkOptions.plugins.tooltip,
+                callbacks: {
+                  label: function(ctx) {
+                    const val = ctx.raw || 0;
+                    const pct = totalFiltered > 0 ? ((val / totalFiltered) * 100).toFixed(1) : 0;
+                    return ` ${ctx.label}: ${val.toLocaleString('pt-BR')} docs (${pct}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    function renderChartTipoDoc(docs, total) {
+      const counts = {
+        'Diploma': 0,
+        'Certificado': 0,
+        'Histórico Escolar': 0,
+        'Declaração / Atestado': 0,
+        'Outro / Não identificado': 0
+      };
+
+      docs.forEach(doc => {
+        const raw = normalizeText(safeString(doc.tipo_documento));
+        if (!raw) {
+          counts['Outro / Não identificado']++;
+        } else if (raw.includes('diploma')) {
+          counts['Diploma']++;
+        } else if (raw.includes('certificado')) {
+          counts['Certificado']++;
+        } else if (raw.includes('historico')) {
+          counts['Histórico Escolar']++;
+        } else if (raw.includes('declaracao') || raw.includes('atestado')) {
+          counts['Declaração / Atestado']++;
+        } else {
+          counts['Outro / Não identificado']++;
+        }
+      });
+
+      const categories = [
+        { label: 'Diploma', key: 'Diploma', color: '#0d9488' },
+        { label: 'Certificado', key: 'Certificado', color: '#0284c7' },
+        { label: 'Histórico Escolar', key: 'Histórico Escolar', color: '#8b5cf6' },
+        { label: 'Declaração / Atestado', key: 'Declaração / Atestado', color: '#f59e0b' },
+        { label: 'Outro / Não identificado', key: 'Outro / Não identificado', color: '#64748b' }
+      ];
+
+      const dataPoints = categories.map(c => counts[c.key] || 0);
+      const totalFiltered = dataPoints.reduce((a, b) => a + b, 0);
+
+      const labelEl = document.getElementById('labelTipoTotal');
+      if (labelEl) labelEl.innerText = `${totalFiltered.toLocaleString('pt-BR')} documentos`;
+
+      // Atualiza tabela
+      const tbody = document.getElementById('tableTipoBody');
+      if (tbody) {
+        tbody.innerHTML = categories.map(c => {
+          const count = counts[c.key] || 0;
+          const pct = totalFiltered > 0 ? ((count / totalFiltered) * 100).toFixed(1) : '0.0';
+          return `
+            <tr class="hover:bg-slate-800/40 transition">
+              <td class="py-1.5 pr-2 text-slate-200 flex items-center gap-1.5 truncate max-w-[150px]" title="${c.key}">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${c.color}"></span>
+                <span class="truncate">${c.label}</span>
+              </td>
+              <td class="py-1.5 px-2 text-right text-slate-300 font-semibold">${count.toLocaleString('pt-BR')}</td>
+              <td class="py-1.5 px-2 text-right text-teal-300">${pct}%</td>
+              <td class="py-1.5 pl-2 text-right no-print">
+                <button type="button" onclick="filterFromBI('tipo', '${escapeHtmlAttr(c.key)}')"
+                        class="text-[10px] text-teal-400 hover:text-teal-300 hover:underline inline-flex items-center gap-0.5">
+                  Filtrar <i class="fa-solid fa-arrow-right text-[8px]"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // Renderiza Gráfico Doughnut
+      destroyBIChart('tipoDoc');
+      const canvas = document.getElementById('chartTipoDoc');
+      if (canvas && typeof Chart !== 'undefined') {
+        biChartInstances['tipoDoc'] = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels: categories.map(c => c.label),
+            datasets: [{
+              data: dataPoints,
+              backgroundColor: categories.map(c => c.color),
+              borderColor: '#0f172a',
+              borderWidth: 2,
+              hoverOffset: 4
+            }]
+          },
+          options: {
+            ...biChartDarkOptions,
+            cutout: '65%',
+            plugins: {
+              ...biChartDarkOptions.plugins,
+              legend: { display: false },
+              tooltip: {
+                ...biChartDarkOptions.plugins.tooltip,
+                callbacks: {
+                  label: function(ctx) {
+                    const val = ctx.raw || 0;
+                    const pct = totalFiltered > 0 ? ((val / totalFiltered) * 100).toFixed(1) : 0;
+                    return ` ${ctx.label}: ${val.toLocaleString('pt-BR')} docs (${pct}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    function renderChartFaculdades(docs, total) {
+      const counts = {};
+      docs.forEach(doc => {
+        const fac = safeString(doc.faculdade).trim();
+        if (fac) {
+          counts[fac] = (counts[fac] || 0) + 1;
+        } else {
+          counts['Não informada'] = (counts['Não informada'] || 0) + 1;
+        }
+      });
+
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      const top10 = sorted.slice(0, 10);
+
+      const labels = top10.map(item => item[0].length > 28 ? item[0].substring(0, 26) + '...' : item[0]);
+      const fullLabels = top10.map(item => item[0]);
+      const values = top10.map(item => item[1]);
+
+      destroyBIChart('faculdades');
+      const canvas = document.getElementById('chartFaculdades');
+      if (canvas && typeof Chart !== 'undefined') {
+        biChartInstances['faculdades'] = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Documentos',
+              data: values,
+              backgroundColor: 'rgba(6, 182, 212, 0.8)',
+              hoverBackgroundColor: 'rgba(6, 182, 212, 1)',
+              borderColor: '#0891b2',
+              borderWidth: 1,
+              borderRadius: 4
+            }]
+          },
+          options: {
+            ...biChartDarkOptions,
+            indexAxis: 'y',
+            scales: {
+              x: {
+                grid: { color: 'rgba(255, 255, 255, 0.06)', drawBorder: false },
+                ticks: { color: '#94a3b8', font: { size: 10 } }
+              },
+              y: {
+                grid: { display: false },
+                ticks: { color: '#cbd5e1', font: { size: 10.5 } }
+              }
+            },
+            plugins: {
+              ...biChartDarkOptions.plugins,
+              legend: { display: false },
+              tooltip: {
+                ...biChartDarkOptions.plugins.tooltip,
+                callbacks: {
+                  title: function(items) {
+                    const idx = items[0].dataIndex;
+                    return fullLabels[idx] || '';
+                  },
+                  label: function(ctx) {
+                    const val = ctx.raw || 0;
+                    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                    return ` ${val.toLocaleString('pt-BR')} documentos (${pct}% do acervo analisado)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    function renderChartCargaHoraria(docs, total) {
+      const buckets = {
+        '< 40h (Curta Duração)': 0,
+        '40h a 179h (Extensão)': 0,
+        '180h a 359h (Capacitação)': 0,
+        '360h a 999h (Especialização/MBA)': 0,
+        '≥ 1000h (Graduação/Técnico)': 0,
+        'Não informada': 0
+      };
+
+      docs.forEach(doc => {
+        const h = extractHours(doc.carga_horaria);
+        if (h === null) {
+          buckets['Não informada']++;
+        } else if (h < 40) {
+          buckets['< 40h (Curta Duração)']++;
+        } else if (h < 180) {
+          buckets['40h a 179h (Extensão)']++;
+        } else if (h < 360) {
+          buckets['180h a 359h (Capacitação)']++;
+        } else if (h < 1000) {
+          buckets['360h a 999h (Especialização/MBA)']++;
+        } else {
+          buckets['≥ 1000h (Graduação/Técnico)']++;
+        }
+      });
+
+      const keys = Object.keys(buckets);
+      const values = keys.map(k => buckets[k]);
+      const colors = ['#38bdf8', '#818cf8', '#a78bfa', '#c084fc', '#f472b6', '#64748b'];
+
+      destroyBIChart('cargaHoraria');
+      const canvas = document.getElementById('chartCargaHoraria');
+      if (canvas && typeof Chart !== 'undefined') {
+        biChartInstances['cargaHoraria'] = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: keys,
+            datasets: [{
+              label: 'Documentos',
+              data: values,
+              backgroundColor: colors.map(c => c + 'cc'),
+              hoverBackgroundColor: colors,
+              borderColor: colors,
+              borderWidth: 1,
+              borderRadius: 4
+            }]
+          },
+          options: {
+            ...biChartDarkOptions,
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { color: '#cbd5e1', font: { size: 9.5 } }
+              },
+              y: {
+                grid: { color: 'rgba(255, 255, 255, 0.06)', drawBorder: false },
+                ticks: { color: '#94a3b8', font: { size: 10 } }
+              }
+            },
+            plugins: {
+              ...biChartDarkOptions.plugins,
+              legend: { display: false },
+              tooltip: {
+                ...biChartDarkOptions.plugins.tooltip,
+                callbacks: {
+                  label: function(ctx) {
+                    const val = ctx.raw || 0;
+                    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                    return ` ${val.toLocaleString('pt-BR')} documentos (${pct}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    function renderChartAnos(docs, total) {
+      const yearCounts = {};
+      docs.forEach(doc => {
+        const y = extractYear(doc.data);
+        if (y) {
+          yearCounts[y] = (yearCounts[y] || 0) + 1;
+        }
+      });
+
+      const sortedYears = Object.keys(yearCounts).map(Number).sort((a, b) => a - b);
+      const labels = sortedYears.map(String);
+      const values = sortedYears.map(y => yearCounts[y]);
+
+      destroyBIChart('anos');
+      const canvas = document.getElementById('chartAnos');
+      if (canvas && typeof Chart !== 'undefined') {
+        biChartInstances['anos'] = new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels: labels.length > 0 ? labels : ['Sem dados de ano'],
+            datasets: [{
+              label: 'Volume Emitido',
+              data: values.length > 0 ? values : [0],
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+              fill: true,
+              tension: 0.35,
+              pointBackgroundColor: '#10b981',
+              pointHoverRadius: 6,
+              pointRadius: 4,
+              borderWidth: 2
+            }]
+          },
+          options: {
+            ...biChartDarkOptions,
+            scales: {
+              x: {
+                grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+                ticks: { color: '#94a3b8', font: { size: 10 } }
+              },
+              y: {
+                grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+                ticks: { color: '#94a3b8', font: { size: 10 } }
+              }
+            },
+            plugins: {
+              ...biChartDarkOptions.plugins,
+              legend: { display: false },
+              tooltip: {
+                ...biChartDarkOptions.plugins.tooltip,
+                callbacks: {
+                  label: function(ctx) {
+                    const val = ctx.raw || 0;
+                    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                    return ` Ano ${ctx.label}: ${val.toLocaleString('pt-BR')} documentos (${pct}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    function renderChartQualidade(docs, total) {
+      const metrics = [
+        { label: 'Titular / Beneficiário', check: d => Boolean(d.beneficiario && String(d.beneficiario).trim()) },
+        { label: 'CPF Válido', check: d => isCpfValid(d.cpf) },
+        { label: 'RG / Identidade', check: d => Boolean(d.rg && String(d.rg).trim()) },
+        { label: 'Nome do Curso', check: d => Boolean(d.curso && String(d.curso).trim()) },
+        { label: 'Faculdade Emissora', check: d => Boolean(d.faculdade && String(d.faculdade).trim()) },
+        { label: 'Carga Horária', check: d => Boolean(d.carga_horaria && String(d.carga_horaria).trim()) },
+        { label: 'Data do Documento', check: d => Boolean(d.data && String(d.data).trim()) },
+        { label: 'Revisão Humana Aprovada', check: d => safeString(d.status_conferencia).toLowerCase() === 'aprovado' }
+      ];
+
+      const labels = metrics.map(m => m.label);
+      const counts = metrics.map(m => docs.filter(m.check).length);
+      const percentages = counts.map(c => total > 0 ? parseFloat(((c / total) * 100).toFixed(1)) : 0);
+
+      destroyBIChart('qualidade');
+      const canvas = document.getElementById('chartQualidade');
+      if (canvas && typeof Chart !== 'undefined') {
+        biChartInstances['qualidade'] = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Taxa de Conformidade (%)',
+              data: percentages,
+              backgroundColor: percentages.map(p => p >= 85 ? 'rgba(34, 197, 94, 0.8)' : (p >= 50 ? 'rgba(234, 179, 8, 0.8)' : 'rgba(239, 68, 68, 0.8)')),
+              borderColor: percentages.map(p => p >= 85 ? '#16a34a' : (p >= 50 ? '#ca8a04' : '#dc2626')),
+              borderWidth: 1,
+              borderRadius: 4
+            }]
+          },
+          options: {
+            ...biChartDarkOptions,
+            indexAxis: 'y',
+            scales: {
+              x: {
+                min: 0,
+                max: 100,
+                grid: { color: 'rgba(255, 255, 255, 0.06)', drawBorder: false },
+                ticks: {
+                  color: '#94a3b8',
+                  font: { size: 10 },
+                  callback: val => `${val}%`
+                }
+              },
+              y: {
+                grid: { display: false },
+                ticks: { color: '#cbd5e1', font: { size: 10.5 } }
+              }
+            },
+            plugins: {
+              ...biChartDarkOptions.plugins,
+              legend: { display: false },
+              tooltip: {
+                ...biChartDarkOptions.plugins.tooltip,
+                callbacks: {
+                  label: function(ctx) {
+                    const idx = ctx.dataIndex;
+                    const pct = ctx.raw || 0;
+                    const cnt = counts[idx] || 0;
+                    return ` ${pct}% (${cnt.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')} docs)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    function renderMatrixTable(docs, total) {
+      const naturezas = [
+        'Graduação / Curso Superior',
+        'Pós-Graduação Lato Sensu (Especialização/MBA)',
+        'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)',
+        'Curso Técnico / Profissionalizante',
+        'Extensão / Aperfeiçoamento',
+        'Não identificada'
+      ];
+
+      const tipos = [
+        'Diploma',
+        'Certificado',
+        'Histórico Escolar',
+        'Declaração / Atestado',
+        'Outro / Não identificado'
+      ];
+
+      // Inicializa matriz [natureza][tipo]
+      const matrix = {};
+      const rowTotals = {};
+      const colTotals = {};
+      tipos.forEach(t => colTotals[t] = 0);
+
+      naturezas.forEach(n => {
+        matrix[n] = {};
+        rowTotals[n] = 0;
+        tipos.forEach(t => matrix[n][t] = 0);
+      });
+
+      docs.forEach(doc => {
+        // Classifica Natureza
+        const rawNat = normalizeText(safeString(doc.natureza_curso));
+        let matchedNat = 'Não identificada';
+        if (rawNat.includes('graduacao') || rawNat.includes('superior') || rawNat.includes('bacharel') || rawNat.includes('licenciatura') || rawNat.includes('tecnologo')) {
+          matchedNat = 'Graduação / Curso Superior';
+        } else if (rawNat.includes('lato sensu') || rawNat.includes('especializacao') || rawNat.includes('mba')) {
+          matchedNat = 'Pós-Graduação Lato Sensu (Especialização/MBA)';
+        } else if (rawNat.includes('stricto sensu') || rawNat.includes('mestrado') || rawNat.includes('doutorado')) {
+          matchedNat = 'Pós-Graduação Stricto Sensu (Mestrado/Doutorado)';
+        } else if (rawNat.includes('tecnico') || rawNat.includes('profissionalizante')) {
+          matchedNat = 'Curso Técnico / Profissionalizante';
+        } else if (rawNat.includes('extensao') || rawNat.includes('aperfeicoamento') || rawNat.includes('capacitacao')) {
+          matchedNat = 'Extensão / Aperfeiçoamento';
+        }
+
+        // Classifica Tipo
+        const rawTipo = normalizeText(safeString(doc.tipo_documento));
+        let matchedTipo = 'Outro / Não identificado';
+        if (rawTipo.includes('diploma')) matchedTipo = 'Diploma';
+        else if (rawTipo.includes('certificado')) matchedTipo = 'Certificado';
+        else if (rawTipo.includes('historico')) matchedTipo = 'Histórico Escolar';
+        else if (rawTipo.includes('declaracao') || rawTipo.includes('atestado')) matchedTipo = 'Declaração / Atestado';
+
+        matrix[matchedNat][matchedTipo]++;
+        rowTotals[matchedNat]++;
+        colTotals[matchedTipo]++;
+      });
+
+      const grandTotal = Object.values(rowTotals).reduce((a, b) => a + b, 0);
+
+      const tbody = document.getElementById('matrixTableBody');
+      if (!tbody) return;
+
+      tbody.innerHTML = naturezas.map(n => {
+        const rowTotal = rowTotals[n];
+        const rowPct = grandTotal > 0 ? ((rowTotal / grandTotal) * 100).toFixed(1) : '0.0';
+        const cells = tipos.map(t => {
+          const c = matrix[n][t];
+          const cPct = grandTotal > 0 ? ((c / grandTotal) * 100).toFixed(1) : '0.0';
+          let highlight = 'text-slate-400';
+          if (c > 0) highlight = 'bg-emerald-500/10 text-emerald-300 font-semibold';
+          let displayVal = `${c}`;
+          if (biState.unitMode === 'relativo') displayVal = `${cPct}%`;
+          else if (biState.unitMode === 'ambos') displayVal = `${c} (${cPct}%)`;
+          return `<td class="p-2.5 text-center ${highlight}">${displayVal}</td>`;
+        }).join('');
+
+        let displayRowTotal = `${rowTotal} (${rowPct}%)`;
+        if (biState.unitMode === 'absoluto') displayRowTotal = `${rowTotal}`;
+        else if (biState.unitMode === 'relativo') displayRowTotal = `${rowPct}%`;
+
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="p-2.5 text-slate-200 font-sans font-medium text-xs flex items-center justify-between">
+              <span>${n}</span>
+              <button type="button" onclick="filterFromBI('natureza', '${escapeHtmlAttr(n)}')" class="text-[10px] text-purple-400 hover:text-purple-300 ml-2 no-print">
+                Filtrar ➔
+              </button>
+            </td>
+            ${cells}
+            <td class="p-2.5 text-right font-bold text-white bg-slate-950/50">${displayRowTotal}</td>
+          </tr>
+        `;
+      }).join('') + `
+        <tr class="bg-slate-950 text-white font-bold border-t-2 border-slate-800">
+          <td class="p-2.5 font-sans text-xs">TOTAL GERAL</td>
+          ${tipos.map(t => {
+            const colTot = colTotals[t];
+            const colPct = grandTotal > 0 ? ((colTot / grandTotal) * 100).toFixed(1) : '0.0';
+            let displayCol = `${colTot} (${colPct}%)`;
+            if (biState.unitMode === 'absoluto') displayCol = `${colTot}`;
+            else if (biState.unitMode === 'relativo') displayCol = `${colPct}%`;
+            return `<td class="p-2.5 text-center text-cyan-300">${displayCol}</td>`;
+          }).join('')}
+          <td class="p-2.5 text-right text-emerald-400 font-extrabold text-sm">${grandTotal.toLocaleString('pt-BR')} (100%)</td>
+        </tr>
+      `;
+    }
+
+    function exportBIReport() {
+      const allDocs = documents || [];
+      const totalAcervo = allDocs.length;
+      const classifDocs = allDocs.filter(d => !isDocumentUnprocessed(d));
+      const unprocDocs = allDocs.filter(d => isDocumentUnprocessed(d));
+      const aprovDocs = classifDocs.filter(d => safeString(d.status_conferencia).toLowerCase() === 'aprovado');
+      const nowStr = new Date().toLocaleString('pt-BR');
+
+      const lines = [
+        '='.repeat(80),
+        'JOACLASSIFICADOR - RELATÓRIO ESTATÍSTICO DE BUSINESS INTELLIGENCE (BI)',
+        'Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>',
+        `Data e Hora de Emissão: ${nowStr}`,
+        '='.repeat(80),
+        '',
+        '1. RESUMO EXECUTIVO DO ACERVO',
+        `  • Total de Documentos Indexados : ${totalAcervo}`,
+        `  • Classificados pela IA com OK  : ${classifDocs.length} (${totalAcervo > 0 ? ((classifDocs.length / totalAcervo) * 100).toFixed(1) : 0}%)`,
+        `  • Pendentes de Leitura / OCR    : ${unprocDocs.length} (${totalAcervo > 0 ? ((unprocDocs.length / totalAcervo) * 100).toFixed(1) : 0}%)`,
+        `  • Revisão Humana Aprovada       : ${aprovDocs.length} (${classifDocs.length > 0 ? ((aprovDocs.length / classifDocs.length) * 100).toFixed(1) : 0}% dos classificados)`,
+        '',
+        '-'.repeat(80),
+        '2. DISTRIBUIÇÃO POR NÍVEL / NATUREZA DO CURSO',
+        '-'.repeat(80)
+      ];
+
+      const countsNat = {};
+      classifDocs.forEach(d => {
+        const n = safeString(d.natureza_curso).trim() || 'Não identificada';
+        countsNat[n] = (countsNat[n] || 0) + 1;
+      });
+      Object.entries(countsNat).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
+        const pct = classifDocs.length > 0 ? ((v / classifDocs.length) * 100).toFixed(1) : '0.0';
+        lines.push(`  • ${k.padEnd(50, '.')} ${String(v).padStart(5, ' ')} (${pct}%)`);
+      });
+
+      lines.push('');
+      lines.push('-'.repeat(80));
+      lines.push('3. DISTRIBUIÇÃO POR TIPO DE DOCUMENTO');
+      lines.push('-'.repeat(80));
+      const countsTipo = {};
+      classifDocs.forEach(d => {
+        const t = safeString(d.tipo_documento).trim() || 'Outro / Não identificado';
+        countsTipo[t] = (countsTipo[t] || 0) + 1;
+      });
+      Object.entries(countsTipo).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
+        const pct = classifDocs.length > 0 ? ((v / classifDocs.length) * 100).toFixed(1) : '0.0';
+        lines.push(`  • ${k.padEnd(50, '.')} ${String(v).padStart(5, ' ')} (${pct}%)`);
+      });
+
+      lines.push('');
+      lines.push('-'.repeat(80));
+      lines.push('4. TOP 10 INSTITUIÇÕES EMISSORAS');
+      lines.push('-'.repeat(80));
+      const countsFac = {};
+      classifDocs.forEach(d => {
+        const f = safeString(d.faculdade).trim() || 'Não informada';
+        countsFac[f] = (countsFac[f] || 0) + 1;
+      });
+      Object.entries(countsFac).sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([k, v], i) => {
+        const pct = classifDocs.length > 0 ? ((v / classifDocs.length) * 100).toFixed(1) : '0.0';
+        lines.push(`  [${String(i + 1).padStart(2, '0')}] ${k.padEnd(46, '.')} ${String(v).padStart(5, ' ')} (${pct}%)`);
+      });
+
+      lines.push('');
+      lines.push('='.repeat(80));
+      lines.push('FIM DO RELATÓRIO ESTATÍSTICO DE BI');
+      lines.push('='.repeat(80));
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio_estatistico_bi_${new Date().toISOString().slice(0, 10)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Relatório estatístico em TXT baixado com sucesso!', 'success');
+    }
+
+    function exportBICSV() {
+      const allDocs = documents || [];
+      const classifDocs = allDocs.filter(d => !isDocumentUnprocessed(d));
+      const total = classifDocs.length;
+
+      const rows = [
+        ['Secao', 'Categoria', 'Quantidade_Absoluta', 'Percentual_Relativo', 'Observacao']
+      ];
+
+      // Naturezas
+      const countsNat = {};
+      classifDocs.forEach(d => {
+        const n = safeString(d.natureza_curso).trim() || 'Não identificada';
+        countsNat[n] = (countsNat[n] || 0) + 1;
+      });
+      Object.entries(countsNat).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
+        const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+        rows.push(['Natureza_Curso', k, v, `${pct}%`, '']);
+      });
+
+      // Tipos
+      const countsTipo = {};
+      classifDocs.forEach(d => {
+        const t = safeString(d.tipo_documento).trim() || 'Outro';
+        countsTipo[t] = (countsTipo[t] || 0) + 1;
+      });
+      Object.entries(countsTipo).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
+        const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+        rows.push(['Tipo_Documento', k, v, `${pct}%`, '']);
+      });
+
+      // Top Instituições
+      const countsFac = {};
+      classifDocs.forEach(d => {
+        const f = safeString(d.faculdade).trim() || 'Não informada';
+        countsFac[f] = (countsFac[f] || 0) + 1;
+      });
+      Object.entries(countsFac).sort((a, b) => b[1] - a[1]).slice(0, 15).forEach(([k, v]) => {
+        const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+        rows.push(['Instituicao_Emissora', k, v, `${pct}%`, '']);
+      });
+
+      const csvContent = '\uFEFF' + rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `estatisticas_joaclassificador_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Tabela estatística CSV baixada com sucesso!', 'success');
     }
   </script>
 </body>
