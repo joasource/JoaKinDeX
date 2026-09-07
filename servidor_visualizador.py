@@ -78,26 +78,47 @@ except ImportError:
     from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
 
 
+def clean_path_input(raw: Any) -> str:
+    """Remove aspas simples/duplas e espaços das extremidades de caminhos colados no console."""
+    if not raw:
+        return ""
+    s = str(raw).strip()
+    while (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+        s = s[1:-1].strip()
+    if len(s) > 1 and s.endswith("/"):
+        s = s.rstrip("/")
+    return s
+
+
 def resolve_pdf_dir(specified_dir: str = None) -> str:
-    """Retorna o diretório de PDFs padrão neutro ou o caminho especificado."""
-    if specified_dir and specified_dir not in ["./pdf", "pdf"]:
-        return str(specified_dir)
-    return "./pdf"
+    """Retorna o diretório de PDFs padrão neutro ou o caminho especificado limpo."""
+    if not specified_dir:
+        return "./pdf"
+    clean = clean_path_input(specified_dir)
+    if clean in ["./pdf", "pdf", ""]:
+        return "./pdf"
+    p = Path(clean).expanduser()
+    if p.is_file():
+        p = p.parent
+    return str(p.resolve())
 
 
 def resolve_json_path(specified_json: str = None) -> str:
     """
-    Resolve o caminho do arquivo JSON. Se for informado um diretório,
-    retorna o caminho esperado de classificacao_diplomas.json.
+    Resolve o caminho do arquivo JSON. Se for informado um diretório ou pasta de saída,
+    retorna o caminho completo para classificacao_diplomas.json.
     """
-    if specified_json:
-        p = Path(specified_json).expanduser()
-        if p.is_dir():
-            return str(p / "classificacao_diplomas.json")
-        if p.suffix.lower() == ".json":
-            return str(p)
-        return str(p / "classificacao_diplomas.json")
-    return "./saida/classificacao_diplomas.json"
+    if not specified_json:
+        return "./saida/classificacao_diplomas.json"
+    clean = clean_path_input(specified_json)
+    if clean in ["./saida/classificacao_diplomas.json", "saida/classificacao_diplomas.json", "./saida", "saida", ""]:
+        return "./saida/classificacao_diplomas.json"
+    p = Path(clean).expanduser()
+    if p.is_dir():
+        return str((p / "classificacao_diplomas.json").resolve())
+    if p.suffix.lower() == ".json":
+        return str(p.resolve())
+    return str((p / "classificacao_diplomas.json").resolve())
 
 
 def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, default_port: int):
@@ -111,6 +132,9 @@ def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, defa
     print("=" * 70)
     print("Pressione ENTER para aceitar o valor padrão sugerido entre colchetes.\n")
 
+    default_pdf_dir = resolve_pdf_dir(default_pdf_dir)
+    default_json_path = resolve_json_path(default_json_path)
+
     # Opção inicial se houver configurações personalizadas salvas
     if has_custom_config("visualizador"):
         print("⚙️  Configurações salvas da execução anterior detectadas:")
@@ -121,8 +145,8 @@ def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, defa
             if init_choice == "2":
                 reset_visualizer_config()
                 factory = get_factory_defaults()["visualizador"]
-                default_pdf_dir = factory["pdf_dir"]
-                default_json_path = factory["json_path"]
+                default_pdf_dir = resolve_pdf_dir(factory["pdf_dir"])
+                default_json_path = resolve_json_path(factory["json_path"])
                 default_port = factory["port"]
                 print("   [✓] Configurações do visualizador restauradas para os padrões de fábrica neutros!\n")
         except (EOFError, KeyboardInterrupt):
@@ -138,20 +162,23 @@ def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, defa
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
 
-        if resp_pdf.lower() in ["reset", "resetar", "padrao", "fábrica", "fabrica"]:
+        clean_pdf = clean_path_input(resp_pdf)
+        if clean_pdf.lower() in ["reset", "resetar", "padrao", "fábrica", "fabrica"]:
             reset_visualizer_config()
             factory = get_factory_defaults()["visualizador"]
-            default_pdf_dir = factory["pdf_dir"]
-            default_json_path = factory["json_path"]
+            default_pdf_dir = resolve_pdf_dir(factory["pdf_dir"])
+            default_json_path = resolve_json_path(factory["json_path"])
             default_port = factory["port"]
             print("   [✓] Configurações restauradas para os padrões de fábrica neutros!")
             continue
 
-        if not resp_pdf:
+        if not clean_pdf:
             chosen_pdf_dir = default_pdf_dir
             break
         else:
-            p = Path(resp_pdf).expanduser().resolve()
+            p = Path(clean_pdf).expanduser().resolve()
+            if p.is_file():
+                p = p.parent
             if not p.exists() or not p.is_dir():
                 print(f"   ⚠️  Aviso: Diretório '{p}' não existe ou não é uma pasta.")
                 try:
@@ -159,10 +186,10 @@ def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, defa
                 except (EOFError, KeyboardInterrupt):
                     sys.exit(0)
                 if conf in ["s", "sim", "y", "yes"]:
-                    chosen_pdf_dir = str(resp_pdf)
+                    chosen_pdf_dir = str(p)
                     break
             else:
-                chosen_pdf_dir = str(resp_pdf)
+                chosen_pdf_dir = str(p)
                 break
 
     # 2. Pasta de saída ou arquivo JSON
@@ -174,15 +201,25 @@ def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, defa
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
 
-        if not resp_json:
+        clean_json = clean_path_input(resp_json)
+        if clean_json.lower() in ["reset", "resetar", "padrao", "fábrica", "fabrica"]:
+            reset_visualizer_config()
+            factory = get_factory_defaults()["visualizador"]
+            default_json_path = resolve_json_path(factory["json_path"])
+            print("   [✓] Caminho do JSON restaurado para o padrão de fábrica neutro!")
+            continue
+
+        if not clean_json:
             chosen_json_path = default_json_path
             break
         else:
-            p_str = resolve_json_path(resp_json)
+            p_str = resolve_json_path(clean_json)
             p = Path(p_str).expanduser().resolve()
             if not p.exists():
                 print(f"   ℹ️  Arquivo '{p_str}' ainda não existe (será criado ao salvar).")
-            chosen_json_path = str(resp_json)
+            else:
+                print(f"   ↳ Arquivo de dados JSON identificado: '{p_str}'")
+            chosen_json_path = str(p)
             break
 
     # 3. Porta
@@ -207,7 +244,7 @@ def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, defa
         except ValueError:
             print("   ⚠️  Digite um número de porta válido.")
 
-    # Salva opções configuradas no visualizador
+    # Salva opções configuradas no visualizador de forma garantida
     save_visualizer_config({
         "pdf_dir": str(chosen_pdf_dir),
         "json_path": str(chosen_json_path),
@@ -476,8 +513,12 @@ class ConferenciaServer:
         openai_key: str = None,
         openai_base_url: str = None
     ):
-        self.json_path = Path(json_path).resolve()
-        self.pdf_dir = Path(pdf_dir).resolve()
+        self.json_path = Path(resolve_json_path(json_path)).resolve()
+        self.pdf_dir = Path(resolve_pdf_dir(pdf_dir)).resolve()
+        if self.json_path.is_dir():
+            self.json_path = (self.json_path / "classificacao_diplomas.json").resolve()
+        if self.pdf_dir.is_file():
+            self.pdf_dir = self.pdf_dir.parent.resolve()
         self.html_path = Path(html_path).resolve()
         self.provider = provider or "ollama"
         self.model = model
@@ -536,6 +577,8 @@ class ConferenciaServer:
     def build_pdf_index(self):
         """Indexa os arquivos PDFs da pasta (inclusive subpastas) mapeando seus MD5."""
         self.md5_to_file.clear()
+        if self.pdf_dir.is_file():
+            self.pdf_dir = self.pdf_dir.parent.resolve()
         if not self.pdf_dir.exists():
             print(f"[Aviso] Pasta de PDFs não encontrada: {self.pdf_dir}")
             return
@@ -554,7 +597,10 @@ class ConferenciaServer:
     def load_data(self):
         data = []
         existing_by_md5 = {}
-        if self.json_path.exists():
+        if self.json_path.is_dir():
+            self.json_path = (self.json_path / "classificacao_diplomas.json").resolve()
+
+        if self.json_path.exists() and self.json_path.is_file():
             try:
                 with open(self.json_path, "r", encoding="utf-8") as f:
                     loaded = json.load(f)
@@ -566,7 +612,7 @@ class ConferenciaServer:
                                 existing_by_md5[h] = item
                                 data.append(item)
             except Exception as e:
-                print(f"[Erro] Falha ao ler JSON: {e}")
+                print(f"[Erro] Falha ao ler JSON ({self.json_path}): {e}")
                 data = []
 
         # Reconciliação com arquivos da pasta individuais caso existam documentos não consolidados
@@ -647,6 +693,8 @@ class ConferenciaServer:
         return data
 
     def save_data(self, data):
+        if self.json_path.is_dir():
+            self.json_path = (self.json_path / "classificacao_diplomas.json").resolve()
         self.json_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_json = self.json_path.parent / f".tmp_{self.json_path.name}"
         # No arquivo consolidado em disco, salva apenas os documentos que já foram de fato processados
@@ -1235,7 +1283,7 @@ def create_handler(server_ctx: ConferenciaServer):
                 new_json = updates_visualizador.get("json_path") or updates_classificador.get("output_dir")
 
                 if new_pdf:
-                    p_pdf = Path(new_pdf).expanduser().resolve()
+                    p_pdf = Path(resolve_pdf_dir(new_pdf)).expanduser().resolve()
                     if p_pdf != server_ctx.pdf_dir:
                         server_ctx.pdf_dir = p_pdf
                         server_ctx.build_pdf_index()
@@ -1325,7 +1373,7 @@ def create_handler(server_ctx: ConferenciaServer):
                 if payload:
                     new_pdf = payload.get("pdf_dir") or payload.get("input")
                     if new_pdf:
-                        p_pdf = Path(new_pdf).expanduser().resolve()
+                        p_pdf = Path(resolve_pdf_dir(new_pdf)).expanduser().resolve()
                         if p_pdf != server_ctx.pdf_dir:
                             server_ctx.pdf_dir = p_pdf
                             server_ctx.build_pdf_index()

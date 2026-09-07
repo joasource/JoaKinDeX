@@ -59,8 +59,53 @@ def get_factory_defaults() -> Dict[str, Any]:
     }
 
 
+def clean_path_string(raw: Any) -> str:
+    """Remove aspas e espaços de caminhos colados no console ou enviados via payload."""
+    if not raw:
+        return ""
+    s = str(raw).strip()
+    while (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+        s = s[1:-1].strip()
+    if len(s) > 1 and s.endswith("/"):
+        s = s.rstrip("/")
+    return s
+
+
+def resolve_classifier_output_dir(raw: Any) -> str:
+    """Garante que output_dir do classificador seja SEMPRE um diretório."""
+    s = clean_path_string(raw)
+    if not s or s in ["./saida", "saida"]:
+        return "./saida"
+    p = Path(s).expanduser()
+    if p.is_file() or p.suffix.lower() == ".json":
+        p = p.parent
+    return str(p.resolve())
+
+
+def resolve_visualizer_json_path(raw: Any) -> str:
+    """Garante que json_path do visualizador seja SEMPRE um arquivo .json válido."""
+    s = clean_path_string(raw)
+    if not s or s in ["./saida/classificacao_diplomas.json", "saida/classificacao_diplomas.json", "./saida", "saida"]:
+        return "./saida/classificacao_diplomas.json"
+    p = Path(s).expanduser()
+    if p.is_dir() or p.suffix.lower() != ".json":
+        p = p / "classificacao_diplomas.json"
+    return str(p.resolve())
+
+
+def resolve_dir_path(raw: Any, default: str = "./pdf") -> str:
+    """Garante que seja um diretório (se for arquivo, usa o pai)."""
+    s = clean_path_string(raw)
+    if not s or s in [default, default.lstrip("./")]:
+        return default
+    p = Path(s).expanduser()
+    if p.is_file():
+        p = p.parent
+    return str(p.resolve())
+
+
 def load_all_config() -> Dict[str, Any]:
-    """Carrega o arquivo de configuração ou retorna padrões de fábrica."""
+    """Carrega o arquivo de configuração, normaliza caminhos ou retorna padrões de fábrica."""
     cfg_file = get_config_file_path()
     defaults = get_factory_defaults()
 
@@ -79,6 +124,20 @@ def load_all_config() -> Dict[str, Any]:
                 if sec in data and isinstance(data[sec], dict):
                     for k, v in data[sec].items():
                         merged[sec][k] = v
+
+            # Auto-repara e higieniza caminhos para evitar corrupções salvas
+            if "classificador" in merged and isinstance(merged["classificador"], dict):
+                if merged["classificador"].get("output_dir"):
+                    merged["classificador"]["output_dir"] = resolve_classifier_output_dir(merged["classificador"]["output_dir"])
+                if merged["classificador"].get("input"):
+                    merged["classificador"]["input"] = resolve_dir_path(merged["classificador"]["input"], default="./pdf")
+
+            if "visualizador" in merged and isinstance(merged["visualizador"], dict):
+                if merged["visualizador"].get("json_path"):
+                    merged["visualizador"]["json_path"] = resolve_visualizer_json_path(merged["visualizador"]["json_path"])
+                if merged["visualizador"].get("pdf_dir"):
+                    merged["visualizador"]["pdf_dir"] = resolve_dir_path(merged["visualizador"]["pdf_dir"], default="./pdf")
+
             return merged
     except Exception:
         return defaults
@@ -126,17 +185,17 @@ def save_classifier_config(updates: Dict[str, Any]) -> None:
         if k in config["classificador"]:
             config["classificador"][k] = v
 
-    # Sincroniza caminhos com o visualizador para conveniência do usuário
+    # Sincroniza caminhos garantindo tipos corretos (output_dir = pasta, json_path = arquivo)
     if "input" in updates and updates["input"]:
-        in_p = Path(updates["input"])
-        if in_p.is_file():
-            config["visualizador"]["pdf_dir"] = str(in_p.parent)
-        else:
-            config["visualizador"]["pdf_dir"] = str(in_p)
+        resolved_in = resolve_dir_path(updates["input"], default="./pdf")
+        config["classificador"]["input"] = resolved_in
+        config["visualizador"]["pdf_dir"] = resolved_in
 
     if "output_dir" in updates and updates["output_dir"]:
-        out_p = Path(updates["output_dir"])
-        config["visualizador"]["json_path"] = str(out_p / "classificacao_diplomas.json")
+        resolved_out = resolve_classifier_output_dir(updates["output_dir"])
+        json_file = resolve_visualizer_json_path(resolved_out)
+        config["classificador"]["output_dir"] = resolved_out
+        config["visualizador"]["json_path"] = json_file
 
     if "provider" in updates and updates["provider"]:
         config["visualizador"]["provider"] = updates["provider"]
@@ -173,11 +232,23 @@ def get_visualizer_config() -> Dict[str, Any]:
 
 
 def save_visualizer_config(updates: Dict[str, Any]) -> None:
-    """Atualiza e salva configurações do visualizador."""
+    """Atualiza e salva configurações do visualizador garantindo caminhos limpos e sincronizados."""
     config = load_all_config()
     for k, v in updates.items():
         if k in config["visualizador"]:
             config["visualizador"][k] = v
+
+    # Sincroniza caminhos com o classificador garantindo tipos corretos (output_dir = pasta, json_path = arquivo)
+    if "json_path" in updates and updates["json_path"]:
+        json_file = resolve_visualizer_json_path(updates["json_path"])
+        out_dir = resolve_classifier_output_dir(json_file)
+        config["visualizador"]["json_path"] = json_file
+        config["classificador"]["output_dir"] = out_dir
+
+    if "pdf_dir" in updates and updates["pdf_dir"]:
+        resolved_pdf = resolve_dir_path(updates["pdf_dir"], default="./pdf")
+        config["visualizador"]["pdf_dir"] = resolved_pdf
+        config["classificador"]["input"] = resolved_pdf
 
     if "openai_key" in updates and updates["openai_key"]:
         config["classificador"]["openai_key"] = updates["openai_key"]

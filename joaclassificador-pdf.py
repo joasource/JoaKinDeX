@@ -68,7 +68,10 @@ try:
         save_classifier_config,
         reset_classifier_config,
         has_custom_config,
-        get_factory_defaults
+        get_factory_defaults,
+        clean_path_string,
+        resolve_classifier_output_dir,
+        resolve_dir_path
     )
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -77,7 +80,10 @@ except ImportError:
         save_classifier_config,
         reset_classifier_config,
         has_custom_config,
-        get_factory_defaults
+        get_factory_defaults,
+        clean_path_string,
+        resolve_classifier_output_dir,
+        resolve_dir_path
     )
 
 try:
@@ -1182,9 +1188,13 @@ def save_consolidated_reports(
 # Menu Interativo e Auxiliares de Configuração
 # ---------------------------------------------------------------------------
 def resolve_default_input_path(specified: Optional[str] = None) -> str:
-    if specified and specified not in ["./pdf", "pdf"]:
-        return str(specified)
-    return "./pdf"
+    if not specified:
+        return "./pdf"
+    clean = clean_path_string(specified)
+    if clean in ["./pdf", "pdf", ""]:
+        return "./pdf"
+    p = Path(clean).expanduser()
+    return str(p.resolve())
 
 
 def count_pdfs_in_path(p: Path) -> int:
@@ -1243,7 +1253,8 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
 
-        if resp_input.lower() in ["reset", "resetar", "padrao", "fábrica", "fabrica"]:
+        clean_input = clean_path_string(resp_input)
+        if clean_input.lower() in ["reset", "resetar", "padrao", "fábrica", "fabrica"]:
             reset_classifier_config()
             factory = get_factory_defaults()["classificador"]
             for k, v in factory.items():
@@ -1252,7 +1263,7 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
             print("   [✓] Configurações restauradas para os padrões de fábrica neutros!")
             continue
 
-        raw_chosen = resp_input if resp_input else default_input
+        raw_chosen = clean_input if clean_input else default_input
         chosen_path = Path(raw_chosen).expanduser().resolve()
         if not chosen_path.exists():
             print(f"   ⚠️  Aviso: Caminho '{chosen_path}' não foi encontrado.")
@@ -1261,7 +1272,7 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
             except (EOFError, KeyboardInterrupt):
                 sys.exit(0)
             if conf in ["s", "sim", "y", "yes"]:
-                args.input = raw_chosen
+                args.input = str(chosen_path)
                 break
         else:
             pdf_count = count_pdfs_in_path(chosen_path)
@@ -1272,15 +1283,15 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
                 except (EOFError, KeyboardInterrupt):
                     sys.exit(0)
                 if conf in ["s", "sim", "y", "yes"]:
-                    args.input = raw_chosen
+                    args.input = str(chosen_path)
                     break
             else:
                 print(f"   ↳ {pdf_count} arquivo(s) PDF localizado(s) para processar.")
-                args.input = raw_chosen
+                args.input = str(chosen_path)
                 break
 
     # 2. Pasta de saída
-    default_out = args.output_dir or "./saida"
+    default_out = resolve_classifier_output_dir(args.output_dir or "./saida")
     while True:
         try:
             resp_out = input(f"\n📄 Pasta de saída dos relatórios [{default_out}]: ").strip()
@@ -1288,8 +1299,15 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
 
-        chosen_out = resp_out if resp_out else default_out
-        args.output_dir = chosen_out
+        clean_out = clean_path_string(resp_out)
+        if clean_out.lower() in ["reset", "resetar", "padrao", "fábrica", "fabrica"]:
+            factory = get_factory_defaults()["classificador"]
+            default_out = resolve_classifier_output_dir(factory.get("output_dir", "./saida"))
+            print("   [✓] Pasta de saída restaurada para o padrão de fábrica neutro!")
+            continue
+
+        raw_out = clean_out if clean_out else default_out
+        args.output_dir = resolve_classifier_output_dir(raw_out)
         break
 
     # 3. Provedor de IA
@@ -1574,7 +1592,8 @@ def run_batch_classification(
             except Exception as ex_cb:
                 print(f"[Aviso Callback] Erro ao notificar: {ex_cb}")
 
-    in_p = Path(input_path).expanduser().resolve()
+    in_clean = clean_path_string(input_path) if input_path else "./pdf"
+    in_p = Path(in_clean).expanduser().resolve()
     if not in_p.exists():
         err_msg = f"Caminho de entrada não encontrado: {in_p}"
         print(f"[ERRO] {err_msg}")
@@ -1632,7 +1651,7 @@ def run_batch_classification(
     else:
         model_name = getattr(client, "model", model or "llm")
 
-    out_dir = Path(output_dir).expanduser().resolve()
+    out_dir = Path(resolve_classifier_output_dir(output_dir)).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     indiv_dir = out_dir / "individuais"
     if not no_individual:
@@ -2218,6 +2237,8 @@ def main():
         print("🎓 JOACLASSIFICADOR - CLASSIFICAÇÃO DE DOCUMENTOS EM MASSA")
         print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
         print("=" * 70)
+        args.input = resolve_dir_path(args.input, default="./pdf") if (args.input and not (Path(clean_path_string(args.input)).is_file() and Path(clean_path_string(args.input)).suffix.lower() == ".pdf")) else (str(Path(clean_path_string(args.input)).expanduser().resolve()) if args.input else "./pdf")
+        args.output_dir = resolve_classifier_output_dir(args.output_dir)
         # Salva opções configuradas via CLI para persistência
         save_classifier_config({
             "input": str(args.input),
