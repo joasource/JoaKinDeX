@@ -18,11 +18,17 @@ import time
 import hashlib
 import argparse
 import threading
+import socket
 from pathlib import Path
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Union
+
+
+class ReusableThreadingHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+    daemon_threads = True
 
 try:
     from classificador import (
@@ -119,6 +125,31 @@ def resolve_json_path(specified_json: str = None) -> str:
     if p.suffix.lower() == ".json":
         return str(p.resolve())
     return str((p / "classificacao_diplomas.json").resolve())
+
+
+def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
+    """Verifica se uma porta TCP já está em uso na máquina."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((host, port))
+            return False
+        except OSError:
+            return True
+
+
+def find_available_port(start_port: int = 8088, host: str = "0.0.0.0", max_tries: int = 50) -> int:
+    """Encontra a próxima porta livre a partir de start_port."""
+    port = start_port
+    for _ in range(max_tries):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind((host, port))
+                return port
+            except OSError:
+                port += 1
+    return start_port
 
 
 def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, default_port: int):
@@ -223,20 +254,29 @@ def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, defa
             break
 
     # 3. Porta
-    chosen_port = default_port
+    suggested_port = default_port
+    if is_port_in_use(suggested_port):
+        suggested_port = find_available_port(suggested_port if suggested_port != 8080 else 8088)
+
+    chosen_port = suggested_port
     while True:
         try:
-            resp_port = input(f"\n🌐 Porta HTTP [{default_port}]: ").strip()
+            resp_port = input(f"\n🌐 Porta HTTP [{suggested_port}]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
 
         if not resp_port:
-            chosen_port = default_port
+            chosen_port = suggested_port
             break
         try:
             p_val = int(resp_port)
             if 1 <= p_val <= 65535:
+                if is_port_in_use(p_val):
+                    print(f"   ⚠️  Aviso: A porta {p_val} já está em uso por outro serviço na máquina.")
+                    alt_free = find_available_port(p_val + 1)
+                    print(f"       Recomendamos utilizar a porta {alt_free} ou outra porta livre.")
+                    continue
                 chosen_port = p_val
                 break
             else:
@@ -1715,8 +1755,14 @@ def main():
     )
     handler = create_handler(ctx)
 
+    if is_port_in_use(port_final):
+        old_port = port_final
+        port_final = find_available_port(port_final + 1)
+        print(f"⚠️  Aviso: A porta {old_port} está ocupada por outro processo no sistema.")
+        print(f"    Utilizando automaticamente a porta livre: {port_final}")
+
     server_address = ("0.0.0.0", port_final)
-    httpd = ThreadingHTTPServer(server_address, handler)
+    httpd = ReusableThreadingHTTPServer(server_address, handler)
 
     print("\n" + "=" * 70)
     print("🚀 JOACLASSIFICADOR - VISUALIZADOR DE CONFERÊNCIA HUMANA")
