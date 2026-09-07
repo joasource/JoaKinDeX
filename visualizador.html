@@ -108,11 +108,11 @@
           <span class="hidden sm:inline">Configuração & Lote</span>
         </button>
 
-        <!-- Botão Exportar JSON -->
-        <button onclick="exportJSON()" title="Exportar JSON Atualizado com as conferências realizadas"
+        <!-- Botão Exportar JSON e CSV -->
+        <button onclick="exportJSON()" title="Exportar dados em JSON e planilha CSV completa com todas as informações extraídas"
                 class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition shrink-0">
           <i class="fa-solid fa-download"></i>
-          <span>Exportar</span>
+          <span>Exportar (JSON + CSV)</span>
         </button>
       </div>
     </div>
@@ -3194,15 +3194,116 @@
     }
 
 
-    function exportJSON() {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(documents, null, 2));
+    // Exporta o arquivo JSON atualizado com a base de documentos
+    function exportJSONFile(showNotification = false) {
+      const allDocs = documents || [];
+      const jsonStr = JSON.stringify(allDocs, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `classificacao_diplomas_revisado_${Date.now()}.json`);
+      downloadAnchor.href = url;
+      downloadAnchor.download = `classificacao_diplomas_revisado_${timestamp}.json`;
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
-      downloadAnchor.remove();
-      showToast('Download do JSON iniciado!', 'success');
+      document.body.removeChild(downloadAnchor);
+      URL.revokeObjectURL(url);
+      if (showNotification) {
+        showToast('Download do arquivo JSON concluído!', 'success');
+      }
+    }
+
+    // Exporta uma planilha CSV COMPLETA com todas as informações extraídas do JSON
+    function exportFullCSV(showNotification = true) {
+      const allDocs = documents || [];
+      if (allDocs.length === 0) {
+        showToast('Nenhum documento disponível para exportação.', 'error');
+        return;
+      }
+
+      // Colunas estruturadas para compatibilidade analítica e humana
+      const columnDefs = [
+        { key: 'beneficiario', header: 'Beneficiario' },
+        { key: 'cpf', header: 'CPF' },
+        { key: 'rg', header: 'RG' },
+        { key: 'faculdade', header: 'Instituicao_Ensino' },
+        { key: 'curso', header: 'Curso' },
+        { key: 'natureza_curso', header: 'Natureza_Curso' },
+        { key: 'tipo_documento', header: 'Tipo_Documento' },
+        { key: 'carga_horaria', header: 'Carga_Horaria' },
+        { key: 'data', header: 'Data_Documento' },
+        { key: 'status_conferencia', header: 'Status_Conferencia' },
+        { key: 'revisado_em', header: 'Revisado_Em' },
+        { key: 'observacoes_conferencia', header: 'Observacoes_Conferencia' },
+        { key: 'status', header: 'Status_Processamento' },
+        { key: 'metodo_leitura', header: 'Metodo_Leitura' },
+        { key: 'tentativa_ocr_llm', header: 'Tentativa_OCR_LLM' },
+        { key: 'erro', header: 'Mensagem_Erro' },
+        { key: 'processado_em', header: 'Processado_Em' },
+        { key: 'nome_arquivo', header: 'Nome_Arquivo_PDF' },
+        { key: 'caminho_relativo', header: 'Caminho_Relativo' },
+        { key: 'md5', header: 'MD5' },
+        { key: 'data_criacao', header: 'Data_Criacao_PDF' },
+        { key: 'data_modificacao', header: 'Data_Modificacao_PDF' }
+      ];
+
+      // Mapeia chaves extras dinamicamente para garantir que nenhum metadado adicional seja omitido
+      const mappedKeys = new Set(columnDefs.map(c => c.key));
+      const extraKeys = new Set();
+      allDocs.forEach(doc => {
+        if (doc && typeof doc === 'object') {
+          Object.keys(doc).forEach(k => {
+            if (!mappedKeys.has(k)) extraKeys.add(k);
+          });
+        }
+      });
+      extraKeys.forEach(k => {
+        columnDefs.push({ key: k, header: k });
+      });
+
+      // Formata cada célula para compatibilidade com Excel e ferramentas de BI
+      function formatCsvCell(val) {
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'boolean') return val ? 'Sim' : 'Não';
+        if (typeof val === 'object') return JSON.stringify(val);
+        // Remove quebras de linha dentro do texto da célula para manter cada documento em uma linha
+        return String(val).replace(/\r?\n|\r/g, ' ').trim();
+      }
+
+      const headerRow = columnDefs.map(col => `"${col.header.replace(/"/g, '""')}"`).join(';');
+      const dataRows = allDocs.map(doc => {
+        return columnDefs.map(col => {
+          const rawVal = doc[col.key];
+          const cellStr = formatCsvCell(rawVal);
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }).join(';');
+      });
+
+      // UTF-8 BOM (\uFEFF) para abrir com acentuação correta no Microsoft Excel
+      const csvContent = '\uFEFF' + [headerRow, ...dataRows].join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.href = url;
+      downloadAnchor.download = `classificacao_diplomas_completo_${timestamp}.csv`;
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      document.body.removeChild(downloadAnchor);
+      URL.revokeObjectURL(url);
+
+      if (showNotification) {
+        showToast('Planilha CSV completa baixada com sucesso!', 'success');
+      }
+    }
+
+    // Exporta simultaneamente o JSON atualizado e a planilha CSV com todas as informações extraídas
+    function exportJSON() {
+      exportJSONFile(false);
+      setTimeout(() => {
+        exportFullCSV(false);
+      }, 200);
+      showToast('Exportação concluída! Baixando JSON e CSV com todas as informações extraídas.', 'success');
     }
 
     function showToast(msg, type = 'success') {
