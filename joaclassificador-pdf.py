@@ -1275,6 +1275,9 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
 
     # 2. Pasta de saída
     default_out = args.output_dir or "./saida"
+    p_def = Path(default_out)
+    if p_def.suffix.lower() == ".json":
+        default_out = str(p_def.parent)
     while True:
         try:
             resp_out = input(f"\n📄 Pasta de saída dos relatórios [{default_out}]: ").strip()
@@ -1283,6 +1286,9 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
             sys.exit(0)
 
         chosen_out = resp_out if resp_out else default_out
+        p_ch = Path(chosen_out)
+        if p_ch.suffix.lower() == ".json":
+            chosen_out = str(p_ch.parent)
         args.output_dir = chosen_out
         break
 
@@ -1627,6 +1633,8 @@ def run_batch_classification(
         model_name = getattr(client, "model", model or "llm")
 
     out_dir = Path(output_dir).expanduser().resolve()
+    if out_dir.suffix.lower() == ".json":
+        out_dir = out_dir.parent
     out_dir.mkdir(parents=True, exist_ok=True)
     indiv_dir = out_dir / "individuais"
     if not no_individual:
@@ -2161,6 +2169,11 @@ def main():
         defaults = get_factory_defaults()["classificador"]
         for k, v in defaults.items():
             setattr(args, k, v)
+
+    if getattr(args, "output_dir", None):
+        p_out = Path(args.output_dir)
+        if p_out.suffix.lower() == ".json":
+            args.output_dir = str(p_out.parent)
 
     # Detecta se foram passados argumentos explícitos via CLI
     explicit_cli_args = [

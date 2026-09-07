@@ -136,7 +136,12 @@ def save_classifier_config(updates: Dict[str, Any]) -> None:
 
     if "output_dir" in updates and updates["output_dir"]:
         out_p = Path(updates["output_dir"])
-        config["visualizador"]["json_path"] = str(out_p / "classificacao_diplomas.json")
+        if out_p.suffix.lower() == ".json":
+            config["classificador"]["output_dir"] = str(out_p.parent)
+            config["visualizador"]["json_path"] = str(out_p)
+        else:
+            config["classificador"]["output_dir"] = str(out_p)
+            config["visualizador"]["json_path"] = str(out_p / "classificacao_diplomas.json")
 
     if "provider" in updates and updates["provider"]:
         config["visualizador"]["provider"] = updates["provider"]
@@ -178,6 +183,21 @@ def save_visualizer_config(updates: Dict[str, Any]) -> None:
     for k, v in updates.items():
         if k in config["visualizador"]:
             config["visualizador"][k] = v
+
+    if "pdf_dir" in updates and updates["pdf_dir"]:
+        p_in = Path(updates["pdf_dir"])
+        if p_in.is_file():
+            config["classificador"]["input"] = str(p_in.parent)
+        else:
+            config["classificador"]["input"] = str(p_in)
+
+    if "json_path" in updates and updates["json_path"]:
+        jp = Path(updates["json_path"])
+        if jp.suffix.lower() == ".json":
+            config["classificador"]["output_dir"] = str(jp.parent)
+        else:
+            config["classificador"]["output_dir"] = str(jp)
+            config["visualizador"]["json_path"] = str(jp / "classificacao_diplomas.json")
 
     if "openai_key" in updates and updates["openai_key"]:
         config["classificador"]["openai_key"] = updates["openai_key"]
