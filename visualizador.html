@@ -394,13 +394,9 @@
           </div>
           <div class="font-mono text-xs text-slate-200 bg-slate-950 p-2 rounded border border-slate-800 break-all select-all" id="field_md5">-</div>
           
-          <div class="grid grid-cols-2 gap-2 text-[11px] pt-1 text-slate-400 border-t border-slate-800/80">
+          <div class="grid grid-cols-3 gap-2 text-[11px] pt-1 text-slate-400 border-t border-slate-800/80">
             <div>
-              <span class="block text-[10px] text-slate-500">Data Criação:</span>
-              <span id="field_data_criacao" class="font-mono text-slate-300">-</span>
-            </div>
-            <div>
-              <span class="block text-[10px] text-slate-500">Data Modificação:</span>
+              <span class="block text-[10px] text-slate-500">Data da última alteração:</span>
               <span id="field_data_modificacao" class="font-mono text-slate-300">-</span>
             </div>
             <div>
@@ -1716,8 +1712,13 @@
           });
 
         const response = await fetch('/api/documentos');
-        if (!response.ok) throw new Error(`Falha ao comunicar com o servidor (HTTP ${response.status})`);
-        documents = await response.json();
+        const rawDocs = await response.json();
+        documents = (rawDocs || []).map(doc => {
+          if (doc && typeof doc === 'object') {
+            delete doc.data_criacao;
+          }
+          return doc;
+        });
         
         initMasterFilterLists();
         applyFilter(false);
@@ -2533,7 +2534,6 @@
       document.getElementById('openPdfNewTab').href = '#';
 
       document.getElementById('field_md5').innerText = '-';
-      document.getElementById('field_data_criacao').innerText = '-';
       document.getElementById('field_data_modificacao').innerText = '-';
       const fMetodoClean = document.getElementById('field_metodo_leitura');
       if (fMetodoClean) fMetodoClean.innerText = '-';
@@ -2579,7 +2579,6 @@
 
       // Preenche campos do formulário de forma segura
       document.getElementById('field_md5').innerText = safeString(doc.md5);
-      document.getElementById('field_data_criacao').innerText = safeString(doc.data_criacao) || '-';
       document.getElementById('field_data_modificacao').innerText = safeString(doc.data_modificacao) || '-';
       const fMetodo = document.getElementById('field_metodo_leitura');
       if (fMetodo) fMetodo.innerText = safeString(doc.metodo_leitura) || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital');
@@ -2656,7 +2655,7 @@
         return null;
       }
       const doc = filteredDocs[currentIndex];
-      return {
+      const res = {
         ...doc,
         beneficiario: document.getElementById('input_beneficiario').value.trim() || null,
         cpf: document.getElementById('input_cpf').value.trim() || null,
@@ -2669,6 +2668,8 @@
         tipo_documento: document.getElementById('select_tipo_documento').value || null,
         observacoes_conferencia: document.getElementById('input_obs').value.trim() || null
       };
+      delete res.data_criacao;
+      return res;
     }
 
     function updateJsonView() {
@@ -3196,7 +3197,11 @@
 
     // Exporta o arquivo JSON atualizado com a base de documentos
     function exportJSONFile(showNotification = false) {
-      const allDocs = documents || [];
+      const allDocs = (documents || []).map(d => {
+        const copy = { ...d };
+        delete copy.data_criacao;
+        return copy;
+      });
       const jsonStr = JSON.stringify(allDocs, null, 2);
       const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -3243,8 +3248,7 @@
         { key: 'nome_arquivo', header: 'Nome_Arquivo_PDF' },
         { key: 'caminho_relativo', header: 'Caminho_Relativo' },
         { key: 'md5', header: 'MD5' },
-        { key: 'data_criacao', header: 'Data_Criacao_PDF' },
-        { key: 'data_modificacao', header: 'Data_Modificacao_PDF' }
+        { key: 'data_modificacao', header: 'Data_Ultima_Alteracao_PDF' }
       ];
 
       // Mapeia chaves extras dinamicamente para garantir que nenhum metadado adicional seja omitido
@@ -3253,6 +3257,7 @@
       allDocs.forEach(doc => {
         if (doc && typeof doc === 'object') {
           Object.keys(doc).forEach(k => {
+            if (k === 'data_criacao') return;
             if (!mappedKeys.has(k)) extraKeys.add(k);
           });
         }

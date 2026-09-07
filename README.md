@@ -17,7 +17,7 @@ O projeto é focado em privacidade, conformidade e auditoria: identifica os arqu
 ## ✨ Principais Funcionalidades
 
 - **Processamento em Lote**: Processa dezenas ou centenas de documentos PDF com barra de progresso em tempo real (`tqdm`).
-- **Foco em Privacidade**: Anonimiza a referência do arquivo utilizando o **Hash MD5** do documento e metadados de criação/modificação.
+- **Foco em Privacidade**: Anonimiza a referência do arquivo utilizando o **Hash MD5** do documento e metadados de modificação.
 - **Extração Completa de Metadados**:
   - Nome do Beneficiário / Titular
   - CPF do Beneficiário (validado e formatado `000.000.000-00`)
@@ -225,7 +225,6 @@ Salvo em `saida/classificacao_diplomas.json`:
 [
   {
     "md5": "e4d909c290d0fb1ca068ffaddf22cbd0",
-    "data_criacao": "01/01/2026 10:00:00",
     "data_modificacao": "15/12/2025 14:30:00",
     "data": "15 de dezembro de 2025",
     "beneficiario": "Nome do Aluno Exemplo",
@@ -257,10 +256,9 @@ Falhas / Erros       : 0
 ================================================================================
 
 [1/1] MD5: e4d909c290d0fb1ca068ffaddf22cbd0
-  • Status             : SUCESSO
-  • Data de Criação    : 01/01/2026 10:00:00
-  • Data de Modificação: 15/12/2025 14:30:00
-  • Tipo Documento     : Diploma
+  • Status                  : SUCESSO
+  • Data da Última Alteração: 15/12/2025 14:30:00
+  • Tipo Documento          : Diploma
   • Beneficiário       : Nome do Aluno Exemplo
   • CPF                : 123.456.789-00
   • Curso              : Bacharelado em Engenharia de Software

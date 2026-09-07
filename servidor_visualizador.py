@@ -647,6 +647,7 @@ class ConferenciaServer:
                     if isinstance(loaded, list):
                         for item in loaded:
                             if isinstance(item, dict) and item.get("md5"):
+                                item.pop("data_criacao", None)
                                 h = str(item["md5"]).strip().lower()
                                 item["md5"] = h
                                 existing_by_md5[h] = item
@@ -668,6 +669,7 @@ class ConferenciaServer:
                                 with open(entry.path, "r", encoding="utf-8") as f:
                                     item = json.load(f)
                                     if isinstance(item, dict) and item.get("md5"):
+                                        item.pop("data_criacao", None)
                                         item["md5"] = str(item["md5"]).strip().lower()
                                         existing_by_md5[item["md5"]] = item
                                         data.append(item)
@@ -687,20 +689,14 @@ class ConferenciaServer:
                 try:
                     stat = pdf_file.stat()
                     dt_mod = datetime.fromtimestamp(stat.st_mtime).isoformat()
-                    try:
-                        dt_cre = datetime.fromtimestamp(stat.st_birthtime).isoformat()
-                    except AttributeError:
-                        dt_cre = dt_mod
                 except Exception:
                     dt_mod = None
-                    dt_cre = None
 
                 rel_path = str(pdf_file.relative_to(self.pdf_dir)) if self.pdf_dir in pdf_file.parents else pdf_file.name
                 unprocessed_doc = {
                     "md5": h,
                     "nome_arquivo": pdf_file.name,
                     "caminho_relativo": rel_path,
-                    "data_criacao": dt_cre,
                     "data_modificacao": dt_mod,
                     "data": None,
                     "beneficiario": None,
@@ -738,7 +734,11 @@ class ConferenciaServer:
         self.json_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_json = self.json_path.parent / f".tmp_{self.json_path.name}"
         # No arquivo consolidado em disco, salva apenas os documentos que já foram de fato processados
-        processed_data = [d for d in data if d.get("status") != "nao_processado"]
+        processed_data = []
+        for d in data:
+            if d.get("status") != "nao_processado":
+                d.pop("data_criacao", None)
+                processed_data.append(d)
         with open(tmp_json, "w", encoding="utf-8") as f:
             json.dump(processed_data, f, ensure_ascii=False, indent=2)
         tmp_json.replace(self.json_path)
@@ -767,11 +767,10 @@ class ConferenciaServer:
         for idx, item in enumerate(results, 1):
             conf = item.get("status_conferencia", "PENDENTE")
             lines.append(f"[{idx}/{total}] MD5: {item.get('md5')}")
-            lines.append(f"  • Conferência        : {conf.upper()}")
-            lines.append(f"  • Status             : {item.get('status', '').upper()}")
-            lines.append(f"  • Data de Criação    : {item.get('data_criacao')}")
-            lines.append(f"  • Data de Modificação: {item.get('data_modificacao')}")
-            lines.append(f"  • Tipo Documento     : {item.get('tipo_documento') or 'Não identificado'}")
+            lines.append(f"  • Conferência             : {conf.upper()}")
+            lines.append(f"  • Status                  : {item.get('status', '').upper()}")
+            lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
+            lines.append(f"  • Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}")
             lines.append(f"  • Beneficiário       : {item.get('beneficiario') or 'Não informado'}")
             lines.append(f"  • CPF                : {item.get('cpf') or 'Não informado'}")
             lines.append(f"  • RG / Identidade    : {item.get('rg') or 'Não informado'}")
@@ -1121,6 +1120,7 @@ def create_handler(server_ctx: ConferenciaServer):
                 dados_atuais = server_ctx.load_data()
                 item_editado = payload.get("item")
                 if item_editado and "md5" in item_editado:
+                    item_editado.pop("data_criacao", None)
                     if item_editado.get("faculdade"):
                         item_editado["faculdade"] = normalizar_instituicao(item_editado.get("faculdade"))
                     target_md5 = item_editado["md5"]
@@ -1222,6 +1222,7 @@ def create_handler(server_ctx: ConferenciaServer):
 
                     # Executa a leitura e classificação completa do documento forçando OCR
                     novo_doc = process_single_pdf(pdf_file, client, force_ocr=True)
+                    novo_doc.pop("data_criacao", None)
 
                     # Sanitiza listas para strings para compatibilidade com o visualizador
                     for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "rg", "data"]:

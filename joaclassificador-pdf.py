@@ -3,7 +3,7 @@
 joaclassificador - Classificador de Documentos Acadêmicos em Massa (Diplomas/Certificados)
 Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 
-Identificação por Hash MD5, Datas de Criação e Modificação do Arquivo,
+Identificação por Hash MD5, Data da Última Alteração do Arquivo,
 Extração do CPF do Beneficiário e Natureza/Nível do Curso.
 Suporta Ollama (Local / Docker) e OpenAI API.
 Gera saídas consolidadas e individuais em JSON e TXT.
@@ -126,11 +126,11 @@ load_dotenv_if_present()
 
 
 # ---------------------------------------------------------------------------
-# Metadados do Arquivo (MD5, Criação, Modificação)
+# Metadados do Arquivo (MD5, Modificação)
 # ---------------------------------------------------------------------------
 def get_file_metadata(file_path: Path) -> Dict[str, str]:
     """
-    Calcula o hash MD5 e obtém as datas de criação e modificação do arquivo no sistema.
+    Calcula o hash MD5 e obtém a data da última alteração do arquivo no sistema.
     """
     hasher = hashlib.md5()
     with open(file_path, "rb") as f:
@@ -140,12 +140,9 @@ def get_file_metadata(file_path: Path) -> Dict[str, str]:
 
     st = file_path.stat()
     dt_mod = datetime.fromtimestamp(st.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
-    c_timestamp = getattr(st, "st_birthtime", st.st_ctime)
-    dt_criacao = datetime.fromtimestamp(c_timestamp).strftime("%d/%m/%Y %H:%M:%S")
 
     return {
         "md5": md5_hash,
-        "data_criacao": dt_criacao,
         "data_modificacao": dt_mod
     }
 
@@ -869,13 +866,12 @@ def process_single_pdf(
     skip_ocr: bool = False,
     metadata: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:
-    # Metadados do arquivo (MD5, data de criação e modificação)
+    # Metadados do arquivo (MD5, data da última alteração)
     meta = metadata or get_file_metadata(pdf_path)
 
     res_dict = {
         "md5": meta["md5"],
-        "data_criacao": meta["data_criacao"],
-        "data_modificacao": meta["data_modificacao"],
+        "data_modificacao": meta.get("data_modificacao"),
         "data": None,
         "beneficiario": None,
         "cpf": None,
@@ -1080,12 +1076,11 @@ def format_single_txt(item: Dict[str, Any]) -> str:
     if item.get("tentativa_ocr_llm"):
         metodo += " (OCR LLM acionado)"
     return f"""--------------------------------------------------------------------------------
-MD5                 : {item.get('md5')}
-Status              : {item.get('status', '').upper()}
-Método de Leitura   : {metodo}
-Data de Criação     : {item.get('data_criacao')}
-Data de Modificação : {item.get('data_modificacao')}
-Tipo Documento      : {item.get('tipo_documento') or 'Não identificado'}
+MD5                     : {item.get('md5')}
+Status                  : {item.get('status', '').upper()}
+Método de Leitura       : {metodo}
+Data da Última Alteração: {item.get('data_modificacao')}
+Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}
 Beneficiário        : {item.get('beneficiario') or 'Não informado'}
 CPF                 : {item.get('cpf') or 'Não informado'}
 RG / Identidade     : {item.get('rg') or 'Não informado'}
@@ -1125,10 +1120,9 @@ def generate_consolidated_txt(
 
     for idx, item in enumerate(results, 1):
         lines.append(f"[{idx}/{total}] MD5: {item.get('md5')}")
-        lines.append(f"  • Status             : {item.get('status', '').upper()}")
-        lines.append(f"  • Data de Criação    : {item.get('data_criacao')}")
-        lines.append(f"  • Data de Modificação: {item.get('data_modificacao')}")
-        lines.append(f"  • Tipo Documento     : {item.get('tipo_documento') or 'Não identificado'}")
+        lines.append(f"  • Status                  : {item.get('status', '').upper()}")
+        lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
+        lines.append(f"  • Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}")
         lines.append(f"  • Beneficiário       : {item.get('beneficiario') or 'Não informado'}")
         lines.append(f"  • CPF                : {item.get('cpf') or 'Não informado'}")
         lines.append(f"  • RG / Identidade    : {item.get('rg') or 'Não informado'}")
@@ -1163,6 +1157,9 @@ def save_consolidated_reports(
     consolidated_json_path = out_dir / "classificacao_diplomas.json"
     consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
     results = sorted(list(items_dict.values()), key=lambda x: str(x.get("md5", "")))
+    for r in results:
+        if isinstance(r, dict):
+            r.pop("data_criacao", None)
 
     # 1. JSON consolidado atômico
     tmp_json = out_dir / f".tmp_{consolidated_json_path.name}"
@@ -1670,6 +1667,7 @@ def run_batch_classification(
                 if isinstance(old_data, list):
                     for item in old_data:
                         if isinstance(item, dict) and "md5" in item:
+                            item.pop("data_criacao", None)
                             existing_by_md5[item["md5"]] = item
                             count_from_consolidated += 1
         except Exception as e:
@@ -1687,6 +1685,7 @@ def run_batch_classification(
                             with open(entry.path, "r", encoding="utf-8") as f:
                                 item = json.load(f)
                                 if isinstance(item, dict) and item.get("md5"):
+                                    item.pop("data_criacao", None)
                                     existing_by_md5[item["md5"]] = item
                                     count_from_indiv += 1
                         except Exception:
@@ -1756,7 +1755,7 @@ def run_batch_classification(
                 try:
                     pdf_meta_map[p] = fut.result()
                 except Exception:
-                    pdf_meta_map[p] = {"md5": "", "data_criacao": "", "data_modificacao": ""}
+                    pdf_meta_map[p] = {"md5": "", "data_modificacao": ""}
                 if idx_i % 25 == 0:
                     notify({"event": "indexing_progress", "indexed": idx_i, "total": len(pdf_files)})
     else:
@@ -1764,7 +1763,7 @@ def run_batch_classification(
             try:
                 pdf_meta_map[p] = get_file_metadata(p)
             except Exception:
-                pdf_meta_map[p] = {"md5": "", "data_criacao": "", "data_modificacao": ""}
+                pdf_meta_map[p] = {"md5": "", "data_modificacao": ""}
 
     # 4. Separa os arquivos entre já processados e novos/pendentes
     files_to_process = []
@@ -1867,6 +1866,7 @@ def run_batch_classification(
                 if "conferido_em" in old_item:
                     res["conferido_em"] = old_item["conferido_em"]
 
+            res.pop("data_criacao", None)
             if not no_individual:
                 file_identifier = res["md5"]
                 single_json_path = indiv_dir / f"{file_identifier}.json"
