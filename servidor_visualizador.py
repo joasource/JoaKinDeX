@@ -23,6 +23,7 @@ from pathlib import Path
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
 import io
+import zipfile
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Union
 
@@ -108,6 +109,8 @@ try:
         get_document_by_md5,
         get_all_documents,
         update_conference_status,
+        batch_update_conference_status,
+        batch_update_tag_domain,
         sync_to_json
     )
 except ImportError:
@@ -120,6 +123,8 @@ except ImportError:
         get_document_by_md5,
         get_all_documents,
         update_conference_status,
+        batch_update_conference_status,
+        batch_update_tag_domain,
         sync_to_json
     )
 
@@ -1019,6 +1024,41 @@ def extract_document_text_content(server_ctx: "ConferenciaServer", md5_str: str)
     return {"status": "erro", "mensagem": "Texto não disponível para este documento."}
 
 
+def create_documents_zip(server_ctx: "ConferenciaServer", md5_list: List[str]) -> io.BytesIO:
+    """Gera um arquivo ZIP em memória contendo os documentos físicos correspondentes aos MD5s solicitados."""
+    zip_buffer = io.BytesIO()
+    seen_names: Dict[str, int] = {}
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for m in md5_list:
+            md5_clean = str(m).strip().lower()
+            if not md5_clean:
+                continue
+            file_path = server_ctx.md5_to_file.get(md5_clean)
+            if not file_path or not file_path.exists():
+                server_ctx.build_pdf_index()
+                file_path = server_ctx.md5_to_file.get(md5_clean)
+            if not file_path or not file_path.exists():
+                continue
+
+            base_name = file_path.name
+            if base_name in seen_names:
+                seen_names[base_name] += 1
+                stem = file_path.stem
+                suffix = file_path.suffix
+                arcname = f"{stem}_{md5_clean[:6]}_{seen_names[base_name]}{suffix}"
+            else:
+                seen_names[base_name] = 1
+                arcname = base_name
+
+            try:
+                zf.write(file_path, arcname=arcname)
+            except Exception:
+                pass
+
+    zip_buffer.seek(0)
+    return zip_buffer
+
+
 def create_handler(server_ctx: ConferenciaServer):
     class RequestHandler(SimpleHTTPRequestHandler):
         def end_headers(self):
@@ -1401,6 +1441,24 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.wfile.write(body)
                 return
 
+            # Download de lote em ZIP via GET
+            if path == "/api/batch/exportar-zip":
+                query = urllib.parse.parse_qs(parsed.query)
+                md5s_raw = query.get("md5s", [""])[0]
+                md5_list = [m.strip().lower() for m in md5s_raw.split(",") if m.strip()]
+                if not md5_list:
+                    self.send_error(400, "Nenhum MD5 fornecido para exportação em lote.")
+                    return
+                zip_buffer = create_documents_zip(server_ctx, md5_list)
+                zip_bytes = zip_buffer.getvalue()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", f'attachment; filename="joakindex_documentos_lote_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip"')
+                self.send_header("Content-Length", str(len(zip_bytes)))
+                self.end_headers()
+                self.wfile.write(zip_bytes)
+                return
+
             super().do_GET()
 
         def do_POST(self):
@@ -1492,6 +1550,136 @@ def create_handler(server_ctx: ConferenciaServer):
                     self.wfile.write(resp)
                 else:
                     self.send_error(404, f"Documento MD5 {target_md5} não encontrado.")
+                return
+
+            # Exportação de ZIP em lote via POST
+            if path == "/api/batch/exportar-zip":
+                md5_list = [str(m).strip().lower() for m in payload.get("md5s", []) if m]
+                if not md5_list:
+                    self.send_error(400, "Nenhum MD5 fornecido para exportação em lote.")
+                    return
+                zip_buffer = create_documents_zip(server_ctx, md5_list)
+                zip_bytes = zip_buffer.getvalue()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", f'attachment; filename="joakindex_documentos_lote_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip"')
+                self.send_header("Content-Length", str(len(zip_bytes)))
+                self.end_headers()
+                self.wfile.write(zip_bytes)
+                return
+
+            # Aprovação de conferência em lote
+            if path == "/api/batch/aprovar":
+                md5_list = [str(m).strip().lower() for m in payload.get("md5s", []) if m]
+                obs = payload.get("observacoes_conferencia")
+                if not md5_list:
+                    self.send_error(400, "Lista de MD5s vazia para aprovação em lote.")
+                    return
+
+                count = batch_update_conference_status(server_ctx.db_path, md5_list, "aprovado", obs)
+
+                # Atualiza arquivos individuais se existirem
+                indiv_dir = server_ctx.json_path.parent / "individuais"
+                if indiv_dir.exists():
+                    now_iso = datetime.now().isoformat()
+                    for m in md5_list:
+                        indiv_file = indiv_dir / f"{m}.json"
+                        if indiv_file.exists():
+                            try:
+                                with open(indiv_file, "r", encoding="utf-8") as fi:
+                                    indiv_data = json.load(fi)
+                                if isinstance(indiv_data, dict):
+                                    indiv_data["status_conferencia"] = "aprovado"
+                                    indiv_data["conferido_em"] = now_iso
+                                    if obs is not None:
+                                        indiv_data["observacoes_conferencia"] = obs
+                                    with open(indiv_file, "w", encoding="utf-8") as fi:
+                                        json.dump(indiv_data, fi, ensure_ascii=False, indent=2)
+                            except Exception:
+                                pass
+
+                sync_to_json(server_ctx.db_path, server_ctx.json_path, only_processed=True)
+                all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
+                server_ctx.update_txt_report(all_processed)
+
+                resp = json.dumps({
+                    "status": "sucesso",
+                    "count": count,
+                    "mensagem": f"{count} documento(s) aprovado(s) com sucesso!"
+                }, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(resp)))
+                self.end_headers()
+                self.wfile.write(resp)
+                return
+
+            # Alteração em lote de Tipo, Domínio e Instituição
+            if path == "/api/batch/alterar-tipo":
+                md5_list = [str(m).strip().lower() for m in payload.get("md5s", []) if m]
+                if not md5_list:
+                    self.send_error(400, "Lista de MD5s vazia para alteração em lote.")
+                    return
+
+                tipo_doc = payload.get("tipo_documento")
+                dom = payload.get("dominio")
+                fac = payload.get("faculdade")
+                if fac:
+                    fac = normalizar_instituicao(fac)
+                conf_st = payload.get("status_conferencia")
+
+                count = batch_update_tag_domain(
+                    server_ctx.db_path,
+                    md5_list,
+                    tipo_documento=tipo_doc,
+                    dominio=dom,
+                    faculdade=fac,
+                    status_conferencia=conf_st
+                )
+
+                # Atualiza arquivos individuais se existirem
+                indiv_dir = server_ctx.json_path.parent / "individuais"
+                if indiv_dir.exists():
+                    now_iso = datetime.now().isoformat()
+                    for m in md5_list:
+                        indiv_file = indiv_dir / f"{m}.json"
+                        if indiv_file.exists():
+                            try:
+                                with open(indiv_file, "r", encoding="utf-8") as fi:
+                                    indiv_data = json.load(fi)
+                                if isinstance(indiv_data, dict):
+                                    if tipo_doc:
+                                        indiv_data["tipo_documento"] = tipo_doc
+                                        indiv_data["todos_tipos"] = [tipo_doc]
+                                    if dom:
+                                        indiv_data["dominio"] = dom
+                                        indiv_data["todos_dominios"] = [dom]
+                                    if fac:
+                                        indiv_data["faculdade"] = fac
+                                    if conf_st:
+                                        indiv_data["status_conferencia"] = conf_st
+                                        if conf_st == "aprovado":
+                                            indiv_data["conferido_em"] = now_iso
+                                    indiv_data["revisado_em"] = now_iso
+                                    with open(indiv_file, "w", encoding="utf-8") as fi:
+                                        json.dump(indiv_data, fi, ensure_ascii=False, indent=2)
+                            except Exception:
+                                pass
+
+                sync_to_json(server_ctx.db_path, server_ctx.json_path, only_processed=True)
+                all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
+                server_ctx.update_txt_report(all_processed)
+
+                resp = json.dumps({
+                    "status": "sucesso",
+                    "count": count,
+                    "mensagem": f"{count} documento(s) atualizado(s) com sucesso!"
+                }, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(resp)))
+                self.end_headers()
+                self.wfile.write(resp)
                 return
 
             # Leitura e Classificação completa sob demanda (com OCR multimodal forçado)

@@ -223,8 +223,8 @@
     <!-- 1. BARRA LATERAL ESQUERDA: LISTA DE DOCUMENTOS E FILTROS -->
     <aside id="sidebar" class="w-84 sm:w-96 bg-slate-950/70 border-r border-slate-800 flex flex-col shrink-0">
       
-      <div class="p-3 border-b border-slate-800 space-y-2.5">
-        <!-- Campo de Busca -->
+      <div class="p-2.5 border-b border-slate-800 space-y-2">
+        <!-- Campo de Busca Principal -->
         <div class="relative">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-500"></i>
           <input type="text" id="searchInput" oninput="onSearchInput()" onkeydown="onSearchKeyDown(event)" placeholder="Buscar por Nome, CPF, RG, MD5, Curso..."
@@ -234,82 +234,166 @@
           </button>
         </div>
 
-        <!-- Filtro por Status da Conferência -->
-        <div class="grid grid-cols-4 gap-1 text-[10.5px]">
-          <button onclick="setStatusFilter('todos')" id="filter-todos" class="py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700 truncate">Todos (<span id="count-todos">0</span>)</button>
-          <button onclick="setStatusFilter('pendente')" id="filter-pendente" class="py-1 px-1 rounded bg-slate-900 text-amber-400/80 hover:bg-slate-800 text-center transition truncate">Pendentes (<span id="count-pendente">0</span>)</button>
-          <button onclick="setStatusFilter('aprovado')" id="filter-aprovado" class="py-1 px-1 rounded bg-slate-900 text-emerald-400/80 hover:bg-slate-800 text-center transition truncate">Aprovados (<span id="count-aprovado">0</span>)</button>
-          <button onclick="setStatusFilter('nao_processado')" id="filter-nao_processado" class="py-1 px-1 rounded bg-slate-900 text-rose-400/80 hover:bg-slate-800 text-center transition truncate" title="Documentos encontrados que ainda não foram lidos/classificados">Não Lidos (<span id="count-nao_processado">0</span>)</button>
+        <!-- BARRA DE VISÕES RÁPIDAS (QUICK VIEWS - ESTILO PAPERLESS-NGX) -->
+        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-[10.5px]">
+          <button type="button" onclick="setQuickView('todos')" id="qv-todos" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm" title="Exibir todos os documentos">
+            <i class="fa-solid fa-star text-[9px] text-emerald-400"></i> Todos
+          </button>
+          <button type="button" onclick="setQuickView('dossies')" id="qv-dossies" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Dossiês com 2 ou mais documentos / páginas">
+            <i class="fa-solid fa-folder-open text-[9px] text-cyan-400"></i> Dossiês (+2)
+          </button>
+          <button type="button" onclick="setQuickView('pendentes')" id="qv-pendentes" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Documentos pendentes de conferência humana">
+            <i class="fa-solid fa-triangle-exclamation text-[9px] text-amber-400"></i> Pendentes
+          </button>
+          <button type="button" onclick="setQuickView('cursos')" id="qv-cursos" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Diplomas, certificados e históricos acadêmicos">
+            <i class="fa-solid fa-graduation-cap text-[9px] text-indigo-400"></i> Acadêmico
+          </button>
+          <button type="button" onclick="setQuickView('financeiro')" id="qv-financeiro" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Comprovantes PIX, recibos e financeiro">
+            <i class="fa-brands fa-pix text-[9px] text-emerald-400"></i> PIX / Fin
+          </button>
+          <button type="button" onclick="setQuickView('identificacao')" id="qv-identificacao" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Identificação (RG, CNH, CPF)">
+            <i class="fa-regular fa-id-badge text-[9px] text-purple-400"></i> Identidade
+          </button>
+          <button type="button" onclick="setQuickView('nao_processado')" id="qv-nao_processado" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Arquivos que ainda não foram classificados pela IA">
+            <i class="fa-solid fa-circle-question text-[9px] text-rose-400"></i> Não Lidos
+          </button>
         </div>
 
-        <!-- Filtro por Domínio do Documento -->
-        <div class="pt-1">
-          <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-            <span class="flex items-center gap-1 font-medium"><i class="fa-solid fa-layer-group text-cyan-400 text-[10px]"></i> Domínio:</span>
-            <button onclick="resetDomainFilter()" id="btnClearDomain" class="hidden text-[10px] text-cyan-400 hover:underline flex items-center gap-0.5">
-              <i class="fa-solid fa-rotate-left"></i> Todos
+        <!-- CONTAINER DE FILTROS SANFONA (COLLAPSIBLE ACCORDIONS) -->
+        <div class="space-y-1 pt-0.5">
+
+          <!-- ACORDEÃO 1: STATUS DA CONFERÊNCIA -->
+          <div id="acc-status" class="border-t border-slate-800/80 pt-1">
+            <button type="button" onclick="toggleAccordion('acc-status')" class="w-full flex items-center justify-between py-1 text-[11px] font-medium text-slate-300 hover:text-white transition group">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-list-check text-emerald-400 text-[10px]"></i>
+                <span>Status da Conferência</span>
+                <span id="badge-acc-status" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"></span>
+              </span>
+              <i id="chevron-acc-status" class="fa-solid fa-chevron-down text-[10px] text-slate-500 group-hover:text-slate-300 transition-transform duration-200"></i>
             </button>
+            <div id="body-acc-status" class="pt-1 pb-0.5 space-y-1">
+              <div class="grid grid-cols-4 gap-1 text-[10px]">
+                <button onclick="setStatusFilter('todos')" id="filter-todos" class="py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700 truncate">Todos (<span id="count-todos">0</span>)</button>
+                <button onclick="setStatusFilter('pendente')" id="filter-pendente" class="py-1 px-1 rounded bg-slate-900 text-amber-400/80 hover:bg-slate-800 text-center transition truncate">Pendentes (<span id="count-pendente">0</span>)</button>
+                <button onclick="setStatusFilter('aprovado')" id="filter-aprovado" class="py-1 px-1 rounded bg-slate-900 text-emerald-400/80 hover:bg-slate-800 text-center transition truncate">Aprovados (<span id="count-aprovado">0</span>)</button>
+                <button onclick="setStatusFilter('nao_processado')" id="filter-nao_processado" class="py-1 px-1 rounded bg-slate-900 text-rose-400/80 hover:bg-slate-800 text-center transition truncate" title="Documentos encontrados que ainda não foram lidos/classificados">Não Lidos (<span id="count-nao_processado">0</span>)</button>
+              </div>
+            </div>
           </div>
-          <div class="grid grid-cols-4 gap-1 text-[10px]">
-            <button onclick="setDomainFilter('todos')" id="filter-dom-todos" class="py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center border border-slate-700 transition truncate">Todos (<span id="count-dom-todos">0</span>)</button>
-            <button onclick="setDomainFilter('academico')" id="filter-dom-academico" class="py-1 px-1 rounded bg-slate-900 text-indigo-300 hover:bg-slate-800 text-center transition truncate" title="Diplomas, certificados e históricos acadêmicos">Acadêmico (<span id="count-dom-academico">0</span>)</button>
-            <button onclick="setDomainFilter('financeiro')" id="filter-dom-financeiro" class="py-1 px-1 rounded bg-slate-900 text-emerald-400 hover:bg-slate-800 text-center transition truncate" title="Comprovantes PIX, recibos e notas fiscais">PIX / Fin (<span id="count-dom-financeiro">0</span>)</button>
-            <button onclick="setDomainFilter('outros')" id="filter-dom-outros" class="py-1 px-1 rounded bg-slate-900 text-purple-300 hover:bg-slate-800 text-center transition truncate" title="Identificação (RG/CNH), Jurídico e Outros">Outros (<span id="count-dom-outros">0</span>)</button>
-          </div>
-        </div>
 
-        <!-- 1º: FILTRO POR TIPO DE DOCUMENTO (Geral / Primário) -->
-        <div class="pt-2 border-t border-slate-800/80 space-y-1.5">
-          <div class="flex items-center justify-between text-[11px]">
-            <label class="text-slate-300 font-medium flex items-center gap-1.5">
-              <i class="fa-solid fa-file-contract text-teal-400"></i>
-              <span>Tipo de Documento:</span>
-            </label>
-            <button onclick="resetTipoFilter()" id="btnClearTipo" class="hidden text-[10px] text-teal-400 hover:underline flex items-center gap-0.5">
-              <i class="fa-solid fa-rotate-left"></i> Limpar
+          <!-- ACORDEÃO 2: DOMÍNIO DO DOCUMENTO -->
+          <div id="acc-dominio" class="border-t border-slate-800/80 pt-1">
+            <button type="button" onclick="toggleAccordion('acc-dominio')" class="w-full flex items-center justify-between py-1 text-[11px] font-medium text-slate-300 hover:text-white transition group">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-layer-group text-cyan-400 text-[10px]"></i>
+                <span>Domínio</span>
+                <span id="badge-acc-dominio" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"></span>
+              </span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="event.stopPropagation(); resetDomainFilter();" id="btnClearDomain" class="hidden text-[10px] text-cyan-400 hover:underline mr-1">
+                  Todos
+                </button>
+                <i id="chevron-acc-dominio" class="fa-solid fa-chevron-down text-[10px] text-slate-500 group-hover:text-slate-300 transition-transform duration-200"></i>
+              </div>
             </button>
+            <div id="body-acc-dominio" class="pt-1 pb-0.5 space-y-1">
+              <div class="grid grid-cols-4 gap-1 text-[10px]">
+                <button onclick="setDomainFilter('todos')" id="filter-dom-todos" class="py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center border border-slate-700 transition truncate">Todos (<span id="count-dom-todos">0</span>)</button>
+                <button onclick="setDomainFilter('academico')" id="filter-dom-academico" class="py-1 px-1 rounded bg-slate-900 text-indigo-300 hover:bg-slate-800 text-center transition truncate" title="Diplomas, certificados e históricos acadêmicos">Acadêmico (<span id="count-dom-academico">0</span>)</button>
+                <button onclick="setDomainFilter('financeiro')" id="filter-dom-financeiro" class="py-1 px-1 rounded bg-slate-900 text-emerald-400 hover:bg-slate-800 text-center transition truncate" title="Comprovantes PIX, recibos e notas fiscais">PIX / Fin (<span id="count-dom-financeiro">0</span>)</button>
+                <button onclick="setDomainFilter('outros')" id="filter-dom-outros" class="py-1 px-1 rounded bg-slate-900 text-purple-300 hover:bg-slate-800 text-center transition truncate" title="Identificação (RG/CNH), Jurídico e Outros">Outros (<span id="count-dom-outros">0</span>)</button>
+              </div>
+            </div>
           </div>
 
-          <!-- Select Dropdown de Tipo de Documento -->
-          <select id="selectTipoFilter" onchange="onTipoSelectChange()"
-                  class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
-            <option value="">Todos os Tipos (0)</option>
-          </select>
-
-          <!-- Chips Rápidos de Filtragem por Tipo de Documento -->
-          <div id="tipoChips" class="flex flex-wrap gap-1 pt-1 max-h-16 overflow-y-auto pr-0.5">
-            <!-- Chips gerados dinamicamente via JS com contadores -->
-          </div>
-        </div>
-
-        <!-- 2º: FILTRO POR NATUREZA / NÍVEL DO CURSO (Contextual para Acadêmico) -->
-        <div id="containerFilterNatureza" class="pt-2 border-t border-slate-800/80 space-y-1.5">
-          <div class="flex items-center justify-between text-[11px]">
-            <label class="text-slate-300 font-medium flex items-center gap-1.5">
-              <i class="fa-solid fa-award text-indigo-400"></i>
-              <span>Nível / Natureza do Curso:</span>
-            </label>
-            <button onclick="resetNaturezaFilter()" id="btnClearNatureza" class="hidden text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5">
-              <i class="fa-solid fa-rotate-left"></i> Limpar
+          <!-- ACORDEÃO 3: TIPO DE DOCUMENTO -->
+          <div id="acc-tipo" class="border-t border-slate-800/80 pt-1">
+            <button type="button" onclick="toggleAccordion('acc-tipo')" class="w-full flex items-center justify-between py-1 text-[11px] font-medium text-slate-300 hover:text-white transition group">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-file-contract text-teal-400 text-[10px]"></i>
+                <span>Tipo de Documento</span>
+                <span id="badge-acc-tipo" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30"></span>
+              </span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="event.stopPropagation(); resetTipoFilter();" id="btnClearTipo" class="hidden text-[10px] text-teal-400 hover:underline mr-1">
+                  Limpar
+                </button>
+                <i id="chevron-acc-tipo" class="fa-solid fa-chevron-down text-[10px] text-slate-500 group-hover:text-slate-300 transition-transform duration-200"></i>
+              </div>
             </button>
+            <div id="body-acc-tipo" class="pt-1.5 space-y-1.5">
+              <select id="selectTipoFilter" onchange="onTipoSelectChange()"
+                      class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
+                <option value="">Todos os Tipos (0)</option>
+              </select>
+              <div id="tipoChips" class="flex flex-wrap gap-1 pt-0.5 max-h-16 overflow-y-auto pr-0.5"></div>
+            </div>
           </div>
 
-          <!-- Select Dropdown de Natureza -->
-          <select id="selectNaturezaFilter" onchange="onNaturezaSelectChange()"
-                  class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-            <option value="">Todas as Naturezas (0)</option>
-          </select>
-
-          <!-- Chips Rápidos de Filtragem por Natureza -->
-          <div id="naturezaChips" class="flex flex-wrap gap-1 pt-1 max-h-20 overflow-y-auto pr-0.5">
-            <!-- Chips gerados dinamicamente via JS com contadores -->
+          <!-- ACORDEÃO 4: INSTITUIÇÃO / EMISSOR -->
+          <div id="acc-instituicao" class="border-t border-slate-800/80 pt-1">
+            <button type="button" onclick="toggleAccordion('acc-instituicao')" class="w-full flex items-center justify-between py-1 text-[11px] font-medium text-slate-300 hover:text-white transition group">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-building-columns text-amber-400 text-[10px]"></i>
+                <span>Instituição / Emissor</span>
+                <span id="badge-acc-instituicao" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30"></span>
+              </span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="event.stopPropagation(); resetInstituicaoFilter();" id="btnClearInstituicao" class="hidden text-[10px] text-amber-400 hover:underline mr-1">
+                  Limpar
+                </button>
+                <i id="chevron-acc-instituicao" class="fa-solid fa-chevron-down text-[10px] text-slate-500 group-hover:text-slate-300 transition-transform duration-200"></i>
+              </div>
+            </button>
+            <div id="body-acc-instituicao" class="pt-1.5 space-y-1.5">
+              <div class="relative">
+                <i class="fa-solid fa-filter absolute left-2.5 top-2 text-[10px] text-slate-500"></i>
+                <input type="text" id="inputSearchInst" oninput="onInstSearchInput()" placeholder="Filtrar emissor/faculdade..."
+                       class="w-full bg-slate-900 border border-slate-800 rounded pl-7 pr-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500">
+              </div>
+              <select id="selectInstituicaoFilter" onchange="onInstituicaoSelectChange()"
+                      class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500">
+                <option value="">Todas as Instituições (0)</option>
+              </select>
+              <div id="instituicaoChips" class="flex flex-wrap gap-1 pt-0.5 max-h-20 overflow-y-auto pr-0.5"></div>
+            </div>
           </div>
+
+          <!-- ACORDEÃO 5: NATUREZA DO CURSO -->
+          <div id="acc-natureza" class="border-t border-slate-800/80 pt-1">
+            <button type="button" onclick="toggleAccordion('acc-natureza')" class="w-full flex items-center justify-between py-1 text-[11px] font-medium text-slate-300 hover:text-white transition group">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-award text-indigo-400 text-[10px]"></i>
+                <span>Nível / Natureza</span>
+                <span id="badge-acc-natureza" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"></span>
+              </span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="event.stopPropagation(); resetNaturezaFilter();" id="btnClearNatureza" class="hidden text-[10px] text-indigo-400 hover:underline mr-1">
+                  Limpar
+                </button>
+                <i id="chevron-acc-natureza" class="fa-solid fa-chevron-down text-[10px] text-slate-500 group-hover:text-slate-300 transition-transform duration-200"></i>
+              </div>
+            </button>
+            <div id="body-acc-natureza" class="pt-1.5 space-y-1.5">
+              <select id="selectNaturezaFilter" onchange="onNaturezaSelectChange()"
+                      class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                <option value="">Todas as Naturezas (0)</option>
+              </select>
+              <div id="naturezaChips" class="flex flex-wrap gap-1 pt-0.5 max-h-20 overflow-y-auto pr-0.5"></div>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      <!-- Cabeçalho de Resultados Filtrados -->
-      <div class="px-3 py-1.5 bg-slate-900/50 border-b border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
-        <span>Resultados: <strong id="filterResultCount" class="text-slate-200 font-mono">0</strong></span>
+      <!-- Cabeçalho de Resultados Filtrados com Seleção em Lote -->
+      <div class="px-3 py-1.5 bg-slate-900/50 border-b border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 shrink-0 select-none">
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="chkSelectAllFiltered" onchange="toggleSelectAllFiltered(this.checked)"
+                 class="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-3.5 w-3.5" title="Selecionar todos os documentos visíveis">
+          <span>Resultados: <strong id="filterResultCount" class="text-slate-200 font-mono">0</strong></span>
+        </div>
         <div class="flex items-center gap-1.5">
           <button id="btnToggleThumbnailView" onclick="toggleThumbnailView()" title="Alternar entre visualização com miniaturas e modo compacto"
                   class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1.5 transition">
@@ -1397,6 +1481,147 @@
 
   </main>
 
+  <!-- BARRA FLUTUANTE DE AÇÕES EM LOTE (BULK ACTIONS - ESTILO PAPERLESS-NGX) -->
+  <div id="floatingBulkBar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-md border border-slate-700 shadow-2xl rounded-2xl px-4 py-2.5 flex items-center gap-2.5 text-xs animate-in fade-in slide-in-from-bottom-5 duration-200 transition-all select-none">
+    <div class="flex items-center gap-2 pr-2 border-r border-slate-800">
+      <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono font-bold text-[11px]">
+        <span id="bulkCountSelected">0</span> sel.
+      </span>
+    </div>
+
+    <!-- Botão Aprovar Lote -->
+    <button onclick="executeBulkApprove()" title="Aprovar conferência de todos os selecionados"
+            class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-lg font-medium flex items-center gap-1.5 transition shadow-sm">
+      <i class="fa-solid fa-check-double text-[11px]"></i>
+      <span>Aprovar</span>
+    </button>
+
+    <!-- Botão Alterar Tipo/Domínio/Instituição -->
+    <button onclick="openBulkTagModal()" title="Alterar tipo, domínio ou emissor em lote"
+            class="px-2.5 py-1.5 bg-teal-600/90 hover:bg-teal-500 active:bg-teal-700 text-white rounded-lg font-medium flex items-center gap-1.5 transition shadow-sm">
+      <i class="fa-solid fa-tags text-[11px]"></i>
+      <span>Classificar / Tag</span>
+    </button>
+
+    <!-- Botão Baixar ZIP -->
+    <button onclick="executeBulkExportZip()" id="btnBulkZip" title="Baixar arquivo compactado ZIP com os PDFs selecionados"
+            class="px-2.5 py-1.5 bg-cyan-600/90 hover:bg-cyan-500 active:bg-cyan-700 text-white rounded-lg font-medium flex items-center gap-1.5 transition shadow-sm">
+      <i class="fa-solid fa-file-zipper text-[11px]"></i>
+      <span>Baixar ZIP</span>
+    </button>
+
+    <!-- Botão Classificar IA -->
+    <button onclick="executeBulkClassify()" id="btnBulkClassify" title="Classificar e extrair dados via IA dos documentos selecionados"
+            class="px-2.5 py-1.5 bg-purple-600/90 hover:bg-purple-500 active:bg-purple-700 text-white rounded-lg font-medium flex items-center gap-1.5 transition shadow-sm">
+      <i class="fa-solid fa-robot text-[11px]"></i>
+      <span class="hidden sm:inline">Classificar IA</span>
+    </button>
+
+    <div class="h-4 w-px bg-slate-700 mx-0.5"></div>
+
+    <!-- Botão Desmarcar Todos -->
+    <button onclick="clearBulkSelection()" title="Desmarcar todos os selecionados (Esc)"
+            class="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition">
+      <i class="fa-solid fa-xmark text-sm"></i>
+    </button>
+  </div>
+
+  <!-- MODAL DE EDIÇÃO EM LOTE (BULK TAGGING & CLASSIFICAÇÃO) -->
+  <div id="modalBulkTag" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden text-xs">
+      <!-- Topo -->
+      <div class="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2 text-slate-100 font-semibold">
+          <i class="fa-solid fa-tags text-teal-400 text-sm"></i>
+          <span>Alterar Metadados em Lote</span>
+        </div>
+        <button onclick="closeBulkTagModal()" class="text-slate-400 hover:text-slate-200 text-sm p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Corpo -->
+      <div class="p-4 space-y-3.5">
+        <p class="text-[11px] text-slate-400">
+          As alterações serão aplicadas a <strong id="modalBulkTagCount" class="text-emerald-400 font-mono">0</strong> documento(s) selecionado(s). Deixe em branco ou "(Manter Atual)" os campos que não deseja alterar.
+        </p>
+
+        <!-- Domínio -->
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Domínio do Documento:</label>
+          <select id="bulkInputDominio" class="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500">
+            <option value="">(Manter Atual)</option>
+            <option value="academico">Acadêmico (Diplomas, Certificados, Históricos)</option>
+            <option value="financeiro">Financeiro (Comprovantes PIX, Recibos, Notas)</option>
+            <option value="identificacao">Identificação (RG, CNH, Certidões, CPF)</option>
+            <option value="juridico">Jurídico (Contratos, Termos de Posse, Procurações)</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+
+        <!-- Tipo de Documento -->
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Tipo de Documento:</label>
+          <input type="text" id="bulkInputTipo" list="bulkDatalistTipos" placeholder="(Manter Atual) ou digite o tipo..."
+                 class="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500">
+          <datalist id="bulkDatalistTipos"></datalist>
+        </div>
+
+        <!-- Emissor / Faculdade -->
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Instituição / Órgão Emissor:</label>
+          <input type="text" id="bulkInputFaculdade" list="bulkDatalistFaculdades" placeholder="(Manter Atual) ou digite a instituição..."
+                 class="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+          <datalist id="bulkDatalistFaculdades"></datalist>
+        </div>
+
+        <!-- Status de Conferência -->
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Status da Conferência:</label>
+          <select id="bulkInputStatusConf" class="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500">
+            <option value="">(Manter Atual)</option>
+            <option value="pendente">Pendente de Conferência</option>
+            <option value="aprovado">Aprovado na Conferência</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Rodapé -->
+      <div class="px-4 py-3 bg-slate-950 border-t border-slate-800 flex items-center justify-end gap-2">
+        <button onclick="closeBulkTagModal()" class="px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-medium transition">
+          Cancelar
+        </button>
+        <button onclick="confirmBulkTagApply()" class="px-4 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
+          <i class="fa-solid fa-check"></i>
+          <span>Aplicar Alterações</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PROGRESSO DE CLASSIFICAÇÃO IA EM LOTE -->
+  <div id="modalBulkClassifyProgress" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl max-w-sm w-full p-5 space-y-4 text-center">
+      <div class="w-12 h-12 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center mx-auto text-purple-400 text-xl animate-pulse">
+        <i class="fa-solid fa-robot"></i>
+      </div>
+      <div>
+        <h4 class="font-semibold text-slate-100 text-sm">Classificando com Inteligência Artificial</h4>
+        <p id="bulkClassifyStatusMsg" class="text-xs text-slate-400 mt-1">Preparando fila...</p>
+      </div>
+      <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden border border-slate-700">
+        <div id="bulkClassifyProgressBar" class="bg-gradient-to-r from-purple-600 to-indigo-500 h-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+        <span id="bulkClassifyCounter">0 / 0</span>
+        <span id="bulkClassifyPercent">0%</span>
+      </div>
+      <button onclick="abortBulkClassify()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-rose-300 rounded border border-slate-700 text-xs transition">
+        Cancelar Restantes
+      </button>
+    </div>
+  </div>
+
   <!-- MODAL DE CONFIGURAÇÃO & PROCESSAMENTO EM LOTE -->
   <div id="configModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 transition-all duration-200 hidden">
     <div class="w-full max-w-4xl max-h-[92vh] flex flex-col bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -1959,6 +2184,576 @@
     let activeDomainFilter = 'todos';
     let activeNaturezaFilter = ''; // Vazio = todas
     let activeTipoFilter = ''; // Vazio = todos
+    let activeInstituicaoFilter = ''; // Vazio = todas
+    let activeQuickView = 'todos';
+    const selectedMd5s = new Set();
+    let allUniqueInstituicoes = [];
+    let openAccordions = new Set(['acc-status', 'acc-dominio', 'acc-tipo']);
+
+    // Gerenciamento de Acordeões Sanfona
+    function loadAccordionsState() {
+      try {
+        const saved = localStorage.getItem('joakindex_accordions_state');
+        if (saved) {
+          const arr = JSON.parse(saved);
+          if (Array.isArray(arr)) openAccordions = new Set(arr);
+        }
+      } catch (e) {}
+    }
+
+    function saveAccordionsState() {
+      try {
+        localStorage.setItem('joakindex_accordions_state', JSON.stringify(Array.from(openAccordions)));
+      } catch (e) {}
+    }
+
+    function toggleAccordion(id) {
+      const body = document.getElementById(`body-${id}`);
+      const chevron = document.getElementById(`chevron-${id}`);
+      if (!body) return;
+      const isCurrentlyOpen = !body.classList.contains('hidden');
+      if (isCurrentlyOpen) {
+        body.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-180');
+        openAccordions.delete(id);
+      } else {
+        body.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+        openAccordions.add(id);
+      }
+      saveAccordionsState();
+    }
+
+    function applyAccordionsState() {
+      ['acc-status', 'acc-dominio', 'acc-tipo', 'acc-instituicao', 'acc-natureza'].forEach(id => {
+        const body = document.getElementById(`body-${id}`);
+        const chevron = document.getElementById(`chevron-${id}`);
+        if (!body) return;
+        if (openAccordions.has(id)) {
+          body.classList.remove('hidden');
+          if (chevron) chevron.classList.add('rotate-180');
+        } else {
+          body.classList.add('hidden');
+          if (chevron) chevron.classList.remove('rotate-180');
+        }
+      });
+    }
+
+    function updateAccordionBadges() {
+      const bStatus = document.getElementById('badge-acc-status');
+      if (bStatus) {
+        if (activeStatusFilter !== 'todos') {
+          bStatus.classList.remove('hidden');
+          bStatus.innerText = activeStatusFilter === 'nao_processado' ? 'Não Lido' : activeStatusFilter;
+        } else {
+          bStatus.classList.add('hidden');
+        }
+      }
+      const bDom = document.getElementById('badge-acc-dominio');
+      if (bDom) {
+        if (activeDomainFilter !== 'todos') {
+          bDom.classList.remove('hidden');
+          bDom.innerText = activeDomainFilter === 'financeiro' ? 'PIX' : (activeDomainFilter === 'outros' ? 'Outro' : 'Acad');
+        } else {
+          bDom.classList.add('hidden');
+        }
+      }
+      const bTipo = document.getElementById('badge-acc-tipo');
+      if (bTipo) {
+        if (activeTipoFilter) {
+          bTipo.classList.remove('hidden');
+          bTipo.innerText = activeTipoFilter.length > 12 ? activeTipoFilter.substring(0, 10) + '...' : activeTipoFilter;
+        } else {
+          bTipo.classList.add('hidden');
+        }
+      }
+      const bInst = document.getElementById('badge-acc-instituicao');
+      if (bInst) {
+        if (activeInstituicaoFilter) {
+          bInst.classList.remove('hidden');
+          bInst.innerText = activeInstituicaoFilter.length > 12 ? activeInstituicaoFilter.substring(0, 10) + '...' : activeInstituicaoFilter;
+        } else {
+          bInst.classList.add('hidden');
+        }
+      }
+      const bNat = document.getElementById('badge-acc-natureza');
+      if (bNat) {
+        if (activeNaturezaFilter) {
+          bNat.classList.remove('hidden');
+          bNat.innerText = formatShortNature(activeNaturezaFilter);
+        } else {
+          bNat.classList.add('hidden');
+        }
+      }
+    }
+
+    // Visões Rápidas (Quick Views)
+    function setQuickView(viewName) {
+      activeQuickView = viewName;
+      updateQuickViewUI();
+
+      if (viewName === 'todos') {
+        resetAllFilters();
+        return;
+      }
+      if (viewName === 'dossies') {
+        applyFilter(true);
+        return;
+      }
+      if (viewName === 'pendentes') {
+        setStatusFilter('pendente');
+        return;
+      }
+      if (viewName === 'cursos') {
+        setDomainFilter('academico');
+        return;
+      }
+      if (viewName === 'financeiro') {
+        setDomainFilter('financeiro');
+        return;
+      }
+      if (viewName === 'identificacao') {
+        setDomainFilter('outros');
+        activeDomainFilter = 'identificacao';
+        applyFilter(true);
+        return;
+      }
+      if (viewName === 'nao_processado') {
+        setStatusFilter('nao_processado');
+        return;
+      }
+    }
+
+    function updateQuickViewUI() {
+      const qvIds = ['todos', 'dossies', 'pendentes', 'cursos', 'financeiro', 'identificacao', 'nao_processado'];
+      qvIds.forEach(id => {
+        const btn = document.getElementById(`qv-${id}`);
+        if (!btn) return;
+        if (id === activeQuickView) {
+          btn.className = "px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm";
+        } else {
+          btn.className = "px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800";
+        }
+      });
+    }
+
+    // Filtro de Instituição / Emissor
+    function updateInstituicaoFilterOptions() {
+      const rawSearch = (document.getElementById('searchInput').value || '').trim();
+      const instSearch = (document.getElementById('inputSearchInst') ? document.getElementById('inputSearchInst').value : '').trim().toLowerCase();
+
+      const baseDocs = documents.filter(doc => {
+        if (activeDomainFilter && activeDomainFilter !== 'todos') {
+          const dom = safeString(doc.dominio || 'academico').toLowerCase();
+          const doms = Array.isArray(doc.todos_dominios) && doc.todos_dominios.length > 0
+            ? doc.todos_dominios.map(d => safeString(d).toLowerCase())
+            : [dom];
+          if (activeDomainFilter === 'outros') {
+            const hasOutros = doms.some(d => d !== 'academico' && d !== 'financeiro');
+            if (!hasOutros && (dom === 'academico' || dom === 'financeiro')) return false;
+          } else if (!doms.includes(activeDomainFilter)) {
+            return false;
+          }
+        }
+
+        const status = safeString(doc.status_conferencia || 'pendente').toLowerCase();
+        if (activeStatusFilter === 'pendente' && status === 'aprovado') return false;
+        if (activeStatusFilter === 'aprovado' && status !== 'aprovado') return false;
+
+        if (activeTipoFilter) {
+          const docTipo = safeString(doc.tipo_documento).trim() || 'Não identificado';
+          const tipos = Array.isArray(doc.todos_tipos) && doc.todos_tipos.length > 0
+            ? doc.todos_tipos.map(t => safeString(t).trim())
+            : [docTipo];
+          if (!tipos.some(t => t.toLowerCase() === activeTipoFilter.toLowerCase())) return false;
+        }
+
+        if (activeNaturezaFilter) {
+          const docNat = safeString(doc.natureza_curso).trim() || 'Não identificada';
+          if (docNat !== activeNaturezaFilter && classifyNatureza(docNat) !== activeNaturezaFilter) return false;
+        }
+
+        return matchDocumentSearch(doc, rawSearch);
+      });
+
+      const counts = {};
+      baseDocs.forEach(d => {
+        const fac = safeString(d.faculdade).trim();
+        if (fac) {
+          counts[fac] = (counts[fac] || 0) + 1;
+        }
+      });
+
+      const select = document.getElementById('selectInstituicaoFilter');
+      if (select) {
+        select.innerHTML = `<option value="">Todas as Instituições (${baseDocs.length})</option>`;
+        const sorted = Object.keys(counts).sort((a, b) => {
+          const diff = counts[b] - counts[a];
+          if (diff !== 0) return diff;
+          return a.localeCompare(b);
+        });
+
+        sorted.forEach(fac => {
+          if (!instSearch || fac.toLowerCase().includes(instSearch)) {
+            const opt = document.createElement('option');
+            opt.value = fac;
+            opt.innerText = `${fac} (${counts[fac]})`;
+            select.appendChild(opt);
+          }
+        });
+        select.value = activeInstituicaoFilter;
+      }
+
+      const chipsContainer = document.getElementById('instituicaoChips');
+      if (chipsContainer) {
+        chipsContainer.innerHTML = '';
+        const sorted = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+        const top8 = sorted.slice(0, 8);
+
+        top8.forEach(fac => {
+          const isActive = activeInstituicaoFilter === fac;
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = `px-2 py-0.5 rounded text-[10px] font-medium border transition truncate max-w-[170px] ${
+            isActive
+              ? 'bg-amber-500 text-white border-amber-400 font-semibold shadow-sm'
+              : 'bg-slate-900 text-amber-300/80 border-slate-800 hover:bg-slate-800'
+          }`;
+          chip.innerText = `${fac} (${counts[fac]})`;
+          chip.title = `${fac} (${counts[fac]} documentos)`;
+          chip.onclick = () => setInstituicaoFilter(isActive ? '' : fac);
+          chipsContainer.appendChild(chip);
+        });
+      }
+
+      const btnClear = document.getElementById('btnClearInstituicao');
+      if (btnClear) {
+        if (activeInstituicaoFilter) btnClear.classList.remove('hidden');
+        else btnClear.classList.add('hidden');
+      }
+    }
+
+    function setInstituicaoFilter(inst) {
+      activeInstituicaoFilter = inst;
+      applyFilter(true);
+    }
+
+    function resetInstituicaoFilter() {
+      activeInstituicaoFilter = '';
+      const input = document.getElementById('inputSearchInst');
+      if (input) input.value = '';
+      applyFilter(true);
+    }
+
+    function onInstituicaoSelectChange() {
+      const val = (document.getElementById('selectInstituicaoFilter').value || '').trim();
+      setInstituicaoFilter(val);
+    }
+
+    function onInstSearchInput() {
+      updateInstituicaoFilterOptions();
+    }
+
+    // Seleção Múltipla & Ações em Lote (Bulk Actions)
+    function toggleSelectDoc(md5, isChecked) {
+      if (isChecked) {
+        selectedMd5s.add(md5);
+      } else {
+        selectedMd5s.delete(md5);
+      }
+      updateBulkUI();
+      updateSidebarSelection();
+    }
+
+    function toggleSelectAllFiltered(isChecked) {
+      if (isChecked) {
+        filteredDocs.forEach(d => {
+          if (d && d.md5) selectedMd5s.add(d.md5);
+        });
+      } else {
+        filteredDocs.forEach(d => {
+          if (d && d.md5) selectedMd5s.delete(d.md5);
+        });
+      }
+      updateBulkUI();
+      renderSidebar();
+    }
+
+    function clearBulkSelection() {
+      selectedMd5s.clear();
+      updateBulkUI();
+      renderSidebar();
+    }
+
+    function updateBulkUI() {
+      const count = selectedMd5s.size;
+      const bar = document.getElementById('floatingBulkBar');
+      const countEl = document.getElementById('bulkCountSelected');
+      const chkMaster = document.getElementById('chkSelectAllFiltered');
+
+      if (countEl) countEl.innerText = count;
+
+      if (bar) {
+        if (count > 0) {
+          bar.classList.remove('hidden');
+        } else {
+          bar.classList.add('hidden');
+        }
+      }
+
+      if (chkMaster) {
+        const totalVisible = filteredDocs.length;
+        if (totalVisible === 0) {
+          chkMaster.checked = false;
+          chkMaster.indeterminate = false;
+        } else {
+          const visibleSelectedCount = filteredDocs.filter(d => selectedMd5s.has(d.md5)).length;
+          if (visibleSelectedCount === totalVisible) {
+            chkMaster.checked = true;
+            chkMaster.indeterminate = false;
+          } else if (visibleSelectedCount > 0) {
+            chkMaster.checked = false;
+            chkMaster.indeterminate = true;
+          } else {
+            chkMaster.checked = false;
+            chkMaster.indeterminate = false;
+          }
+        }
+      }
+    }
+
+    async function executeBulkApprove() {
+      const count = selectedMd5s.size;
+      if (count === 0) return;
+
+      if (!confirm(`Deseja aprovar a conferência humana de ${count} documento(s) selecionado(s)?`)) {
+        return;
+      }
+
+      const md5s = Array.from(selectedMd5s);
+      try {
+        const res = await fetch('/api/batch/aprovar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ md5s })
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'sucesso') {
+          const nowIso = new Date().toISOString();
+          documents.forEach(d => {
+            if (selectedMd5s.has(d.md5)) {
+              d.status_conferencia = 'aprovado';
+              d.conferido_em = nowIso;
+            }
+          });
+          clearBulkSelection();
+          applyFilter(true);
+          showToast(`${data.count || count} documento(s) aprovado(s) com sucesso!`, 'success');
+        } else {
+          alert(`Erro ao aprovar documentos em lote: ${data.mensagem || 'Falha na requisição'}`);
+        }
+      } catch (err) {
+        alert(`Erro de conexão ao aprovar lote: ${err.message}`);
+      }
+    }
+
+    async function executeBulkExportZip() {
+      const count = selectedMd5s.size;
+      if (count === 0) return;
+
+      const btn = document.getElementById('btnBulkZip');
+      const origHtml = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-[11px]"></i><span>Gerando...</span>`;
+      }
+
+      const md5s = Array.from(selectedMd5s);
+      try {
+        const res = await fetch('/api/batch/exportar-zip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ md5s })
+        });
+
+        if (!res.ok) {
+          throw new Error(`Servidor retornou erro ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `joakindex_lote_${count}_arquivos_${new Date().toISOString().slice(0, 10)}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        showToast(`Arquivo ZIP com ${count} documento(s) baixado com sucesso!`, 'success');
+      } catch (err) {
+        alert(`Erro ao exportar ZIP em lote: ${err.message}`);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
+      }
+    }
+
+    function openBulkTagModal() {
+      const count = selectedMd5s.size;
+      if (count === 0) return;
+
+      document.getElementById('modalBulkTagCount').innerText = count;
+      document.getElementById('bulkInputDominio').value = '';
+      document.getElementById('bulkInputTipo').value = '';
+      document.getElementById('bulkInputFaculdade').value = '';
+      document.getElementById('bulkInputStatusConf').value = '';
+
+      const dlTipos = document.getElementById('bulkDatalistTipos');
+      if (dlTipos) {
+        dlTipos.innerHTML = allUniqueTipos.map(t => `<option value="${t}">`).join('');
+      }
+      const dlFacs = document.getElementById('bulkDatalistFaculdades');
+      if (dlFacs) {
+        dlFacs.innerHTML = allUniqueInstituicoes.map(f => `<option value="${f}">`).join('');
+      }
+
+      document.getElementById('modalBulkTag').classList.remove('hidden');
+    }
+
+    function closeBulkTagModal() {
+      document.getElementById('modalBulkTag').classList.add('hidden');
+    }
+
+    async function confirmBulkTagApply() {
+      const count = selectedMd5s.size;
+      if (count === 0) return;
+
+      const dom = document.getElementById('bulkInputDominio').value.trim();
+      const tipo = document.getElementById('bulkInputTipo').value.trim();
+      const fac = document.getElementById('bulkInputFaculdade').value.trim();
+      const statusConf = document.getElementById('bulkInputStatusConf').value.trim();
+
+      if (!dom && !tipo && !fac && !statusConf) {
+        alert('Selecione ou preencha pelo menos um campo para alterar.');
+        return;
+      }
+
+      const payload = {
+        md5s: Array.from(selectedMd5s),
+        dominio: dom || null,
+        tipo_documento: tipo || null,
+        faculdade: fac || null,
+        status_conferencia: statusConf || null
+      };
+
+      try {
+        const res = await fetch('/api/batch/alterar-tipo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'sucesso') {
+          const nowIso = new Date().toISOString();
+          documents.forEach(d => {
+            if (selectedMd5s.has(d.md5)) {
+              if (dom) {
+                d.dominio = dom;
+                d.todos_dominios = [dom];
+              }
+              if (tipo) {
+                d.tipo_documento = tipo;
+                d.todos_tipos = [tipo];
+              }
+              if (fac) {
+                d.faculdade = fac;
+              }
+              if (statusConf) {
+                d.status_conferencia = statusConf;
+                if (statusConf === 'aprovado') d.conferido_em = nowIso;
+              }
+              d.revisado_em = nowIso;
+            }
+          });
+          closeBulkTagModal();
+          clearBulkSelection();
+          initMasterFilterLists();
+          applyFilter(true);
+          showToast(`${data.count || count} documento(s) atualizado(s) com sucesso!`, 'success');
+        } else {
+          alert(`Erro ao atualizar lote: ${data.mensagem || 'Falha na requisição'}`);
+        }
+      } catch (err) {
+        alert(`Erro de conexão ao atualizar lote: ${err.message}`);
+      }
+    }
+
+    let bulkClassifyAborted = false;
+
+    async function executeBulkClassify() {
+      const count = selectedMd5s.size;
+      if (count === 0) return;
+
+      if (!confirm(`Deseja executar a leitura com IA e OCR para ${count} documento(s) selecionado(s)?`)) {
+        return;
+      }
+
+      bulkClassifyAborted = false;
+      const modal = document.getElementById('modalBulkClassifyProgress');
+      const msgEl = document.getElementById('bulkClassifyStatusMsg');
+      const barEl = document.getElementById('bulkClassifyProgressBar');
+      const counterEl = document.getElementById('bulkClassifyCounter');
+      const percentEl = document.getElementById('bulkClassifyPercent');
+
+      modal.classList.remove('hidden');
+      const md5s = Array.from(selectedMd5s);
+      let done = 0;
+
+      for (let i = 0; i < md5s.length; i++) {
+        if (bulkClassifyAborted) break;
+
+        const m = md5s[i];
+        const docObj = documents.find(d => d.md5 === m);
+        const fname = docObj ? (docObj.nome_arquivo || m.substring(0, 8)) : m.substring(0, 8);
+        msgEl.innerText = `Processando ${fname}...`;
+        counterEl.innerText = `${i + 1} / ${md5s.length}`;
+        const pct = Math.round(((i + 1) / md5s.length) * 100);
+        barEl.style.width = `${pct}%`;
+        percentEl.innerText = `${pct}%`;
+
+        try {
+          const res = await fetch('/api/processar-documento', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ md5: m })
+          });
+          const data = await res.json();
+          if (res.ok && data.status === 'sucesso' && data.documento) {
+            const idx = documents.findIndex(d => d.md5 === m);
+            if (idx !== -1) {
+              documents[idx] = Object.assign({}, documents[idx], data.documento);
+            }
+            done++;
+          }
+        } catch (e) {
+          console.error(`Erro ao processar ${m}:`, e);
+        }
+      }
+
+      modal.classList.add('hidden');
+      clearBulkSelection();
+      initMasterFilterLists();
+      applyFilter(true);
+      showToast(`${done} de ${md5s.length} documento(s) classificado(s) com sucesso!`, 'success');
+    }
+
+    function abortBulkClassify() {
+      bulkClassifyAborted = true;
+      const msgEl = document.getElementById('bulkClassifyStatusMsg');
+      if (msgEl) msgEl.innerText = 'Interrompendo após o documento atual...';
+    }
 
     // Modo de Exibição do Sidebar (Miniaturas vs Compacto)
     let sidebarViewMode = localStorage.getItem('joakindex_sidebar_view_mode') || 'thumbnails';
@@ -2399,6 +3194,8 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      loadAccordionsState();
+      applyAccordionsState();
       updateThumbnailToggleUI();
       loadDocuments();
       setupKeyboardShortcuts();
@@ -2485,10 +3282,14 @@
     function initMasterFilterLists() {
       const natSet = new Set();
       const tipoSet = new Set();
+      const instSet = new Set();
 
       documents.forEach(d => {
         const nat = safeString(d.natureza_curso).trim();
         natSet.add(nat || 'Não identificada');
+
+        const fac = safeString(d.faculdade).trim();
+        if (fac) instSet.add(fac);
 
         if (Array.isArray(d.todos_tipos) && d.todos_tipos.length > 0) {
           d.todos_tipos.forEach(t => {
@@ -2503,11 +3304,14 @@
 
       allUniqueNaturezas = Array.from(natSet);
       allUniqueTipos = Array.from(tipoSet);
+      allUniqueInstituicoes = Array.from(instSet).sort((a, b) => a.localeCompare(b));
     }
 
     function updateFacetFilters() {
       updateNaturezaFilterOptions();
       updateTipoFilterOptions();
+      updateInstituicaoFilterOptions();
+      updateAccordionBadges();
     }
 
     // Calcula e atualiza dinamicamente as opções e tags de Natureza do Curso
@@ -2979,6 +3783,13 @@
       const rawSearch = (document.getElementById('searchInput').value || '').trim();
       
       filteredDocs = documents.filter(doc => {
+        // -1. Filtro especial da Visão Rápida Dossiês
+        if (activeQuickView === 'dossies') {
+          const pgs = Array.isArray(doc.dossie_paginas) ? doc.dossie_paginas.length : 0;
+          const tipos = Array.isArray(doc.todos_tipos) ? doc.todos_tipos.length : 0;
+          if (pgs < 2 && tipos < 2) return false;
+        }
+
         // 0. Filtro por Domínio
         if (activeDomainFilter && activeDomainFilter !== 'todos') {
           const dom = safeString(doc.dominio || 'academico').toLowerCase();
@@ -3015,6 +3826,12 @@
             ? doc.todos_tipos.map(t => safeString(t).trim())
             : [docTipo];
           if (!tipos.some(t => t.toLowerCase() === activeTipoFilter.toLowerCase())) return false;
+        }
+
+        // 3.1. Filtro por Instituição / Emissor
+        if (activeInstituicaoFilter) {
+          const fac = safeString(doc.faculdade).trim();
+          if (fac.toLowerCase() !== activeInstituicaoFilter.toLowerCase()) return false;
         }
 
         // 4. Filtro de busca textual
@@ -3124,6 +3941,7 @@
       if (cntNaoProc) cntNaoProc.innerText = naoProcessados;
 
       document.getElementById('filterResultCount').innerText = `${filteredDocs.length} de ${total}`;
+      updateBulkUI();
       
       const label = [];
       if (rawSearch) {
@@ -3139,6 +3957,7 @@
       }
       if (activeNaturezaFilter) label.push(formatShortNature(activeNaturezaFilter));
       if (activeTipoFilter) label.push(activeTipoFilter);
+      if (activeInstituicaoFilter) label.push(activeInstituicaoFilter);
       document.getElementById('activeFilterLabel').innerText = label.length > 0 ? `(${label.join(' • ')})` : '';
 
       const totalUnprocessed = documents.filter(d => isDocumentUnprocessed(d)).length;
@@ -3264,17 +4083,24 @@
 
       filteredDocs.forEach((doc, idx) => {
         const isSelected = idx === currentIndex;
+        const isDocChecked = selectedMd5s.has(doc.md5);
         const isUnproc = isDocumentUnprocessed(doc);
         const isApproved = !isUnproc && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
         const isImg = isImageDoc(doc);
         const docDom = safeString(doc.dominio || 'academico').toLowerCase();
         
         const card = document.createElement('div');
-        card.className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 ${
-          isSelected 
-            ? 'bg-slate-800/95 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30' 
-            : (isUnproc ? 'bg-slate-900/40 hover:bg-slate-800/50 border-slate-800/60 text-slate-400' : 'bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400')
-        }`;
+        let cardClass = 'p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 ';
+        if (isDocChecked) {
+          cardClass += 'bg-emerald-950/25 border-emerald-500/70 shadow-sm ring-1 ring-emerald-500/50 text-slate-200';
+        } else if (isSelected) {
+          cardClass += 'bg-slate-800/95 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30 text-slate-100';
+        } else if (isUnproc) {
+          cardClass += 'bg-slate-900/40 hover:bg-slate-800/50 border-slate-800/60 text-slate-400';
+        } else {
+          cardClass += 'bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400';
+        }
+        card.className = cardClass;
 
         card.onclick = () => selectDocument(idx);
 
@@ -3343,6 +4169,8 @@
           ? `<span class="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded text-[9px] font-semibold shrink-0" title="${doc.todos_tipos.join(', ')}">+${tiposCount - 1} doc${tiposCount > 2 ? 's' : ''}</span>`
           : '';
 
+        const chkBoxHtml = `<input type="checkbox" ${isDocChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleSelectDoc('${doc.md5}', this.checked)" class="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-3.5 w-3.5 shrink-0 mr-0.5" title="Selecionar para ações em lote">`;
+
         if (sidebarViewMode === 'thumbnails') {
           const thumbSrc = `/api/thumbnail/${doc.md5}`;
           card.innerHTML = `
@@ -3359,6 +4187,7 @@
               <div class="flex-1 min-w-0 flex flex-col gap-1">
                 <div class="flex items-center justify-between gap-1">
                   <div class="flex items-center gap-1.5 truncate">
+                    ${chkBoxHtml}
                     <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
                     ${tipoBadge}
                     ${multiBadge}
@@ -3381,6 +4210,7 @@
           card.innerHTML = `
             <div class="flex items-center justify-between gap-1">
               <div class="flex items-center gap-1.5 truncate">
+                ${chkBoxHtml}
                 ${extIcon}
                 <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
                 ${tipoBadge}
@@ -3406,10 +4236,19 @@
     function resetAllFilters() {
       document.getElementById('searchInput').value = '';
       document.getElementById('clearSearchBtn').classList.add('hidden');
+      activeQuickView = 'todos';
+      updateQuickViewUI();
       activeStatusFilter = 'todos';
       activeDomainFilter = 'todos';
       activeNaturezaFilter = '';
       activeTipoFilter = '';
+      activeInstituicaoFilter = '';
+      const inputInst = document.getElementById('inputSearchInst');
+      if (inputInst) inputInst.value = '';
+      const selInst = document.getElementById('selectInstituicaoFilter');
+      if (selInst) selInst.value = '';
+      const btnClearInst = document.getElementById('btnClearInstituicao');
+      if (btnClearInst) btnClearInst.classList.add('hidden');
       document.getElementById('selectNaturezaFilter').value = '';
       document.getElementById('btnClearNatureza').classList.add('hidden');
       document.getElementById('selectTipoFilter').value = '';
@@ -3440,11 +4279,21 @@
       const cards = listEl.children;
       for (let i = 0; i < cards.length; i++) {
         if (!cards[i].classList || !cards[i].classList.contains('cursor-pointer')) continue;
+        const doc = filteredDocs[i];
+        const isDocChecked = doc && selectedMd5s.has(doc.md5);
         if (i === currentIndex) {
-          cards[i].className = 'p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 bg-slate-800/95 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30';
+          cards[i].className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 ${
+            isDocChecked
+              ? 'bg-emerald-950/30 border-emerald-500/80 ring-2 ring-emerald-500/50'
+              : 'bg-slate-800/95 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30'
+          }`;
           cards[i].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         } else {
-          cards[i].className = 'p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400';
+          cards[i].className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 ${
+            isDocChecked
+              ? 'bg-emerald-950/20 border-emerald-500/70 ring-1 ring-emerald-500/40 text-slate-200'
+              : 'bg-slate-900/50 hover:bg-slate-800/60 border-slate-800/80 text-slate-400'
+          }`;
         }
       }
     }
@@ -5112,6 +5961,15 @@
           const modal = document.getElementById('configModal');
           if (modal && !modal.classList.contains('hidden')) {
             closeConfigModal();
+            return;
+          }
+          const bulkModal = document.getElementById('modalBulkTag');
+          if (bulkModal && !bulkModal.classList.contains('hidden')) {
+            closeBulkTagModal();
+            return;
+          }
+          if (selectedMd5s.size > 0) {
+            clearBulkSelection();
             return;
           }
         }

@@ -473,6 +473,111 @@ def update_conference_status(
         return cur.rowcount > 0
 
 
+def batch_update_conference_status(
+    db_path: Union[str, Path],
+    md5s: List[str],
+    status_conferencia: str,
+    observacoes: Optional[str] = None
+) -> int:
+    """Atualiza aprovação de conferência para múltiplos documentos em uma transação única."""
+    if not md5s:
+        return 0
+    db = Path(db_path).expanduser().resolve()
+    if not db.exists():
+        return 0
+    clean_md5s = [str(m).strip().lower() for m in md5s if m]
+    if not clean_md5s:
+        return 0
+
+    now_iso = datetime.now().isoformat()
+    with get_connection(db) as conn:
+        cur = conn.cursor()
+        if observacoes is not None:
+            params = [(status_conferencia, now_iso, observacoes, m) for m in clean_md5s]
+            cur.executemany("""
+                UPDATE documentos
+                SET status_conferencia = ?, conferido_em = ?, observacoes_conferencia = ?
+                WHERE md5 = ?
+            """, params)
+        else:
+            params = [(status_conferencia, now_iso, m) for m in clean_md5s]
+            cur.executemany("""
+                UPDATE documentos
+                SET status_conferencia = ?, conferido_em = ?
+                WHERE md5 = ?
+            """, params)
+        total_updated = cur.rowcount
+        conn.commit()
+    return total_updated
+
+
+def batch_update_tag_domain(
+    db_path: Union[str, Path],
+    md5s: List[str],
+    tipo_documento: Optional[str] = None,
+    dominio: Optional[str] = None,
+    faculdade: Optional[str] = None,
+    status_conferencia: Optional[str] = None
+) -> int:
+    """Atualiza tipo, domínio, emissor ou status para múltiplos documentos em uma transação única."""
+    if not md5s:
+        return 0
+    db = Path(db_path).expanduser().resolve()
+    if not db.exists():
+        return 0
+    clean_md5s = [str(m).strip().lower() for m in md5s if m]
+    if not clean_md5s:
+        return 0
+
+    set_clauses = []
+    base_values = []
+    now_iso = datetime.now().isoformat()
+
+    if tipo_documento is not None and str(tipo_documento).strip():
+        t_clean = str(tipo_documento).strip()
+        set_clauses.append("tipo_documento = ?")
+        base_values.append(t_clean)
+        set_clauses.append("todos_tipos = ?")
+        base_values.append(json.dumps([t_clean], ensure_ascii=False))
+
+    if dominio is not None and str(dominio).strip():
+        d_clean = str(dominio).strip().lower()
+        set_clauses.append("dominio = ?")
+        base_values.append(d_clean)
+        set_clauses.append("todos_dominios = ?")
+        base_values.append(json.dumps([d_clean], ensure_ascii=False))
+
+    if faculdade is not None and str(faculdade).strip():
+        f_clean = str(faculdade).strip()
+        set_clauses.append("faculdade = ?")
+        base_values.append(f_clean)
+
+    if status_conferencia is not None and str(status_conferencia).strip():
+        s_clean = str(status_conferencia).strip().lower()
+        set_clauses.append("status_conferencia = ?")
+        base_values.append(s_clean)
+        if s_clean == "aprovado":
+            set_clauses.append("conferido_em = ?")
+            base_values.append(now_iso)
+
+    if not set_clauses:
+        return 0
+
+    set_clauses.append("revisado_em = ?")
+    base_values.append(now_iso)
+
+    sql = f"UPDATE documentos SET {', '.join(set_clauses)} WHERE md5 = ?"
+
+    with get_connection(db) as conn:
+        cur = conn.cursor()
+        params = [tuple(base_values + [m]) for m in clean_md5s]
+        cur.executemany(sql, params)
+        total_updated = cur.rowcount
+        conn.commit()
+    return total_updated
+
+
+
 def sync_to_json(
     db_path: Union[str, Path],
     json_path: Union[str, Path],
