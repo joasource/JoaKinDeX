@@ -537,6 +537,31 @@
                 </select>
               </div>
             </div>
+
+            <!-- Seção de Documentos no Arquivo (Tags Múltiplas Interativas) -->
+            <div class="mt-3 pt-2.5 border-t border-slate-800/80">
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                  <i class="fa-solid fa-tags text-indigo-400 text-[11px]"></i> Documentos no Arquivo (Dossiê)
+                </label>
+                <div class="flex items-center gap-1.5">
+                  <button type="button" onclick="openAddTagModal()" title="Adicionar documento ao arquivo"
+                          class="text-[10px] px-2 py-0.5 rounded bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/50 flex items-center gap-1 transition-colors">
+                    <i class="fa-solid fa-plus text-[9px]"></i> Adicionar
+                  </button>
+                </div>
+              </div>
+              <div id="multiTagsContainer" class="flex flex-wrap gap-1.5 min-h-[30px] items-center p-1.5 bg-slate-950/60 rounded border border-slate-800">
+                <!-- Tags renderizadas dinamicamente aqui -->
+              </div>
+              <!-- Atalhos rápidos de páginas do dossiê -->
+              <div id="dossierPageShortcuts" class="mt-2 flex flex-wrap items-center gap-1.5 hidden">
+                <span class="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                  <i class="fa-regular fa-compass text-[9px]"></i> Páginas:
+                </span>
+                <div id="dossierPageList" class="flex flex-wrap items-center gap-1"></div>
+              </div>
+            </div>
           </div>
 
           <!-- 2. CARD EXCLUSIVO DE COMPROVANTE PIX / FINANCEIRO (Contextual) -->
@@ -1693,6 +1718,78 @@
     </div>
   </div>
 
+  <!-- MODAL: ADICIONAR DOCUMENTO AO ARQUIVO (DOSSIÊ) -->
+  <div id="modalAddTag" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 w-full max-w-md space-y-4 animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-xs font-semibold text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-tags text-indigo-400"></i> Adicionar Documento ao Arquivo (Dossiê)
+        </h3>
+        <button type="button" onclick="closeAddTagModal()" class="text-slate-400 hover:text-slate-200 text-sm p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-300 mb-1">Selecione um Tipo Comum:</label>
+          <select id="quickSelectTag" onchange="onQuickSelectTagChange()"
+                  class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+            <option value="">-- Escolha um tipo pré-definido --</option>
+            <optgroup label="Identificação Pessoal">
+              <option value="CNH">CNH (Carteira Nacional de Habilitação)</option>
+              <option value="RG">RG / Identidade</option>
+              <option value="CPF">CPF</option>
+              <option value="Certidão de Nascimento">Certidão de Nascimento</option>
+              <option value="Certidão de Casamento">Certidão de Casamento</option>
+              <option value="Passaporte">Passaporte</option>
+              <option value="Título de Eleitor">Título de Eleitor</option>
+              <option value="Carteira de Trabalho">Carteira de Trabalho</option>
+            </optgroup>
+            <optgroup label="Acadêmico">
+              <option value="Diploma">Diploma</option>
+              <option value="Certificado">Certificado</option>
+              <option value="Histórico Escolar">Histórico Escolar</option>
+              <option value="Declaração">Declaração</option>
+              <option value="Ementa">Ementa</option>
+              <option value="Currículo">Currículo</option>
+            </optgroup>
+            <optgroup label="Financeiro & Pagamentos">
+              <option value="Comprovante PIX">Comprovante PIX</option>
+              <option value="Comprovante de Pagamento">Comprovante de Pagamento</option>
+              <option value="Recibo de Pagamento">Recibo de Pagamento</option>
+              <option value="Boleto Bancário">Boleto Bancário</option>
+              <option value="Extrato Bancário">Extrato Bancário</option>
+              <option value="Nota Fiscal">Nota Fiscal</option>
+            </optgroup>
+            <optgroup label="Jurídico">
+              <option value="Procuração">Procuração</option>
+              <option value="Contrato">Contrato</option>
+              <option value="Termo de Posse">Termo de Posse</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-slate-300 mb-1">Ou Digite um Nome Personalizado:</label>
+          <input type="text" id="customTagNameInput" placeholder="Ex: Atestado Médico, Carteira OAB..."
+                 class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button type="button" onclick="closeAddTagModal()"
+                class="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200">
+          Cancelar
+        </button>
+        <button type="button" onclick="confirmAddTag()"
+                class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-check"></i> Adicionar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION -->
   <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 text-slate-100 border border-slate-700 px-4 py-2.5 rounded-lg shadow-xl text-xs flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
     <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
@@ -1845,6 +1942,18 @@
         selectDom.value = mapTipoDom[tipo];
         onDominioChange();
       }
+
+      if (currentIndex >= 0 && filteredDocs && filteredDocs[currentIndex]) {
+        const doc = filteredDocs[currentIndex];
+        doc.tipo_documento = tipo;
+        let tipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
+        if (tipo && !tipos.some(t => t.toLowerCase() === tipo.toLowerCase())) {
+          tipos.unshift(tipo);
+        }
+        doc.todos_tipos = tipos;
+        renderMultiTags(doc);
+      }
+
       markDirty();
     }
 
@@ -2141,6 +2250,15 @@
           if (doc && typeof doc === 'object') {
             delete doc.data_criacao;
             if (!doc.dominio) doc.dominio = 'academico';
+            if (!doc.todos_tipos || !Array.isArray(doc.todos_tipos)) {
+              doc.todos_tipos = doc.tipo_documento ? [doc.tipo_documento] : [];
+            }
+            if (!doc.todos_dominios || !Array.isArray(doc.todos_dominios)) {
+              doc.todos_dominios = doc.dominio ? [doc.dominio] : [];
+            }
+            if (!doc.dossie_paginas || !Array.isArray(doc.dossie_paginas)) {
+              doc.dossie_paginas = [];
+            }
           }
           return doc;
         });
@@ -2185,8 +2303,16 @@
       documents.forEach(d => {
         const nat = safeString(d.natureza_curso).trim();
         natSet.add(nat || 'Não identificada');
-        const tipo = safeString(d.tipo_documento).trim();
-        tipoSet.add(tipo || 'Não identificado');
+
+        if (Array.isArray(d.todos_tipos) && d.todos_tipos.length > 0) {
+          d.todos_tipos.forEach(t => {
+            const cleanT = safeString(t).trim();
+            if (cleanT) tipoSet.add(cleanT);
+          });
+        } else {
+          const tipo = safeString(d.tipo_documento).trim();
+          tipoSet.add(tipo || 'Não identificado');
+        }
       });
 
       allUniqueNaturezas = Array.from(natSet);
@@ -2208,9 +2334,13 @@
       const baseDocs = documents.filter(doc => {
         if (activeDomainFilter && activeDomainFilter !== 'todos') {
           const dom = safeString(doc.dominio || 'academico').toLowerCase();
+          const doms = Array.isArray(doc.todos_dominios) && doc.todos_dominios.length > 0
+            ? doc.todos_dominios.map(d => safeString(d).toLowerCase())
+            : [dom];
           if (activeDomainFilter === 'outros') {
-            if (dom === 'academico' || dom === 'financeiro') return false;
-          } else if (dom !== activeDomainFilter) {
+            const hasOutros = doms.some(d => d !== 'academico' && d !== 'financeiro');
+            if (!hasOutros && (dom === 'academico' || dom === 'financeiro')) return false;
+          } else if (!doms.includes(activeDomainFilter)) {
             return false;
           }
         }
@@ -2221,7 +2351,10 @@
 
         if (activeTipoFilter) {
           const docTipo = safeString(doc.tipo_documento).trim() || 'Não identificado';
-          if (docTipo !== activeTipoFilter) return false;
+          const tipos = Array.isArray(doc.todos_tipos) && doc.todos_tipos.length > 0
+            ? doc.todos_tipos.map(t => safeString(t).trim())
+            : [docTipo];
+          if (!tipos.some(t => t.toLowerCase() === activeTipoFilter.toLowerCase())) return false;
         }
 
         return matchDocumentSearch(doc, rawSearch);
@@ -2362,9 +2495,13 @@
       const baseDocs = documents.filter(doc => {
         if (activeDomainFilter && activeDomainFilter !== 'todos') {
           const dom = safeString(doc.dominio || 'academico').toLowerCase();
+          const doms = Array.isArray(doc.todos_dominios) && doc.todos_dominios.length > 0
+            ? doc.todos_dominios.map(d => safeString(d).toLowerCase())
+            : [dom];
           if (activeDomainFilter === 'outros') {
-            if (dom === 'academico' || dom === 'financeiro') return false;
-          } else if (dom !== activeDomainFilter) {
+            const hasOutros = doms.some(d => d !== 'academico' && d !== 'financeiro');
+            if (!hasOutros && (dom === 'academico' || dom === 'financeiro')) return false;
+          } else if (!doms.includes(activeDomainFilter)) {
             return false;
           }
         }
@@ -2383,8 +2520,17 @@
 
       const counts = {};
       baseDocs.forEach(d => {
-        const tipo = safeString(d.tipo_documento).trim() || 'Não identificado';
-        counts[tipo] = (counts[tipo] || 0) + 1;
+        const tipos = Array.isArray(d.todos_tipos) && d.todos_tipos.length > 0
+          ? d.todos_tipos.map(t => safeString(t).trim()).filter(Boolean)
+          : [safeString(d.tipo_documento).trim() || 'Não identificado'];
+        
+        const seenInDoc = new Set();
+        tipos.forEach(t => {
+          if (!seenInDoc.has(t)) {
+            seenInDoc.add(t);
+            counts[t] = (counts[t] || 0) + 1;
+          }
+        });
       });
 
       const totalMatching = baseDocs.length;
@@ -2529,8 +2675,10 @@
       const pixPag = normalizeText(doc.pix_pagador_nome || de.pix_pagador_nome);
       const pixPagBanco = normalizeText(doc.pix_pagador_banco || de.pix_pagador_banco);
       const pixRecBanco = normalizeText(doc.pix_recebedor_banco || de.pix_recebedor_banco);
+      const todosTipos = Array.isArray(doc.todos_tipos) ? normalizeText(doc.todos_tipos.join(' ')) : '';
+      const todosDominios = Array.isArray(doc.todos_dominios) ? normalizeText(doc.todos_dominios.join(' ')) : '';
 
-      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${data} ${carga} ${obs} ${dominio} ${extensao} ${valor} ${pixChave} ${pixE2e} ${pixAut} ${pixPag} ${pixPagBanco} ${pixRecBanco}`;
+      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${todosTipos} ${data} ${carga} ${obs} ${dominio} ${todosDominios} ${extensao} ${valor} ${pixChave} ${pixE2e} ${pixAut} ${pixPag} ${pixPagBanco} ${pixRecBanco}`;
 
       return tokens.every(token => {
         // 1. Busca textual direta na junção de todos os campos
@@ -2648,9 +2796,13 @@
         // 0. Filtro por Domínio
         if (activeDomainFilter && activeDomainFilter !== 'todos') {
           const dom = safeString(doc.dominio || 'academico').toLowerCase();
+          const doms = Array.isArray(doc.todos_dominios) && doc.todos_dominios.length > 0
+            ? doc.todos_dominios.map(d => safeString(d).toLowerCase())
+            : [dom];
           if (activeDomainFilter === 'outros') {
-            if (dom === 'academico' || dom === 'financeiro') return false;
-          } else if (dom !== activeDomainFilter) {
+            const hasOutros = doms.some(d => d !== 'academico' && d !== 'financeiro');
+            if (!hasOutros && (dom === 'academico' || dom === 'financeiro')) return false;
+          } else if (!doms.includes(activeDomainFilter)) {
             return false;
           }
         }
@@ -2673,7 +2825,10 @@
         // 3. Filtro por Tipo de Documento
         if (activeTipoFilter) {
           const docTipo = safeString(doc.tipo_documento).trim() || 'Não identificado';
-          if (docTipo !== activeTipoFilter) return false;
+          const tipos = Array.isArray(doc.todos_tipos) && doc.todos_tipos.length > 0
+            ? doc.todos_tipos.map(t => safeString(t).trim())
+            : [docTipo];
+          if (!tipos.some(t => t.toLowerCase() === activeTipoFilter.toLowerCase())) return false;
         }
 
         // 4. Filtro de busca textual
@@ -2997,12 +3152,18 @@
           subText = safeString(doc.curso) || (isUnproc ? (doc.caminho_relativo || 'Clique em Classificar para extrair dados') : 'Curso não informado');
         }
 
+        const tiposCount = Array.isArray(doc.todos_tipos) ? doc.todos_tipos.length : 1;
+        const multiBadge = tiposCount > 1 
+          ? `<span class="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded text-[9px] font-semibold shrink-0" title="${doc.todos_tipos.join(', ')}">+${tiposCount - 1} doc${tiposCount > 2 ? 's' : ''}</span>`
+          : '';
+
         card.innerHTML = `
           <div class="flex items-center justify-between gap-1">
             <div class="flex items-center gap-1.5 truncate">
               ${extIcon}
               <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
               ${tipoBadge}
+              ${multiBadge}
             </div>
             ${statusBadge}
           </div>
@@ -3376,7 +3537,255 @@
       if (typeof updateClassificationButtonsState === 'function') {
         updateClassificationButtonsState();
       }
+      renderMultiTags(doc);
+      renderDossierPageShortcuts(doc);
       isDirty = false;
+    }
+
+    // -----------------------------------------------------------------------
+    // Funções do Dossiê Multi-Documento e Tags Interativas
+    // -----------------------------------------------------------------------
+    function renderMultiTags(doc) {
+      const container = document.getElementById('multiTagsContainer');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (!doc) return;
+      let tipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
+      if (tipos.length === 0 && doc.tipo_documento) {
+        tipos = [doc.tipo_documento];
+        doc.todos_tipos = tipos;
+      }
+
+      const primaryTipo = safeString(doc.tipo_documento || (tipos.length > 0 ? tipos[0] : '')).trim();
+
+      if (tipos.length === 0) {
+        container.innerHTML = '<span class="text-[11px] text-slate-500 italic p-1">Nenhum documento listado. Clique em "+ Adicionar".</span>';
+        return;
+      }
+
+      tipos.forEach(tipo => {
+        const cleanTipo = safeString(tipo).trim();
+        if (!cleanTipo) return;
+        const isPrimary = cleanTipo.toLowerCase() === primaryTipo.toLowerCase();
+
+        const tagEl = document.createElement('div');
+        tagEl.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-all ${
+          isPrimary
+            ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/30'
+            : 'bg-slate-800/90 text-slate-300 border border-slate-700 hover:border-slate-600 hover:bg-slate-800'
+        }`;
+
+        // Ícone temático
+        let iconClass = 'fa-regular fa-file text-slate-400';
+        const tLower = cleanTipo.toLowerCase();
+        if (tLower.includes('diploma') || tLower.includes('certificado')) iconClass = 'fa-solid fa-graduation-cap text-purple-400';
+        else if (tLower.includes('histórico') || tLower.includes('historico')) iconClass = 'fa-solid fa-book-bookmark text-indigo-400';
+        else if (tLower.includes('cnh') || tLower.includes('rg') || tLower.includes('cpf') || tLower.includes('identidade') || tLower.includes('passaporte') || tLower.includes('eleitor')) iconClass = 'fa-regular fa-id-card text-cyan-400';
+        else if (tLower.includes('certidão') || tLower.includes('certidao')) iconClass = 'fa-solid fa-scroll text-amber-400';
+        else if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto')) iconClass = 'fa-solid fa-money-bill-wave text-emerald-400';
+        else if (tLower.includes('procuração') || tLower.includes('procuracao') || tLower.includes('contrato') || tLower.includes('posse')) iconClass = 'fa-solid fa-gavel text-amber-400';
+
+        // Estrela de Principal
+        const starBtn = document.createElement('button');
+        starBtn.type = 'button';
+        starBtn.title = isPrimary ? 'Documento Principal deste arquivo' : 'Clique para eleger como Documento Principal';
+        starBtn.className = isPrimary ? 'text-amber-400 hover:text-amber-300 ml-0.5' : 'text-slate-500 hover:text-amber-400 ml-0.5';
+        starBtn.innerHTML = `<i class="fa-${isPrimary ? 'solid' : 'regular'} fa-star text-[10px]"></i>`;
+        starBtn.onclick = (e) => {
+          e.stopPropagation();
+          setPrimaryTag(cleanTipo);
+        };
+
+        // Texto do Tipo
+        const textSpan = document.createElement('span');
+        textSpan.className = 'select-none truncate max-w-[150px]';
+        textSpan.innerText = cleanTipo;
+        textSpan.title = cleanTipo;
+
+        // Botão Remover (×)
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.title = `Remover "${cleanTipo}" deste arquivo`;
+        delBtn.className = 'text-slate-500 hover:text-rose-400 hover:bg-slate-700/50 rounded p-0.5 transition-colors ml-0.5';
+        delBtn.innerHTML = '<i class="fa-solid fa-xmark text-[10px]"></i>';
+        delBtn.onclick = (e) => {
+          e.stopPropagation();
+          removeTag(cleanTipo);
+        };
+
+        tagEl.innerHTML = `<i class="${iconClass} text-[10px]"></i>`;
+        tagEl.appendChild(textSpan);
+        tagEl.appendChild(starBtn);
+        tagEl.appendChild(delBtn);
+
+        container.appendChild(tagEl);
+      });
+    }
+
+    function renderDossierPageShortcuts(doc) {
+      const container = document.getElementById('dossierPageShortcuts');
+      const list = document.getElementById('dossierPageList');
+      if (!container || !list) return;
+
+      if (!doc || !Array.isArray(doc.dossie_paginas) || doc.dossie_paginas.length <= 1) {
+        container.classList.add('hidden');
+        list.innerHTML = '';
+        return;
+      }
+
+      container.classList.remove('hidden');
+      list.innerHTML = '';
+
+      doc.dossie_paginas.forEach(p => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/70 text-[10px] flex items-center gap-1 transition-colors';
+        btn.title = `Pular para a página ${p.pagina} (${p.tipo})`;
+        btn.innerHTML = `<span class="font-mono text-cyan-400 font-semibold">P.${p.pagina}</span> <span class="truncate max-w-[100px]">${p.tipo}</span>`;
+        btn.onclick = () => jumpToPdfPage(p.pagina);
+        list.appendChild(btn);
+      });
+    }
+
+    function jumpToPdfPage(pageNum) {
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      if (isImageDoc(doc)) return;
+      const pdfFrame = document.getElementById('pdfFrame');
+      if (pdfFrame) {
+        pdfFrame.src = `/api/pdf/${doc.md5}#page=${pageNum}&toolbar=1&navpanes=0`;
+        showToast(`Exibindo página ${pageNum} (${doc.nome_arquivo || ''})`, 'info');
+      }
+    }
+
+    function setPrimaryTag(tipo) {
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      doc.tipo_documento = tipo;
+
+      // Atualiza domínio correspondente
+      const tLower = tipo.toLowerCase();
+      let newDom = 'academico';
+      if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto') || tLower.includes('extrato')) {
+        newDom = 'financeiro';
+      } else if (tLower.includes('rg') || tLower.includes('cnh') || tLower.includes('cpf') || tLower.includes('certidão') || tLower.includes('certidao') || tLower.includes('passaporte') || tLower.includes('eleitor')) {
+        newDom = 'identificacao';
+      } else if (tLower.includes('contrato') || tLower.includes('procuração') || tLower.includes('procuracao') || tLower.includes('posse')) {
+        newDom = 'juridico';
+      }
+      doc.dominio = newDom;
+
+      const selectDom = document.getElementById('select_dominio');
+      if (selectDom) selectDom.value = newDom;
+      onDominioChange();
+
+      const selectTipo = document.getElementById('select_tipo_documento');
+      if (selectTipo) {
+        let exists = false;
+        for (let i = 0; i < selectTipo.options.length; i++) {
+          if (selectTipo.options[i].value === tipo) { exists = true; break; }
+        }
+        if (!exists) {
+          const opt = document.createElement('option');
+          opt.value = tipo;
+          opt.innerText = tipo;
+          selectTipo.appendChild(opt);
+        }
+        selectTipo.value = tipo;
+      }
+
+      renderMultiTags(doc);
+      markDirty();
+      saveCurrentDoc();
+      showToast(`Documento principal definido como: ${tipo}`, 'success');
+    }
+
+    function removeTag(tipo) {
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      let tipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
+      tipos = tipos.filter(t => t.toLowerCase().trim() !== tipo.toLowerCase().trim());
+      doc.todos_tipos = tipos;
+
+      // Se removeu o tipo principal, define o próximo como principal
+      if (doc.tipo_documento && doc.tipo_documento.toLowerCase().trim() === tipo.toLowerCase().trim()) {
+        if (tipos.length > 0) {
+          setPrimaryTag(tipos[0]);
+          return;
+        } else {
+          doc.tipo_documento = 'Outro';
+          const selectTipo = document.getElementById('select_tipo_documento');
+          if (selectTipo) selectTipo.value = 'Outro';
+        }
+      }
+
+      renderMultiTags(doc);
+      markDirty();
+      saveCurrentDoc();
+      showToast(`Classificação "${tipo}" removida.`, 'info');
+    }
+
+    function openAddTagModal() {
+      const modal = document.getElementById('modalAddTag');
+      if (modal) {
+        document.getElementById('quickSelectTag').value = '';
+        document.getElementById('customTagNameInput').value = '';
+        modal.classList.remove('hidden');
+        document.getElementById('customTagNameInput').focus();
+      }
+    }
+
+    function closeAddTagModal() {
+      const modal = document.getElementById('modalAddTag');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function onQuickSelectTagChange() {
+      const val = document.getElementById('quickSelectTag').value;
+      if (val) {
+        document.getElementById('customTagNameInput').value = val;
+      }
+    }
+
+    function confirmAddTag() {
+      const customVal = (document.getElementById('customTagNameInput').value || '').trim();
+      const selectVal = document.getElementById('quickSelectTag').value;
+      const finalTag = customVal || selectVal;
+      if (!finalTag) {
+        showToast('Selecione ou digite o nome do documento.', 'info');
+        return;
+      }
+
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      let tipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
+
+      if (tipos.some(t => t.toLowerCase().trim() === finalTag.toLowerCase().trim())) {
+        showToast(`O documento "${finalTag}" já está listado neste arquivo.`, 'info');
+        closeAddTagModal();
+        return;
+      }
+
+      tipos.push(finalTag);
+      doc.todos_tipos = tipos;
+
+      // Atualiza domínios
+      const tLower = finalTag.toLowerCase();
+      let dom = 'academico';
+      if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto')) dom = 'financeiro';
+      else if (tLower.includes('rg') || tLower.includes('cnh') || tLower.includes('cpf') || tLower.includes('certid') || tLower.includes('passaporte') || tLower.includes('eleitor')) dom = 'identificacao';
+      else if (tLower.includes('procur') || tLower.includes('contrato') || tLower.includes('posse')) dom = 'juridico';
+
+      let doms = Array.isArray(doc.todos_dominios) ? [...doc.todos_dominios] : [];
+      if (!doms.includes(dom)) doms.push(dom);
+      doc.todos_dominios = doms;
+
+      renderMultiTags(doc);
+      closeAddTagModal();
+      markDirty();
+      saveCurrentDoc();
+      showToast(`Documento "${finalTag}" adicionado com sucesso!`, 'success');
     }
 
     function markDirty() {
@@ -3424,9 +3833,23 @@
         dadosExtras.pix_autenticacao = pixAutenticacao || null;
       }
 
+      const primaryTipo = document.getElementById('select_tipo_documento').value || null;
+      let todosTipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
+      if (primaryTipo && !todosTipos.some(t => t.toLowerCase() === primaryTipo.toLowerCase())) {
+        todosTipos.unshift(primaryTipo);
+      }
+      
+      let todosDominios = Array.isArray(doc.todos_dominios) ? [...doc.todos_dominios] : [];
+      if (dominio && !todosDominios.includes(dominio)) {
+        todosDominios.unshift(dominio);
+      }
+
       const res = {
         ...doc,
         dominio: dominio,
+        todos_dominios: todosDominios,
+        todos_tipos: todosTipos,
+        dossie_paginas: doc.dossie_paginas || [],
         valor_monetario: valorMonetario || null,
         beneficiario: document.getElementById('input_beneficiario').value.trim() || null,
         cpf: document.getElementById('input_cpf').value.trim() || null,
@@ -3436,7 +3859,7 @@
         carga_horaria: document.getElementById('input_carga_horaria').value.trim() || null,
         data: document.getElementById('input_data').value.trim() || null,
         faculdade: document.getElementById('input_faculdade').value.trim() || null,
-        tipo_documento: document.getElementById('select_tipo_documento').value || null,
+        tipo_documento: primaryTipo,
         observacoes_conferencia: document.getElementById('input_obs').value.trim() || null,
         dados_extras: dadosExtras
       };

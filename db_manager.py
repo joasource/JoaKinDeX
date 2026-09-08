@@ -20,7 +20,8 @@ COLUMNS = [
     "beneficiario", "cpf", "rg", "curso", "natureza_curso", "carga_horaria",
     "faculdade", "tipo_documento", "valor_monetario", "status", "status_conferencia",
     "metodo_leitura", "tentativa_ocr_llm", "erro", "processado_em",
-    "conferido_em", "revisado_em", "observacoes_conferencia"
+    "conferido_em", "revisado_em", "observacoes_conferencia",
+    "todos_dominios", "todos_tipos", "dossie_paginas"
 ]
 
 COLUMNS_SET = set(COLUMNS)
@@ -81,6 +82,9 @@ def create_schema(conn: sqlite3.Connection) -> None:
         conferido_em TEXT,
         revisado_em TEXT,
         observacoes_conferencia TEXT,
+        todos_dominios TEXT,
+        todos_tipos TEXT,
+        dossie_paginas TEXT,
         dados_extras TEXT
     );
     """)
@@ -96,6 +100,12 @@ def create_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE documentos ADD COLUMN dominio TEXT DEFAULT 'academico';")
     if "valor_monetario" not in existing_cols:
         conn.execute("ALTER TABLE documentos ADD COLUMN valor_monetario TEXT;")
+    if "todos_dominios" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN todos_dominios TEXT;")
+    if "todos_tipos" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN todos_tipos TEXT;")
+    if "dossie_paginas" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN dossie_paginas TEXT;")
 
     # Índices para consultas instantâneas
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_status ON documentos(status);")
@@ -106,6 +116,8 @@ def create_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_tipo ON documentos(tipo_documento);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_dominio ON documentos(dominio);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_extensao ON documentos(extensao);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_tipos ON documentos(todos_tipos);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_dominios ON documentos(todos_dominios);")
 
     # Garante preenchimento de domínio retroativo nos registros antigos
     conn.execute("UPDATE documentos SET dominio = 'academico' WHERE dominio IS NULL OR dominio = '';")
@@ -159,6 +171,35 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
     revisado_em = item.get("revisado_em")
     obs_conf = item.get("observacoes_conferencia")
 
+    # Multi-classificação e dossiê
+    todos_dominios = item.get("todos_dominios")
+    if isinstance(todos_dominios, list):
+        todos_dominios = json.dumps([str(x).strip() for x in todos_dominios if x], ensure_ascii=False)
+    elif isinstance(todos_dominios, str) and todos_dominios.strip():
+        todos_dominios = todos_dominios.strip()
+    elif dominio:
+        todos_dominios = json.dumps([dominio], ensure_ascii=False)
+    else:
+        todos_dominios = None
+
+    todos_tipos = item.get("todos_tipos")
+    if isinstance(todos_tipos, list):
+        todos_tipos = json.dumps([str(x).strip() for x in todos_tipos if x], ensure_ascii=False)
+    elif isinstance(todos_tipos, str) and todos_tipos.strip():
+        todos_tipos = todos_tipos.strip()
+    elif tipo_documento:
+        todos_tipos = json.dumps([tipo_documento], ensure_ascii=False)
+    else:
+        todos_tipos = None
+
+    dossie_paginas = item.get("dossie_paginas")
+    if isinstance(dossie_paginas, (list, dict)):
+        dossie_paginas = json.dumps(dossie_paginas, ensure_ascii=False)
+    elif isinstance(dossie_paginas, str) and dossie_paginas.strip():
+        dossie_paginas = dossie_paginas.strip()
+    else:
+        dossie_paginas = None
+
     # Campos extras não mapeados nas colunas fixas são serializados em JSON
     extras = {}
     if isinstance(item.get("dados_extras"), dict):
@@ -173,7 +214,8 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
         beneficiario, cpf, rg, curso, natureza_curso, carga_horaria,
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr, erro, processado_em,
-        conferido_em, revisado_em, obs_conf, dados_extras
+        conferido_em, revisado_em, obs_conf,
+        todos_dominios, todos_tipos, dossie_paginas, dados_extras
     )
 
 
@@ -201,6 +243,39 @@ def row_to_doc(row: sqlite3.Row) -> Dict[str, Any]:
                             d[k] = v
             except Exception:
                 pass
+
+    # Normalização de listas de tipos e domínios para consumo da aplicação e frontend
+    if "todos_dominios" in row_keys and d.get("todos_dominios"):
+        td = d["todos_dominios"]
+        if isinstance(td, str):
+            try:
+                parsed = json.loads(td)
+                d["todos_dominios"] = parsed if isinstance(parsed, list) else [s.strip() for s in td.split(",") if s.strip()]
+            except Exception:
+                d["todos_dominios"] = [s.strip() for s in td.split(",") if s.strip()]
+    else:
+        d["todos_dominios"] = [d["dominio"]] if d.get("dominio") else []
+
+    if "todos_tipos" in row_keys and d.get("todos_tipos"):
+        tt = d["todos_tipos"]
+        if isinstance(tt, str):
+            try:
+                parsed = json.loads(tt)
+                d["todos_tipos"] = parsed if isinstance(parsed, list) else [s.strip() for s in tt.split(",") if s.strip()]
+            except Exception:
+                d["todos_tipos"] = [s.strip() for s in tt.split(",") if s.strip()]
+    else:
+        d["todos_tipos"] = [d["tipo_documento"]] if d.get("tipo_documento") else []
+
+    if "dossie_paginas" in row_keys and d.get("dossie_paginas"):
+        dp = d["dossie_paginas"]
+        if isinstance(dp, str):
+            try:
+                d["dossie_paginas"] = json.loads(dp)
+            except Exception:
+                d["dossie_paginas"] = []
+    else:
+        d["dossie_paginas"] = []
 
     # Garante ausência estrita de data_criacao
     d.pop("data_criacao", None)
@@ -248,8 +323,9 @@ def upsert_document(db_path: Union[str, Path], doc: Dict[str, Any]) -> None:
         beneficiario, cpf, rg, curso, natureza_curso, carga_horaria,
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
-        conferido_em, revisado_em, observacoes_conferencia, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        conferido_em, revisado_em, observacoes_conferencia,
+        todos_dominios, todos_tipos, dossie_paginas, dados_extras
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
@@ -275,6 +351,9 @@ def upsert_document(db_path: Union[str, Path], doc: Dict[str, Any]) -> None:
         conferido_em = COALESCE(excluded.conferido_em, documentos.conferido_em),
         revisado_em = COALESCE(excluded.revisado_em, documentos.revisado_em),
         observacoes_conferencia = COALESCE(excluded.observacoes_conferencia, documentos.observacoes_conferencia),
+        todos_dominios = excluded.todos_dominios,
+        todos_tipos = excluded.todos_tipos,
+        dossie_paginas = excluded.dossie_paginas,
         dados_extras = excluded.dados_extras;
     """
     with get_connection(db) as conn:
@@ -295,8 +374,9 @@ def upsert_documents_batch(db_path: Union[str, Path], docs: List[Dict[str, Any]]
         beneficiario, cpf, rg, curso, natureza_curso, carga_horaria,
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
-        conferido_em, revisado_em, observacoes_conferencia, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        conferido_em, revisado_em, observacoes_conferencia,
+        todos_dominios, todos_tipos, dossie_paginas, dados_extras
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
@@ -322,6 +402,9 @@ def upsert_documents_batch(db_path: Union[str, Path], docs: List[Dict[str, Any]]
         conferido_em = COALESCE(excluded.conferido_em, documentos.conferido_em),
         revisado_em = COALESCE(excluded.revisado_em, documentos.revisado_em),
         observacoes_conferencia = COALESCE(excluded.observacoes_conferencia, documentos.observacoes_conferencia),
+        todos_dominios = excluded.todos_dominios,
+        todos_tipos = excluded.todos_tipos,
+        dossie_paginas = excluded.dossie_paginas,
         dados_extras = excluded.dados_extras;
     """
     with get_connection(db) as conn:

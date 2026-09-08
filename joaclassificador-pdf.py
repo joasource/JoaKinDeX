@@ -30,7 +30,7 @@ import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union, Callable, Set
+from typing import Dict, Any, List, Optional, Union, Callable, Set, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
@@ -508,6 +508,72 @@ def render_pdf_pages_to_base64(
     return images_b64
 
 
+def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Identifica o tipo de documento e seu domínio a partir de assinaturas textuais e palavras-chave.
+    Retorna (tipo_documento, dominio) ou (None, None).
+    """
+    if not text or len(text.strip()) < 10:
+        return None, None
+
+    t = text.lower()
+    scores = {}
+
+    # 1. Domínio: Identificação
+    if any(k in t for k in ["carteira nacional de habilita", "driver license", "permiso de conduccion", "senatran", "denatran", "1° habilita", "1ª habilita"]) or ("cnh" in t and "categoria" in t):
+        scores["CNH"] = ("identificacao", 10)
+    elif any(k in t for k in ["cédula de identidade", "cedula de identidade", "registro geral", "instituto de identificação", "instituto de identificacao", "secretaria de segurança", "ssp/", "ssp-", "polícia civil"]):
+        scores["RG"] = ("identificacao", 9)
+    elif any(k in t for k in ["certidão de nascimento", "certidao de nascimento", "nascimento sob o termo", "registro civil das pessoas naturais"]):
+        scores["Certidão de Nascimento"] = ("identificacao", 9)
+    elif any(k in t for k in ["certidão de casamento", "certidao de casamento", "casamento sob o termo"]):
+        scores["Certidão de Casamento"] = ("identificacao", 9)
+    elif any(k in t for k in ["cadastro de pessoas físicas", "cadastro de pessoas fisicas", "receita federal do brasil", "comprovante de inscrição no cpf", "cartão de identificação do contribuinte"]) or ("cpf" in t and "receita federal" in t):
+        scores["CPF"] = ("identificacao", 8)
+    elif any(k in t for k in ["passaporte", "passport", "república federativa do brasil passaporte"]):
+        scores["Passaporte"] = ("identificacao", 9)
+    elif any(k in t for k in ["título de eleitor", "titulo de eleitor", "justiça eleitoral"]):
+        scores["Título de Eleitor"] = ("identificacao", 8)
+    elif any(k in t for k in ["carteira de trabalho", "ctps", "previdência social"]):
+        scores["Carteira de Trabalho"] = ("identificacao", 8)
+
+    # 2. Domínio: Acadêmico
+    if any(k in t for k in ["diploma", "conferiu o grau", "confere o grau", "colação de grau", "conclusão do curso de", "conclusdo do curso de", "licenciada a", "licenciado a", "bacharel em", "conferiu o título"]):
+        scores["Diploma"] = ("academico", 10)
+    elif any(k in t for k in ["histórico escolar", "historico escolar", "rendimento escolar", "componente curricular", "disciplinas cursadas", "coeficiente de rendimento"]):
+        scores["Histórico Escolar"] = ("academico", 9)
+    elif any(k in t for k in ["certificado", "certificamos que", "concluiu com êxito", "pós-graduação", "especialização"]):
+        scores["Certificado"] = ("academico", 8)
+    elif any(k in t for k in ["declaração de matrícula", "atestado de matrícula", "declaração de conclusão", "declaramos para os devidos fins"]):
+        scores["Declaração"] = ("academico", 7)
+    elif any(k in t for k in ["ementa", "conteúdo programático", "plano de ensino"]):
+        scores["Ementa"] = ("academico", 7)
+
+    # 3. Domínio: Financeiro
+    if any(k in t for k in ["comprovante pix", "transferência pix", "transferencia pix", "pagamento pix", "chave pix", "fim-a-fim", "end-to-end", "e2eid"]):
+        scores["Comprovante PIX"] = ("financeiro", 10)
+    elif any(k in t for k in ["comprovante de pagamento", "comprovante de transferência", "comprovante de transferencia", "autenticação bancária", "autenticação mecânica", "ted", "doc"]):
+        scores["Comprovante de Pagamento"] = ("financeiro", 8)
+    elif any(k in t for k in ["boleto bancário", "boleto bancario", "recibo do pagador", "linha digitável", "código de barras"]):
+        scores["Boleto"] = ("financeiro", 8)
+    elif any(k in t for k in ["recibo de pagamento", "recebemos de"]):
+        scores["Recibo"] = ("financeiro", 7)
+
+    # 4. Domínio: Jurídico / Outros
+    if any(k in t for k in ["procuração", "procuracao", "outorgante", "outorgado"]):
+        scores["Procuração"] = ("juridico", 8)
+    elif any(k in t for k in ["termo de posse", "posse no cargo"]):
+        scores["Termo de Posse"] = ("juridico", 8)
+    elif any(k in t for k in ["contrato de prestação", "instrumento particular"]):
+        scores["Contrato"] = ("juridico", 7)
+
+    if not scores:
+        return None, None
+
+    best_tipo = max(scores.keys(), key=lambda k: scores[k][1])
+    return best_tipo, scores[best_tipo][0]
+
+
 # ---------------------------------------------------------------------------
 # OCR Local Rápido de Contingência (Tesseract)
 # ---------------------------------------------------------------------------
@@ -546,15 +612,29 @@ def run_tesseract_ocr_on_image(img: Any, try_rotation: bool = True) -> str:
 
     text = _exec_tess(tmp_path)
 
-    # Se não encontrou CPF ou o texto for muito curto, tenta rotação de 180 graus (documentos de cabeça para baixo)
+    # Se não encontrou CPF ou assinatura conhecida, tenta rotação de 180 graus (documentos de cabeça para baixo)
     if try_rotation:
         has_cpf = bool(re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", text))
-        if not has_cpf:
+        has_sig = bool(classify_text_signatures(text)[0])
+        # Só testa rotação 180° se não houver CPF E (não houver assinatura conhecida OU o texto for muito curto)
+        if not has_cpf and (not has_sig or len(text) < 60):
             try:
                 img_180 = img.rotate(180, expand=True)
                 img_180.save(tmp_path)
                 text_180 = _exec_tess(tmp_path)
-                if re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", text_180) or len(text_180) > len(text):
+                has_cpf_180 = bool(re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", text_180))
+                has_sig_180 = bool(classify_text_signatures(text_180)[0])
+                if has_cpf_180 or (not has_sig and has_sig_180):
+                    text = text_180
+            except Exception:
+                pass
+        elif not has_cpf:
+            # Já tem assinatura de documento (ex: certidão), mas se 180° encontrar um CPF válido, pode ser anexo invertido
+            try:
+                img_180 = img.rotate(180, expand=True)
+                img_180.save(tmp_path)
+                text_180 = _exec_tess(tmp_path)
+                if re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", text_180):
                     text = text_180
             except Exception:
                 pass
@@ -616,6 +696,162 @@ def extract_tesseract_text_from_pdf(
                 pass
 
     return "\n\n".join(extracted_parts).strip()
+
+
+
+
+
+def analyze_pdf_dossier(
+    pdf_path: Union[str, Path],
+    max_ocr_pages: int = 10
+) -> Dict[str, Any]:
+    """
+    Realiza a varredura completa de todas as páginas do PDF para identificar múltiplos documentos.
+    Utiliza leitura digital em 100% das páginas e OCR Tesseract pontual em páginas de imagem.
+    Aplica regras de hierarquia e anti-contaminação para consolidar dados do titular.
+    """
+    p = Path(pdf_path)
+    result = {
+        "paginas": [],
+        "todos_tipos": [],
+        "todos_dominios": [],
+        "dossie_paginas": [],
+        "cpf_titular": None,
+        "rg_titular": None,
+        "curso_titular": None,
+        "faculdade_titular": None,
+        "tipo_documento_principal": None,
+        "dominio_principal": None
+    }
+
+    if not p.exists() or pdfium is None:
+        return result
+
+    try:
+        pdf = pdfium.PdfDocument(str(p))
+        total_pages = len(pdf)
+    except Exception:
+        return result
+
+    pages_info = []
+    seen_tipos = []
+    seen_dominios = []
+
+    for i in range(total_pages):
+        page = pdf[i]
+        page_num = i + 1
+
+        # 1. Leitura de texto digital da página
+        try:
+            p_text = page.get_textpage().get_text_range().strip()
+        except Exception:
+            p_text = ""
+
+        embedded_texts = []
+        # 2. Se houver imagens embutidas em alta resolução (ex: recortes CDT/SENATRAN)
+        try:
+            for obj in page.get_objects():
+                if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE:
+                    bm = obj.get_bitmap()
+                    pil_img = bm.to_pil()
+                    if pil_img.width >= 200 and pil_img.height >= 200:
+                        t = run_tesseract_ocr_on_image(pil_img, try_rotation=True)
+                        if t and len(t) >= 15:
+                            embedded_texts.append(t)
+        except Exception:
+            pass
+
+        # 3. Se a página for imagem pura sem texto digital e não achou imagens embutidas, roda OCR se dentro do limite
+        ocr_rendered_text = ""
+        if len(p_text) < 40 and not embedded_texts and i < max_ocr_pages:
+            try:
+                p_img = page.render(scale=1.5).to_pil()
+                ocr_rendered_text = run_tesseract_ocr_on_image(p_img, try_rotation=True)
+            except Exception:
+                pass
+
+        combined_page_text = "\n".join(
+            x for x in [p_text, "\n".join(embedded_texts), ocr_rendered_text] if x.strip()
+        ).strip()
+
+        if not combined_page_text:
+            continue
+
+        tipo, dom = classify_text_signatures(combined_page_text)
+        p_cpf = extract_cpf_fallback(combined_page_text)
+        p_rg = extract_rg_fallback(combined_page_text)
+        p_curso = extract_course_fallback(combined_page_text)
+
+        p_entry = {
+            "pagina": page_num,
+            "dominio": dom or "outros",
+            "tipo": tipo or "Documento Diverso",
+            "cpf": p_cpf,
+            "rg": p_rg,
+            "curso": p_curso
+        }
+        pages_info.append(p_entry)
+
+        if tipo and tipo not in seen_tipos:
+            seen_tipos.append(tipo)
+        if dom and dom not in seen_dominios:
+            seen_dominios.append(dom)
+
+    # Hierarquia e Anti-Contaminação
+    # CPF: Prioridade 1 = Identificação, 2 = Acadêmico, 3 = Financeiro
+    cpf_titular = None
+    for target_dom in ["identificacao", "academico", "financeiro", "outros"]:
+        for p_info in pages_info:
+            if p_info["dominio"] == target_dom and p_info.get("cpf"):
+                cpf_titular = p_info["cpf"]
+                break
+        if cpf_titular:
+            break
+
+    # RG: Prioridade 1 = Identificação, 2 = Acadêmico
+    rg_titular = None
+    for target_dom in ["identificacao", "academico", "outros"]:
+        for p_info in pages_info:
+            if p_info["dominio"] == target_dom and p_info.get("rg"):
+                rg_titular = p_info["rg"]
+                break
+        if rg_titular:
+            break
+
+    # Curso: Estritamente de páginas acadêmicas
+    curso_titular = None
+    for p_info in pages_info:
+        if p_info["dominio"] == "academico" and p_info.get("curso"):
+            curso_titular = p_info["curso"]
+            break
+
+    # Determinação do Tipo e Domínio Principal
+    # Se houver Diploma ou documento acadêmico, o dossiê tem primazia acadêmica
+    dominio_principal = "academico" if "academico" in seen_dominios else (seen_dominios[0] if seen_dominios else "academico")
+    tipo_principal = None
+    priority_order = [
+        "Diploma", "Certificado", "Histórico Escolar", "Declaração", "Ementa",
+        "CNH", "RG", "CPF", "Certidão de Nascimento", "Certidão de Casamento", "Passaporte",
+        "Comprovante PIX", "Comprovante de Pagamento", "Boleto", "Recibo"
+    ]
+    for p_tipo in priority_order:
+        if p_tipo in seen_tipos:
+            tipo_principal = p_tipo
+            break
+    if not tipo_principal and seen_tipos:
+        tipo_principal = seen_tipos[0]
+
+    result["paginas"] = pages_info
+    result["todos_tipos"] = seen_tipos
+    result["todos_dominios"] = seen_dominios
+    result["dossie_paginas"] = [{"pagina": p["pagina"], "tipo": p["tipo"], "dominio": p["dominio"]} for p in pages_info]
+    result["cpf_titular"] = cpf_titular
+    result["rg_titular"] = rg_titular
+    result["curso_titular"] = curso_titular
+    result["tipo_documento_principal"] = tipo_principal
+    result["dominio_principal"] = dominio_principal
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1227,6 +1463,9 @@ def process_single_pdf(
         "faculdade": None,
         "tipo_documento": None,
         "valor_monetario": None,
+        "todos_dominios": [],
+        "todos_tipos": [],
+        "dossie_paginas": [],
         "status": "pendente",
         "erro": None,
         "metodo_leitura": "imagem_ocr_llm" if is_image else "texto_digital",
@@ -1556,6 +1795,56 @@ def process_single_pdf(
             if cf:
                 res_dict["curso"] = cf
 
+        # 4. Integração do Dossiê Multi-Páginas e Hierarquia Anti-Contaminação
+        if not is_image:
+            try:
+                dossier = analyze_pdf_dossier(pdf_path, max_ocr_pages=min(max_pages, 10))
+                todos_tipos = list(dossier.get("todos_tipos", []))
+                todos_dominios = list(dossier.get("todos_dominios", []))
+
+                prim_tipo = res_dict.get("tipo_documento")
+                prim_dom = res_dict.get("dominio")
+
+                # Se o classificador ou LLM definiu um tipo primário, assegura presença em todos_tipos
+                if prim_tipo and prim_tipo not in todos_tipos:
+                    todos_tipos.insert(0, prim_tipo)
+                if prim_dom and prim_dom not in todos_dominios:
+                    todos_dominios.insert(0, prim_dom)
+
+                # Se o LLM não identificou o tipo principal, assume a primazia do dossiê
+                if (not res_dict.get("tipo_documento") or res_dict.get("tipo_documento") in ["Outro", "não identificado", "nao identificado"]) and dossier.get("tipo_documento_principal"):
+                    res_dict["tipo_documento"] = dossier["tipo_documento_principal"]
+                    if not res_dict.get("dominio") or res_dict.get("dominio") == "outros":
+                        res_dict["dominio"] = dossier.get("dominio_principal", "academico")
+
+                # Resgate prioritário de CPF do titular (CNH / CPF / RG têm prioridade máxima sobre comprovantes PIX)
+                if (not res_dict.get("cpf") or not is_valid_cpf_syntax(res_dict.get("cpf"))) and dossier.get("cpf_titular"):
+                    res_dict["cpf"] = dossier["cpf_titular"]
+
+                # Resgate de RG do titular
+                if not res_dict.get("rg") and dossier.get("rg_titular"):
+                    res_dict["rg"] = dossier["rg_titular"]
+
+                # Resgate do curso (estritamente de páginas acadêmicas)
+                if (not res_dict.get("curso") or any(k in str(res_dict.get("curso")).lower() for k in ["faculdade", "universidade", "instituto", "colegio"])) and dossier.get("curso_titular"):
+                    res_dict["curso"] = dossier["curso_titular"]
+
+                res_dict["todos_tipos"] = todos_tipos if todos_tipos else ([prim_tipo] if prim_tipo else [])
+                res_dict["todos_dominios"] = todos_dominios if todos_dominios else ([prim_dom] if prim_dom else [])
+                res_dict["dossie_paginas"] = dossier.get("dossie_paginas", [])
+            except Exception:
+                prim_tipo = res_dict.get("tipo_documento")
+                prim_dom = res_dict.get("dominio")
+                res_dict["todos_tipos"] = [prim_tipo] if prim_tipo else []
+                res_dict["todos_dominios"] = [prim_dom] if prim_dom else []
+                res_dict["dossie_paginas"] = []
+        else:
+            prim_tipo = res_dict.get("tipo_documento")
+            prim_dom = res_dict.get("dominio")
+            res_dict["todos_tipos"] = [prim_tipo] if prim_tipo else []
+            res_dict["todos_dominios"] = [prim_dom] if prim_dom else []
+            res_dict["dossie_paginas"] = [{"pagina": 1, "tipo": prim_tipo or "Documento", "dominio": prim_dom or "outros"}]
+
         # Validação de sucesso adaptativa para múltiplos domínios
         campos_uteis = [
             res_dict.get("beneficiario"),
@@ -1596,12 +1885,14 @@ def format_single_txt(item: Dict[str, Any]) -> str:
 
     dom = item.get("dominio") or "academico"
     ext = item.get("extensao") or ""
+    todos_tipos = item.get("todos_tipos") or []
+    dossie_line = f"\nDocumentos no Arquivo  : {', '.join(str(t) for t in todos_tipos)}" if (isinstance(todos_tipos, list) and len(todos_tipos) > 1) else ""
 
     txt = f"""--------------------------------------------------------------------------------
 MD5                     : {item.get('md5')}
 Status                  : {item.get('status', '').upper()}
 Domínio                 : {dom.upper()}
-Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}
+Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}{dossie_line}
 Extensão                : {ext.upper() if ext else 'N/A'}
 Método de Leitura       : {metodo}
 Data da Última Alteração: {item.get('data_modificacao')}
