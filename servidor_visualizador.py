@@ -22,8 +22,21 @@ import socket
 from pathlib import Path
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
+import io
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Union
+
+try:
+    import pypdfium2 as pdfium
+except ImportError:
+    pdfium = None
+
+_PDFIUM_LOCK = threading.Lock()
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
 
 
 class ReusableThreadingHTTPServer(ThreadingHTTPServer):
@@ -872,13 +885,148 @@ class ConferenciaServer:
             pass
 
 
+def get_or_create_thumbnail(server_ctx: "ConferenciaServer", md5_str: str, page_num: int = 1, target_width: int = 120) -> Optional[bytes]:
+    """Gera ou recupera miniatura ultra-rápida em cache JPEG comprimido."""
+    thumb_dir = server_ctx.json_path.parent / ".thumbnails"
+    try:
+        thumb_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
+    page_idx = max(0, page_num - 1)
+    cache_name = f"{md5_str}_p{page_num}.jpg" if page_num > 1 else f"{md5_str}.jpg"
+    cache_file = thumb_dir / cache_name
+
+    if cache_file.exists() and cache_file.stat().st_size > 0:
+        try:
+            return cache_file.read_bytes()
+        except Exception:
+            pass
+
+    pdf_file = server_ctx.md5_to_file.get(md5_str)
+    if not pdf_file or not pdf_file.exists():
+        server_ctx.build_pdf_index()
+        pdf_file = server_ctx.md5_to_file.get(md5_str)
+
+    if not pdf_file or not pdf_file.exists():
+        return None
+
+    ext = pdf_file.suffix.lower()
+    img_data = None
+
+    # Tratamento de imagem nativa
+    if ext in [".png", ".jpg", ".jpeg", ".webp"] and Image is not None:
+        try:
+            with Image.open(pdf_file) as im:
+                im = im.convert("RGB")
+                w, h = im.size
+                target_height = max(1, int(h * (target_width / max(1, w))))
+                im = im.resize((target_width, target_height), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=80, optimize=True)
+                img_data = buf.getvalue()
+        except Exception:
+            return None
+    elif ext == ".pdf" and pdfium is not None:
+        # Tratamento de arquivo PDF via pypdfium2 protegido por lock global
+        try:
+            pil_image = None
+            with _PDFIUM_LOCK:
+                pdf = pdfium.PdfDocument(str(pdf_file))
+                try:
+                    if 0 <= page_idx < len(pdf):
+                        page = pdf.get_page(page_idx)
+                        try:
+                            w, h = page.get_size()
+                            scale = float(target_width) / max(1.0, float(w))
+                            bitmap = page.render(scale=scale)
+                            try:
+                                pil_image = bitmap.to_pil().convert("RGB").copy()
+                            finally:
+                                bitmap.close()
+                        finally:
+                            page.close()
+                finally:
+                    pdf.close()
+
+            if pil_image:
+                buf = io.BytesIO()
+                pil_image.save(buf, format="JPEG", quality=80, optimize=True)
+                img_data = buf.getvalue()
+        except Exception:
+            return None
+
+    if img_data:
+        try:
+            cache_file.write_bytes(img_data)
+        except Exception:
+            pass
+
+    return img_data
+
+
+def extract_document_text_content(server_ctx: "ConferenciaServer", md5_str: str) -> Dict[str, Any]:
+    """Retorna o texto bruto integral do documento para a aba de OCR/Texto."""
+    indiv_txt = server_ctx.json_path.parent / "individuais" / f"{md5_str}.txt"
+    if indiv_txt.exists():
+        try:
+            return {"status": "sucesso", "texto": indiv_txt.read_text(encoding="utf-8", errors="replace"), "origem": "ficha_individual"}
+        except Exception:
+            pass
+
+    pdf_file = server_ctx.md5_to_file.get(md5_str)
+    if not pdf_file or not pdf_file.exists():
+        server_ctx.build_pdf_index()
+        pdf_file = server_ctx.md5_to_file.get(md5_str)
+
+    if not pdf_file or not pdf_file.exists():
+        return {"status": "erro", "mensagem": f"Arquivo físico para MD5 {md5_str} não encontrado."}
+
+    if pdf_file.suffix.lower() == ".pdf" and pdfium is not None:
+        try:
+            texts = []
+            with _PDFIUM_LOCK:
+                pdf = pdfium.PdfDocument(str(pdf_file))
+                try:
+                    max_pages = min(50, len(pdf))
+                    for page_idx in range(max_pages):
+                        page = pdf.get_page(page_idx)
+                        try:
+                            textpage = page.get_textpage()
+                            try:
+                                p_text = textpage.get_text_range()
+                                if p_text and p_text.strip():
+                                    texts.append(f"=== PÁGINA {page_idx + 1} ===\n{p_text.strip()}")
+                            finally:
+                                textpage.close()
+                        finally:
+                            page.close()
+                finally:
+                    pdf.close()
+            if texts:
+                return {"status": "sucesso", "texto": "\n\n".join(texts), "origem": "camada_digital"}
+        except Exception:
+            pass
+
+    doc = get_document_by_md5(server_ctx.db_path, md5_str)
+    if doc:
+        linhas = [f"Metadados Indexados no Acervo (MD5: {md5_str}):\n" + "-" * 50]
+        for k, v in doc.items():
+            if v and k not in ["dados_extras", "dossie_paginas"]:
+                linhas.append(f"{k.replace('_', ' ').title():<25}: {v}")
+        return {"status": "sucesso", "texto": "\n".join(linhas), "origem": "metadados_banco"}
+
+    return {"status": "erro", "mensagem": "Texto não disponível para este documento."}
+
+
 def create_handler(server_ctx: ConferenciaServer):
     class RequestHandler(SimpleHTTPRequestHandler):
         def end_headers(self):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            if not getattr(self, "_custom_cache_control", False):
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             super().end_headers()
 
         def do_OPTIONS(self):
@@ -894,6 +1042,22 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.send_header("Content-Length", str(server_ctx.html_path.stat().st_size))
                 self.end_headers()
                 return
+            elif path.startswith("/api/thumbnail/"):
+                parts = path.split("/api/thumbnail/")[-1].strip("/").split("/")
+                md5_req = parts[0].strip().lower()
+                page_req = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
+                data = get_or_create_thumbnail(server_ctx, md5_req, page_num=page_req, target_width=120)
+                if data:
+                    self._custom_cache_control = True
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/jpeg")
+                    self.send_header("Cache-Control", "public, max-age=604800")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    return
+                else:
+                    self.send_error(404, "Thumbnail não disponível.")
+                    return
             elif path.startswith("/api/pdf/") or path.startswith("/api/arquivo/"):
                 prefix = "/api/pdf/" if path.startswith("/api/pdf/") else "/api/arquivo/"
                 md5_req = path.split(prefix)[-1].strip().lower()
@@ -912,12 +1076,20 @@ def create_handler(server_ctx: ConferenciaServer):
                     self.send_header("Content-Type", content_type)
                     self.send_header("Content-Length", str(pdf_file.stat().st_size))
                     self.end_headers()
-                    return
+            elif path == "/favicon.ico":
+                self.send_response(204)
+                self.end_headers()
+                return
             super().do_HEAD()
 
         def do_GET(self):
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
+
+            if path == "/favicon.ico":
+                self.send_response(204)
+                self.end_headers()
+                return
 
             # Rota da página principal
             if path in ["/", "/index.html", "/visualizador", "/visualizador.html"]:
@@ -963,6 +1135,37 @@ def create_handler(server_ctx: ConferenciaServer):
                             item[k] = ", ".join(str(x) for x in v if x)
                 body = json.dumps(dados, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            # API de Miniaturas de Páginas (Thumbnail com Cache ultraleve)
+            if path.startswith("/api/thumbnail/"):
+                parts = path.split("/api/thumbnail/")[-1].strip("/").split("/")
+                md5_req = parts[0].strip().lower()
+                page_req = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
+                data = get_or_create_thumbnail(server_ctx, md5_req, page_num=page_req, target_width=120)
+                if data:
+                    self._custom_cache_control = True
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/jpeg")
+                    self.send_header("Cache-Control", "public, max-age=604800")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                else:
+                    self.send_error(404, "Thumbnail não disponível.")
+                    return
+
+            # API para obter o texto integral / OCR do documento
+            if path.startswith("/api/texto/"):
+                md5_req = path.split("/api/texto/")[-1].strip().lower()
+                res = extract_document_text_content(server_ctx, md5_req)
+                body = json.dumps(res, ensure_ascii=False).encode("utf-8")
+                self.send_response(200 if res.get("status") == "sucesso" else 404)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()

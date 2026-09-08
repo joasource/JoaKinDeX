@@ -310,7 +310,14 @@
       <!-- Cabeçalho de Resultados Filtrados -->
       <div class="px-3 py-1.5 bg-slate-900/50 border-b border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
         <span>Resultados: <strong id="filterResultCount" class="text-slate-200 font-mono">0</strong></span>
-        <span id="activeFilterLabel" class="text-[10px] text-slate-500 truncate max-w-[180px]"></span>
+        <div class="flex items-center gap-1.5">
+          <button id="btnToggleThumbnailView" onclick="toggleThumbnailView()" title="Alternar entre visualização com miniaturas e modo compacto"
+                  class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1.5 transition">
+            <i id="iconToggleThumbnail" class="fa-solid fa-table-cells-large text-emerald-400"></i>
+            <span id="labelToggleThumbnail">Miniaturas</span>
+          </button>
+          <span id="activeFilterLabel" class="text-[10px] text-slate-500 truncate max-w-[120px]"></span>
+        </div>
       </div>
 
       <!-- Lista Rolável de Documentos -->
@@ -333,10 +340,13 @@
     <!-- 2. PAINEL CENTRAL ESQUERDO: VISUALIZADOR DE DOCUMENTO (PDF / IMAGEM) -->
     <section class="flex-1 flex flex-col border-r border-slate-800 bg-slate-950 overflow-hidden">
       <div class="bg-slate-900/90 border-b border-slate-800 px-4 py-2 flex items-center justify-between shrink-0">
-        <div class="flex items-center gap-2 overflow-hidden text-xs">
+        <div class="flex items-center gap-2.5 overflow-hidden text-xs">
           <i id="docTypeHeaderIcon" class="fa-regular fa-file-pdf text-rose-400"></i>
           <span id="docTypeHeaderLabel" class="text-slate-400">Visualização do PDF:</span>
-          <span id="pdfMd5Title" class="font-mono text-emerald-400 truncate max-w-[200px] sm:max-w-md">Nenhum selecionado</span>
+          <span id="pdfMd5Title" class="font-mono text-emerald-400 truncate max-w-[160px] sm:max-w-xs md:max-w-sm">Nenhum selecionado</span>
+          <div id="currentStatusBadge" class="text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20 shrink-0 shadow-sm">
+            Pendente
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <!-- Controles de Imagem (quando documento for imagem nativa) -->
@@ -388,35 +398,31 @@
       </div>
     </section>
 
-    <!-- 3. PAINEL CENTRAL DIREITO: DADOS EXTRAÍDOS & CONFERÊNCIA -->
-    <section class="w-[480px] lg:w-[530px] flex flex-col bg-slate-950 shrink-0 overflow-hidden">
-      <!-- Abas superiores do formulário -->
-      <div class="bg-slate-900/90 border-b border-slate-800 px-4 py-2 flex items-center justify-between shrink-0">
-        <div class="flex gap-2">
-          <button onclick="switchTab('form')" id="tab-form" class="px-3 py-1 rounded text-xs font-medium bg-slate-800 text-white transition flex items-center gap-1.5">
-            <i class="fa-solid fa-list-check text-emerald-400"></i>
-            Conferência
-          </button>
-          <button onclick="switchTab('json')" id="tab-json" class="px-3 py-1 rounded text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5">
-            <i class="fa-solid fa-code"></i>
-            JSON Bruto
-          </button>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <button id="btnProcessarDocHeader" onclick="triggerProcessarDocumento()" title="Classificar ou reclassificar dados deste documento com OCR multimodal via LLM ou API externa"
-                  class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition">
-            <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
-            <span>Classificar</span>
-          </button>
-          <div id="currentStatusBadge" class="text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20">
-            Pendente
-          </div>
-        </div>
+    <!-- 3. PAINEL CENTRAL DIREITO: DADOS EXTRAÍDOS, DOSSIÊ & CONFERÊNCIA -->
+    <section class="w-[480px] lg:w-[540px] flex flex-col bg-slate-950 shrink-0 overflow-hidden">
+      <!-- Abas superiores do Inspetor (4 Abas Limpas e Espaçosas) -->
+      <div class="bg-slate-900/95 border-b border-slate-800 px-3 py-2 flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
+        <button onclick="switchInspectorTab('dados')" id="tabBtnDados" class="flex-1 min-w-[95px] px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-emerald-400 border border-slate-700/80 transition flex items-center justify-center gap-1.5 shadow-sm" title="Dados cadastrais e classificação">
+          <i class="fa-solid fa-list-check text-[11px]"></i>
+          <span>Dados</span>
+        </button>
+        <button onclick="switchInspectorTab('dossie')" id="tabBtnDossie" class="flex-1 min-w-[130px] px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1.5" title="Visualização de páginas e documentos do dossiê">
+          <i class="fa-solid fa-layer-group text-[11px]"></i>
+          <span>Dossiê & Páginas</span>
+          <span id="tabBadgePaginas" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-cyan-400 font-mono hidden">1p</span>
+        </button>
+        <button onclick="switchInspectorTab('texto')" id="tabBtnTexto" class="flex-1 min-w-[105px] px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1.5" title="Texto integral extraído e OCR com busca local">
+          <i class="fa-solid fa-align-left text-[11px]"></i>
+          <span>Texto OCR</span>
+        </button>
+        <button onclick="switchInspectorTab('ficha')" id="tabBtnFicha" class="flex-1 min-w-[110px] px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1.5" title="Ficha técnica, metadados do arquivo e auditoria">
+          <i class="fa-solid fa-circle-info text-[11px]"></i>
+          <span>Ficha Técnica</span>
+        </button>
       </div>
 
-      <!-- Conteúdo da Aba 1: Formulário de Conferência -->
-      <div id="viewForm" class="flex-1 overflow-y-auto p-4 space-y-4">
+      <!-- Conteúdo da Aba 1: Dados Cadastrais & Conferência -->
+      <div id="viewTabDados" class="flex-1 overflow-y-auto p-4 space-y-4">
         
         <!-- Identificação Hash MD5 & Metadados de Sistema -->
         <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-2">
@@ -830,9 +836,155 @@
         </div>
       </div>
 
-      <!-- Conteúdo da Aba 2: JSON Bruto -->
-      <div id="viewJson" class="hidden flex-1 overflow-y-auto p-4">
-        <pre id="jsonViewer" class="bg-slate-900 text-emerald-400 p-3 rounded-lg border border-slate-800 text-xs font-mono overflow-x-auto whitespace-pre-wrap select-all"></pre>
+      <!-- Conteúdo da Aba 2: Dossiê & Páginas -->
+      <div id="viewTabDossie" class="hidden flex-1 overflow-y-auto p-4 space-y-4">
+        <!-- Cabeçalho do Dossiê -->
+        <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 space-y-2.5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-layer-group text-indigo-400 text-sm"></i>
+              <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider">Estrutura do Dossiê & Páginas</span>
+            </div>
+            <span id="dossierPageCountBadge" class="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">1 página</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            Clique em qualquer página abaixo para navegar diretamente para ela no leitor PDF à esquerda.
+          </p>
+          <!-- Atalhos rápidos em linha -->
+          <div id="dossierQuickPills" class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800/60"></div>
+        </div>
+
+        <!-- Grade Visual de Miniaturas por Página -->
+        <div id="dossierPagesGrid" class="grid grid-cols-2 gap-3">
+          <!-- Renderizado dinamicamente via JS -->
+        </div>
+      </div>
+
+      <!-- Conteúdo da Aba 3: Texto Extraído / OCR -->
+      <div id="viewTabTexto" class="hidden flex-1 overflow-y-auto p-4 space-y-3">
+        <!-- Barra de Ferramentas de Texto -->
+        <div class="bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-2.5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-align-left text-cyan-400 text-sm"></i>
+              <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider">Texto Integral / OCR</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="textDocOriginBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">automático</span>
+              <button type="button" onclick="copyDocumentRawText()" title="Copiar texto integral extraído para a área de transferência"
+                      class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-emerald-300 border border-slate-700 rounded text-xs font-medium flex items-center gap-1.5 transition">
+                <i class="fa-regular fa-copy text-[11px]"></i>
+                <span>Copiar Texto</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Campo de Busca em Tempo Real no Texto -->
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-500 text-xs"></i>
+            <input id="searchDocTextInput" type="text" oninput="onSearchDocTextInput(this.value)" placeholder="Localizar palavra ou termo no texto..."
+                   class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-24 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500">
+            <div id="textSearchCountContainer" class="hidden absolute right-2.5 top-1.5 flex items-center gap-1.5">
+              <span id="textSearchMatchCount" class="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">0</span>
+              <button type="button" onclick="clearDocTextSearch()" class="text-slate-500 hover:text-slate-300 text-xs">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Área de Leitura de Texto com Destaque -->
+        <div class="relative bg-slate-950 rounded-xl border border-slate-800 overflow-hidden shadow-inner">
+          <div id="docTextLoading" class="hidden absolute inset-0 bg-slate-950/80 backdrop-blur flex items-center justify-center gap-2 text-cyan-400 text-xs z-10">
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>Carregando texto do documento...</span>
+          </div>
+          <div id="docTextContent" class="p-3.5 text-xs font-mono text-slate-300 leading-relaxed whitespace-pre-wrap select-text max-h-[580px] overflow-y-auto">
+            Selecione um documento para visualizar o texto extraído.
+          </div>
+        </div>
+      </div>
+
+      <!-- Conteúdo da Aba 4: Ficha Técnica & Auditoria -->
+      <div id="viewTabFicha" class="hidden flex-1 overflow-y-auto p-4 space-y-4">
+        <!-- Card 1: Informações Técnicas do Arquivo -->
+        <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 space-y-3 shadow-sm">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-server text-cyan-400"></i> Metadados do Arquivo Físico
+            </span>
+            <span id="auditFileTypeBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">PDF</span>
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <div>
+              <span class="text-[10px] text-slate-500 block uppercase font-mono">Identificador Hash MD5:</span>
+              <div class="flex items-center justify-between gap-2 mt-0.5 bg-slate-950 p-2 rounded border border-slate-800 font-mono text-slate-300 break-all select-all">
+                <span id="audit_md5">-</span>
+                <button type="button" onclick="copyMd5()" class="text-[10px] text-slate-400 hover:text-emerald-400 shrink-0">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+                <span class="text-[10px] text-slate-500 block">Nome do Arquivo:</span>
+                <span id="audit_nome_arquivo" class="font-mono text-slate-300 truncate block" title="-">-</span>
+              </div>
+              <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+                <span class="text-[10px] text-slate-500 block">Tamanho:</span>
+                <span id="audit_tamanho" class="font-mono text-slate-300 block">-</span>
+              </div>
+            </div>
+
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Caminho Relativo no Armazenamento:</span>
+              <span id="audit_caminho" class="font-mono text-slate-400 break-all select-all block text-[11px]">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Pipeline de Leitura & IA -->
+        <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 space-y-3 shadow-sm">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-microchip text-purple-400"></i> Pipeline de Leitura & IA
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Método de Leitura:</span>
+              <span id="audit_metodo_leitura" class="font-mono text-slate-200 block">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Tentativa OCR LLM:</span>
+              <span id="audit_tentativa_ocr" class="font-mono text-slate-200 block">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Última Alteração:</span>
+              <span id="audit_data_modificacao" class="font-mono text-slate-200 block">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Status de Conferência:</span>
+              <span id="audit_status_conferencia" class="font-semibold block">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Inspecionar JSON Bruto do Registro -->
+        <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 space-y-2.5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-code text-amber-400"></i> Registro JSON Bruto (Banco de Dados)
+            </span>
+            <button type="button" onclick="copyJsonData()" class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1">
+              <i class="fa-regular fa-copy"></i> Copiar JSON
+            </button>
+          </div>
+          <pre id="jsonViewer" class="bg-slate-950 text-emerald-400 p-3 rounded-lg border border-slate-800 text-[11px] font-mono overflow-x-auto whitespace-pre-wrap select-all max-h-64"></pre>
+        </div>
       </div>
 
       <!-- RODAPÉ FIXO DE AÇÕES -->
@@ -1808,6 +1960,39 @@
     let activeNaturezaFilter = ''; // Vazio = todas
     let activeTipoFilter = ''; // Vazio = todos
 
+    // Modo de Exibição do Sidebar (Miniaturas vs Compacto)
+    let sidebarViewMode = localStorage.getItem('joakindex_sidebar_view_mode') || 'thumbnails';
+
+    // Inspetor 4 Abas & Cache de Texto OCR
+    let currentInspectorTab = 'dados';
+    let currentDocRawText = '';
+    const docTextCache = {};
+
+    function toggleThumbnailView() {
+      sidebarViewMode = (sidebarViewMode === 'thumbnails' ? 'compact' : 'thumbnails');
+      try {
+        localStorage.setItem('joakindex_sidebar_view_mode', sidebarViewMode);
+      } catch (e) {}
+      updateThumbnailToggleUI();
+      renderSidebar();
+    }
+
+    function updateThumbnailToggleUI() {
+      const btn = document.getElementById('btnToggleThumbnailView');
+      const icon = document.getElementById('iconToggleThumbnail');
+      const label = document.getElementById('labelToggleThumbnail');
+      if (!btn || !icon || !label) return;
+      if (sidebarViewMode === 'thumbnails') {
+        icon.className = 'fa-solid fa-table-cells-large text-emerald-400';
+        label.innerText = 'Miniaturas';
+        btn.title = 'Visualização com Miniaturas ativa. Clique para alternar para Modo Compacto.';
+      } else {
+        icon.className = 'fa-solid fa-bars text-slate-400';
+        label.innerText = 'Compacto';
+        btn.title = 'Modo Compacto ativo. Clique para alternar para Visualização com Miniaturas.';
+      }
+    }
+
     // Controle de Zoom e Rotação do Visualizador de Imagens
     let currentImageScale = 1.0;
     let currentImageRotation = 0;
@@ -2214,6 +2399,7 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      updateThumbnailToggleUI();
       loadDocuments();
       setupKeyboardShortcuts();
       checkBatchStatusOnLoad();
@@ -3157,26 +3343,62 @@
           ? `<span class="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded text-[9px] font-semibold shrink-0" title="${doc.todos_tipos.join(', ')}">+${tiposCount - 1} doc${tiposCount > 2 ? 's' : ''}</span>`
           : '';
 
-        card.innerHTML = `
-          <div class="flex items-center justify-between gap-1">
-            <div class="flex items-center gap-1.5 truncate">
-              ${extIcon}
-              <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
-              ${tipoBadge}
-              ${multiBadge}
+        if (sidebarViewMode === 'thumbnails') {
+          const thumbSrc = `/api/thumbnail/${doc.md5}`;
+          card.innerHTML = `
+            <div class="flex gap-2.5 items-start">
+              <div class="w-14 h-18 sm:w-16 sm:h-20 bg-slate-950 rounded border border-slate-800/90 overflow-hidden shrink-0 shadow-sm relative group">
+                <img src="${thumbSrc}" loading="lazy" alt="Miniatura"
+                     class="w-full h-full object-cover object-top transition-transform duration-200 group-hover:scale-105"
+                     onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
+                <div class="hidden w-full h-full flex flex-col items-center justify-center text-slate-600 bg-slate-950 p-1 text-center">
+                  ${extIcon}
+                  <span class="text-[8px] font-mono mt-0.5">${isImg ? 'IMG' : 'PDF'}</span>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0 flex flex-col gap-1">
+                <div class="flex items-center justify-between gap-1">
+                  <div class="flex items-center gap-1.5 truncate">
+                    <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
+                    ${tipoBadge}
+                    ${multiBadge}
+                  </div>
+                  ${statusBadge}
+                </div>
+                <div class="font-semibold text-slate-100 truncate text-[12px]">${nome}</div>
+                <div class="flex items-center justify-between gap-1 pt-0.5">
+                  ${middleBadge}
+                  <div class="flex items-center gap-1 shrink-0">
+                    ${rg ? `<span class="font-mono text-[10px] text-slate-400 bg-slate-800/80 px-1 rounded" title="RG / Identidade">${rg}</span>` : ''}
+                    ${cpf ? `<span class="font-mono text-[10px] text-slate-500 shrink-0" title="CPF">${cpf}</span>` : ''}
+                  </div>
+                </div>
+                <div class="text-[11px] text-slate-400 truncate">${subText}</div>
+              </div>
             </div>
-            ${statusBadge}
-          </div>
-          <div class="font-semibold text-slate-100 truncate">${nome}</div>
-          <div class="flex items-center justify-between gap-1 pt-0.5">
-            ${middleBadge}
-            <div class="flex items-center gap-1.5 shrink-0">
-              ${rg ? `<span class="font-mono text-[10px] text-slate-400 bg-slate-800/80 px-1 rounded" title="RG / Identidade">${rg}</span>` : ''}
-              ${cpf ? `<span class="font-mono text-[10px] text-slate-500 shrink-0" title="CPF">${cpf}</span>` : ''}
+          `;
+        } else {
+          card.innerHTML = `
+            <div class="flex items-center justify-between gap-1">
+              <div class="flex items-center gap-1.5 truncate">
+                ${extIcon}
+                <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
+                ${tipoBadge}
+                ${multiBadge}
+              </div>
+              ${statusBadge}
             </div>
-          </div>
-          <div class="text-[11px] text-slate-400 line-clamp-1">${subText}</div>
-        `;
+            <div class="font-semibold text-slate-100 truncate">${nome}</div>
+            <div class="flex items-center justify-between gap-1 pt-0.5">
+              ${middleBadge}
+              <div class="flex items-center gap-1.5 shrink-0">
+                ${rg ? `<span class="font-mono text-[10px] text-slate-400 bg-slate-800/80 px-1 rounded" title="RG / Identidade">${rg}</span>` : ''}
+                ${cpf ? `<span class="font-mono text-[10px] text-slate-500 shrink-0" title="CPF">${cpf}</span>` : ''}
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-400 line-clamp-1">${subText}</div>
+          `;
+        }
         listEl.appendChild(card);
       });
     }
@@ -3539,6 +3761,13 @@
       }
       renderMultiTags(doc);
       renderDossierPageShortcuts(doc);
+      renderDossierPagesGrid(doc);
+      updateFichaTecnica(doc);
+      if (currentInspectorTab === 'texto') {
+        loadDocumentText(doc.md5);
+      } else {
+        clearDocTextSearch();
+      }
       isDirty = false;
     }
 
@@ -4159,24 +4388,311 @@
       showToast('Visualizador recarregado.', 'info');
     }
 
-    function switchTab(tab) {
-      const btnForm = document.getElementById('tab-form');
-      const btnJson = document.getElementById('tab-json');
-      const viewForm = document.getElementById('viewForm');
-      const viewJson = document.getElementById('viewJson');
+    // -----------------------------------------------------------------------
+    // Painel do Inspetor: 4 Abas Modernas (Dados, Dossiê, Texto OCR, Ficha)
+    // -----------------------------------------------------------------------
+    function switchInspectorTab(tab) {
+      if (tab === 'form') tab = 'dados';
+      if (tab === 'json') tab = 'ficha';
 
-      if (tab === 'form') {
-        btnForm.className = "px-3 py-1 rounded text-xs font-medium bg-slate-800 text-white transition flex items-center gap-1.5";
-        btnJson.className = "px-3 py-1 rounded text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5";
-        viewForm.classList.remove('hidden');
-        viewJson.classList.add('hidden');
-      } else {
-        btnJson.className = "px-3 py-1 rounded text-xs font-medium bg-slate-800 text-white transition flex items-center gap-1.5";
-        btnForm.className = "px-3 py-1 rounded text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5";
-        viewJson.classList.remove('hidden');
-        viewForm.classList.add('hidden');
+      currentInspectorTab = tab;
+
+      const tabs = ['dados', 'dossie', 'texto', 'ficha'];
+      tabs.forEach(t => {
+        const btnId = `tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`;
+        const viewId = `viewTab${t.charAt(0).toUpperCase() + t.slice(1)}`;
+        const btn = document.getElementById(btnId);
+        const view = document.getElementById(viewId);
+        const isActive = (t === tab);
+
+        if (btn) {
+          if (isActive) {
+            btn.className = "flex-1 min-w-[95px] px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-emerald-400 border border-slate-700/80 transition flex items-center justify-center gap-1.5 shadow-sm";
+          } else {
+            btn.className = "flex-1 min-w-[95px] px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1.5";
+          }
+        }
+
+        if (view) {
+          if (isActive) {
+            view.classList.remove('hidden');
+          } else {
+            view.classList.add('hidden');
+          }
+        }
+      });
+
+      const curDoc = (filteredDocs && currentIndex >= 0 && currentIndex < filteredDocs.length) ? filteredDocs[currentIndex] : null;
+
+      if (tab === 'dossie') {
+        renderDossierPagesGrid(curDoc);
+      } else if (tab === 'texto') {
+        if (curDoc && curDoc.md5) {
+          loadDocumentText(curDoc.md5);
+        }
+      } else if (tab === 'ficha') {
+        updateFichaTecnica(curDoc);
         updateJsonView();
       }
+    }
+
+    function switchTab(tab) {
+      switchInspectorTab(tab);
+    }
+
+    function renderDossierPagesGrid(doc) {
+      const gridEl = document.getElementById('dossierPagesGrid');
+      const countBadge = document.getElementById('dossierPageCountBadge');
+      const pillsEl = document.getElementById('dossierQuickPills');
+      const tabBadge = document.getElementById('tabBadgePaginas');
+      if (!gridEl) return;
+      gridEl.innerHTML = '';
+      if (pillsEl) pillsEl.innerHTML = '';
+
+      if (!doc) {
+        gridEl.innerHTML = '<div class="col-span-2 text-center py-8 text-slate-500 text-xs">Nenhum documento selecionado.</div>';
+        if (countBadge) countBadge.innerText = '0 páginas';
+        if (tabBadge) tabBadge.classList.add('hidden');
+        return;
+      }
+
+      const isImg = isImageDoc(doc);
+      const dossie = (Array.isArray(doc.dossie_paginas) && doc.dossie_paginas.length > 0)
+        ? doc.dossie_paginas
+        : [{ pagina: 1, tipo: doc.tipo_documento || 'Documento' }];
+
+      const totalPages = Math.max(1, parseInt(doc.paginas) || dossie.length);
+
+      if (countBadge) {
+        countBadge.innerText = `${totalPages} ${totalPages > 1 ? 'páginas' : 'página'}`;
+      }
+      if (tabBadge) {
+        tabBadge.innerText = `${totalPages}p`;
+        tabBadge.classList.remove('hidden');
+      }
+
+      // Atalhos rápidos no cabeçalho do dossiê
+      dossie.forEach(item => {
+        if (pillsEl && item.pagina) {
+          const pill = document.createElement('button');
+          pill.type = 'button';
+          pill.className = 'px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 border border-slate-700/80 text-[10px] flex items-center gap-1 transition';
+          pill.title = `Ir para página ${item.pagina} (${item.tipo || 'Página'})`;
+          pill.innerHTML = `<span class="font-mono text-cyan-400 font-semibold">P.${item.pagina}</span> <span class="truncate max-w-[120px]">${item.tipo || ''}</span>`;
+          pill.onclick = () => jumpToPdfPage(item.pagina);
+          pillsEl.appendChild(pill);
+        }
+      });
+
+      // Mapeamento das páginas para seus respectivos tipos
+      const pageTypeMap = {};
+      dossie.forEach(d => {
+        if (d.pagina) pageTypeMap[d.pagina] = d.tipo;
+      });
+
+      for (let pNum = 1; pNum <= totalPages; pNum++) {
+        const pageType = pageTypeMap[pNum] || (pNum === 1 ? (doc.tipo_documento || 'Página Inicial') : `Página ${pNum}`);
+        const card = document.createElement('div');
+        card.className = 'bg-slate-900/90 border border-slate-800 hover:border-emerald-500/60 rounded-xl p-2.5 flex flex-col gap-2 transition-all hover:shadow-lg group';
+
+        const thumbUrl = isImg ? `/api/arquivo/${doc.md5}` : `/api/thumbnail/${doc.md5}/${pNum}`;
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between text-[11px] pb-1 border-b border-slate-800/80">
+            <span class="font-mono font-bold text-cyan-400 flex items-center gap-1">
+              <i class="fa-regular fa-file-lines text-[10px]"></i> Pág. ${pNum}
+            </span>
+            <span class="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 truncate max-w-[110px]" title="${pageType}">
+              ${pageType}
+            </span>
+          </div>
+          <div class="relative aspect-[3/4] bg-slate-950 rounded-lg overflow-hidden border border-slate-800/80 cursor-pointer" onclick="jumpToPdfPage(${pNum})">
+            <img src="${thumbUrl}" loading="lazy" alt="Página ${pNum}" class="w-full h-full object-cover object-top transition-transform duration-200 group-hover:scale-105"
+                 onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
+            <div class="hidden w-full h-full flex flex-col items-center justify-center text-slate-600 bg-slate-950 p-2 text-center">
+              <i class="fa-regular fa-file-pdf text-2xl text-slate-700 mb-1"></i>
+              <span class="text-[10px]">Página ${pNum}</span>
+            </div>
+            <div class="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+              <span class="bg-slate-900/90 text-emerald-400 text-[10px] font-semibold px-2 py-1 rounded shadow border border-emerald-500/30 flex items-center gap-1">
+                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> Visualizar
+              </span>
+            </div>
+          </div>
+          <button type="button" onclick="jumpToPdfPage(${pNum})"
+                  class="w-full py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-300 rounded text-[10px] font-medium transition flex items-center justify-center gap-1">
+            <i class="fa-solid fa-eye text-[9px]"></i>
+            <span>Exibir no Leitor</span>
+          </button>
+        `;
+        gridEl.appendChild(card);
+      }
+    }
+
+    async function loadDocumentText(md5, force = false) {
+      if (!md5) return;
+      const contentEl = document.getElementById('docTextContent');
+      const loadingEl = document.getElementById('docTextLoading');
+      const badgeEl = document.getElementById('textDocOriginBadge');
+
+      if (!force && docTextCache[md5]) {
+        currentDocRawText = docTextCache[md5].texto || '';
+        if (badgeEl) badgeEl.innerText = docTextCache[md5].origem || 'cache';
+        renderDocText(currentDocRawText);
+        return;
+      }
+
+      if (loadingEl) loadingEl.classList.remove('hidden');
+      try {
+        const res = await fetch(`/api/texto/${md5}`);
+        const data = await res.json();
+        if (data.status === 'sucesso' && data.texto) {
+          docTextCache[md5] = data;
+          currentDocRawText = data.texto;
+          if (badgeEl) badgeEl.innerText = data.origem || 'extraído';
+          renderDocText(currentDocRawText);
+        } else {
+          currentDocRawText = data.mensagem || 'Texto não disponível.';
+          if (badgeEl) badgeEl.innerText = 'indisponível';
+          renderDocText(currentDocRawText);
+        }
+      } catch (err) {
+        console.error('Erro ao obter texto do documento:', err);
+        currentDocRawText = 'Erro ao carregar texto: ' + err.message;
+        if (badgeEl) badgeEl.innerText = 'erro';
+        renderDocText(currentDocRawText);
+      } finally {
+        if (loadingEl) loadingEl.classList.add('hidden');
+      }
+    }
+
+    function renderDocText(textToRender, highlightTerm = '') {
+      const contentEl = document.getElementById('docTextContent');
+      if (!contentEl) return;
+      if (!textToRender) {
+        contentEl.innerHTML = '<span class="text-slate-500 italic">Nenhum texto extraído para este documento.</span>';
+        return;
+      }
+
+      const cleanTerm = (highlightTerm || '').trim();
+      if (!cleanTerm) {
+        contentEl.innerText = textToRender;
+        return;
+      }
+
+      const escaped = textToRender
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      try {
+        const escapedTerm = cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escapedTerm})`, 'gi');
+        const highlighted = escaped.replace(regex, '<mark class="bg-amber-400 text-slate-950 font-bold px-0.5 rounded">$1</mark>');
+        contentEl.innerHTML = highlighted;
+      } catch (e) {
+        contentEl.innerText = textToRender;
+      }
+    }
+
+    function onSearchDocTextInput(query) {
+      const container = document.getElementById('textSearchCountContainer');
+      const countEl = document.getElementById('textSearchMatchCount');
+      const clean = (query || '').trim();
+
+      if (!clean) {
+        if (container) container.classList.add('hidden');
+        renderDocText(currentDocRawText);
+        return;
+      }
+
+      try {
+        const escapedTerm = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escapedTerm, 'gi');
+        const matches = (currentDocRawText.match(regex) || []).length;
+        if (container && countEl) {
+          container.classList.remove('hidden');
+          countEl.innerText = `${matches} ocorrência${matches === 1 ? '' : 's'}`;
+        }
+        renderDocText(currentDocRawText, clean);
+      } catch (e) {
+        if (container) container.classList.add('hidden');
+        renderDocText(currentDocRawText);
+      }
+    }
+
+    function clearDocTextSearch() {
+      const input = document.getElementById('searchDocTextInput');
+      if (input) input.value = '';
+      onSearchDocTextInput('');
+    }
+
+    function copyDocumentRawText() {
+      if (!currentDocRawText) {
+        showToast('Nenhum texto disponível para copiar.', 'info');
+        return;
+      }
+      navigator.clipboard.writeText(currentDocRawText).then(() => {
+        showToast('Texto integral copiado para a área de transferência!', 'success');
+      }).catch(() => {
+        showToast('Não foi possível copiar o texto.', 'error');
+      });
+    }
+
+    function updateFichaTecnica(doc) {
+      if (!doc) return;
+      const setEl = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = safeString(val) || '-';
+      };
+
+      setEl('audit_md5', doc.md5);
+      setEl('audit_nome_arquivo', doc.nome_arquivo || `${doc.md5}.${doc.extensao || 'pdf'}`);
+      const fNameEl = document.getElementById('audit_nome_arquivo');
+      if (fNameEl) fNameEl.title = doc.nome_arquivo || '';
+
+      const bytes = parseInt(doc.tamanho_bytes) || 0;
+      let sizeStr = '-';
+      if (bytes > 0) {
+        sizeStr = bytes > 1048576 
+          ? `${(bytes / 1048576).toFixed(2)} MB (${bytes.toLocaleString()} bytes)`
+          : `${(bytes / 1024).toFixed(1)} KB (${bytes.toLocaleString()} bytes)`;
+      }
+      setEl('audit_tamanho', sizeStr);
+      setEl('audit_caminho', doc.caminho_relativo || '-');
+      setEl('audit_metodo_leitura', doc.metodo_leitura || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital'));
+      setEl('audit_tentativa_ocr', doc.tentativa_ocr_llm ? 'Sim (Executado)' : 'Não');
+      setEl('audit_data_modificacao', doc.data_modificacao || '-');
+
+      const statusEl = document.getElementById('audit_status_conferencia');
+      if (statusEl) {
+        const st = safeString(doc.status_conferencia || 'pendente').toLowerCase();
+        if (st === 'aprovado') {
+          statusEl.className = 'text-emerald-400 font-semibold';
+          statusEl.innerText = 'Aprovado / Conferido';
+        } else {
+          statusEl.className = 'text-amber-400 font-semibold';
+          statusEl.innerText = 'Pendente';
+        }
+      }
+
+      const typeBadge = document.getElementById('auditFileTypeBadge');
+      if (typeBadge) {
+        typeBadge.innerText = isImageDoc(doc) ? (doc.extensao || 'IMG').toUpperCase() : 'PDF';
+      }
+    }
+
+    function copyJsonData() {
+      const jsonViewer = document.getElementById('jsonViewer');
+      if (!jsonViewer || !jsonViewer.innerText) {
+        showToast('Nenhum dado JSON para copiar.', 'info');
+        return;
+      }
+      navigator.clipboard.writeText(jsonViewer.innerText).then(() => {
+        showToast('JSON copiado com sucesso!', 'success');
+      }).catch(() => {
+        showToast('Erro ao copiar JSON.', 'error');
+      });
     }
 
     function copyMd5() {
