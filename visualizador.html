@@ -239,34 +239,26 @@
           <button onclick="setStatusFilter('todos')" id="filter-todos" class="py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700 truncate">Todos (<span id="count-todos">0</span>)</button>
           <button onclick="setStatusFilter('pendente')" id="filter-pendente" class="py-1 px-1 rounded bg-slate-900 text-amber-400/80 hover:bg-slate-800 text-center transition truncate">Pendentes (<span id="count-pendente">0</span>)</button>
           <button onclick="setStatusFilter('aprovado')" id="filter-aprovado" class="py-1 px-1 rounded bg-slate-900 text-emerald-400/80 hover:bg-slate-800 text-center transition truncate">Aprovados (<span id="count-aprovado">0</span>)</button>
-          <button onclick="setStatusFilter('nao_processado')" id="filter-nao_processado" class="py-1 px-1 rounded bg-slate-900 text-rose-400/80 hover:bg-slate-800 text-center transition truncate" title="Documentos PDF encontrados que ainda não foram lidos/classificados">Não Lidos (<span id="count-nao_processado">0</span>)</button>
+          <button onclick="setStatusFilter('nao_processado')" id="filter-nao_processado" class="py-1 px-1 rounded bg-slate-900 text-rose-400/80 hover:bg-slate-800 text-center transition truncate" title="Documentos encontrados que ainda não foram lidos/classificados">Não Lidos (<span id="count-nao_processado">0</span>)</button>
         </div>
 
-        <!-- NOVO: FILTRO POR NATUREZA / NÍVEL DO CURSO -->
-        <div class="pt-2 border-t border-slate-800/80 space-y-1.5">
-          <div class="flex items-center justify-between text-[11px]">
-            <label class="text-slate-300 font-medium flex items-center gap-1.5">
-              <i class="fa-solid fa-award text-indigo-400"></i>
-              <span>Nível / Natureza do Curso:</span>
-            </label>
-            <button onclick="resetNaturezaFilter()" id="btnClearNatureza" class="hidden text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5">
-              <i class="fa-solid fa-rotate-left"></i> Limpar
+        <!-- Filtro por Domínio do Documento -->
+        <div class="pt-1">
+          <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+            <span class="flex items-center gap-1 font-medium"><i class="fa-solid fa-layer-group text-cyan-400 text-[10px]"></i> Domínio:</span>
+            <button onclick="resetDomainFilter()" id="btnClearDomain" class="hidden text-[10px] text-cyan-400 hover:underline flex items-center gap-0.5">
+              <i class="fa-solid fa-rotate-left"></i> Todos
             </button>
           </div>
-
-          <!-- Select Dropdown de Natureza -->
-          <select id="selectNaturezaFilter" onchange="onNaturezaSelectChange()"
-                  class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-            <option value="">Todas as Naturezas (0)</option>
-          </select>
-
-          <!-- Chips Rápidos de Filtragem por Natureza -->
-          <div id="naturezaChips" class="flex flex-wrap gap-1 pt-1 max-h-20 overflow-y-auto pr-0.5">
-            <!-- Chips gerados dinamicamente via JS com contadores -->
+          <div class="grid grid-cols-4 gap-1 text-[10px]">
+            <button onclick="setDomainFilter('todos')" id="filter-dom-todos" class="py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center border border-slate-700 transition truncate">Todos (<span id="count-dom-todos">0</span>)</button>
+            <button onclick="setDomainFilter('academico')" id="filter-dom-academico" class="py-1 px-1 rounded bg-slate-900 text-indigo-300 hover:bg-slate-800 text-center transition truncate" title="Diplomas, certificados e históricos acadêmicos">Acadêmico (<span id="count-dom-academico">0</span>)</button>
+            <button onclick="setDomainFilter('financeiro')" id="filter-dom-financeiro" class="py-1 px-1 rounded bg-slate-900 text-emerald-400 hover:bg-slate-800 text-center transition truncate" title="Comprovantes PIX, recibos e notas fiscais">PIX / Fin (<span id="count-dom-financeiro">0</span>)</button>
+            <button onclick="setDomainFilter('outros')" id="filter-dom-outros" class="py-1 px-1 rounded bg-slate-900 text-purple-300 hover:bg-slate-800 text-center transition truncate" title="Identificação (RG/CNH), Jurídico e Outros">Outros (<span id="count-dom-outros">0</span>)</button>
           </div>
         </div>
 
-        <!-- FILTRO POR TIPO DE DOCUMENTO -->
+        <!-- 1º: FILTRO POR TIPO DE DOCUMENTO (Geral / Primário) -->
         <div class="pt-2 border-t border-slate-800/80 space-y-1.5">
           <div class="flex items-center justify-between text-[11px]">
             <label class="text-slate-300 font-medium flex items-center gap-1.5">
@@ -286,6 +278,30 @@
 
           <!-- Chips Rápidos de Filtragem por Tipo de Documento -->
           <div id="tipoChips" class="flex flex-wrap gap-1 pt-1 max-h-16 overflow-y-auto pr-0.5">
+            <!-- Chips gerados dinamicamente via JS com contadores -->
+          </div>
+        </div>
+
+        <!-- 2º: FILTRO POR NATUREZA / NÍVEL DO CURSO (Contextual para Acadêmico) -->
+        <div id="containerFilterNatureza" class="pt-2 border-t border-slate-800/80 space-y-1.5">
+          <div class="flex items-center justify-between text-[11px]">
+            <label class="text-slate-300 font-medium flex items-center gap-1.5">
+              <i class="fa-solid fa-award text-indigo-400"></i>
+              <span>Nível / Natureza do Curso:</span>
+            </label>
+            <button onclick="resetNaturezaFilter()" id="btnClearNatureza" class="hidden text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5">
+              <i class="fa-solid fa-rotate-left"></i> Limpar
+            </button>
+          </div>
+
+          <!-- Select Dropdown de Natureza -->
+          <select id="selectNaturezaFilter" onchange="onNaturezaSelectChange()"
+                  class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <option value="">Todas as Naturezas (0)</option>
+          </select>
+
+          <!-- Chips Rápidos de Filtragem por Natureza -->
+          <div id="naturezaChips" class="flex flex-wrap gap-1 pt-1 max-h-20 overflow-y-auto pr-0.5">
             <!-- Chips gerados dinamicamente via JS com contadores -->
           </div>
         </div>
@@ -314,38 +330,59 @@
       </div>
     </aside>
 
-    <!-- 2. PAINEL CENTRAL ESQUERDO: VISUALIZADOR DE PDF -->
+    <!-- 2. PAINEL CENTRAL ESQUERDO: VISUALIZADOR DE DOCUMENTO (PDF / IMAGEM) -->
     <section class="flex-1 flex flex-col border-r border-slate-800 bg-slate-950 overflow-hidden">
       <div class="bg-slate-900/90 border-b border-slate-800 px-4 py-2 flex items-center justify-between shrink-0">
         <div class="flex items-center gap-2 overflow-hidden text-xs">
-          <i class="fa-regular fa-file-pdf text-rose-400"></i>
-          <span class="text-slate-400">Visualização do PDF:</span>
+          <i id="docTypeHeaderIcon" class="fa-regular fa-file-pdf text-rose-400"></i>
+          <span id="docTypeHeaderLabel" class="text-slate-400">Visualização do PDF:</span>
           <span id="pdfMd5Title" class="font-mono text-emerald-400 truncate max-w-[200px] sm:max-w-md">Nenhum selecionado</span>
         </div>
         <div class="flex items-center gap-2">
-          <button onclick="reloadPdf()" title="Recarregar Visualizador de PDF" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-800">
+          <!-- Controles de Imagem (quando documento for imagem nativa) -->
+          <div id="imageControls" class="hidden items-center gap-1 mr-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+            <button onclick="zoomImage(0.2)" title="Aumentar Zoom (+)" class="text-slate-400 hover:text-emerald-400 text-xs px-1.5 py-0.5 rounded hover:bg-slate-800">
+              <i class="fa-solid fa-magnifying-glass-plus"></i>
+            </button>
+            <button onclick="zoomImage(-0.2)" title="Diminuir Zoom (-)" class="text-slate-400 hover:text-emerald-400 text-xs px-1.5 py-0.5 rounded hover:bg-slate-800">
+              <i class="fa-solid fa-magnifying-glass-minus"></i>
+            </button>
+            <button onclick="resetImageZoom()" title="Ajustar ao Padrão (100%)" class="text-slate-400 hover:text-cyan-400 text-xs px-1.5 py-0.5 rounded hover:bg-slate-800 text-[10px] font-mono">
+              100%
+            </button>
+            <button onclick="rotateImage()" title="Girar 90°" class="text-slate-400 hover:text-amber-400 text-xs px-1.5 py-0.5 rounded hover:bg-slate-800">
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
+          </div>
+          <button onclick="reloadPdf()" title="Recarregar Visualizador" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-800">
             <i class="fa-solid fa-arrows-rotate"></i>
           </button>
-          <a id="openPdfNewTab" href="#" target="_blank" title="Abrir PDF em nova aba" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-800 flex items-center gap-1">
+          <a id="openPdfNewTab" href="#" target="_blank" title="Abrir arquivo em nova aba" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-800 flex items-center gap-1">
             <i class="fa-solid fa-arrow-up-right-from-square"></i>
             <span class="hidden sm:inline">Nova Aba</span>
           </a>
         </div>
       </div>
 
-      <!-- Iframe do PDF -->
-      <div class="flex-1 relative bg-slate-900 overflow-hidden">
+      <!-- Container do Visualizador (PDF ou Imagem) -->
+      <div class="flex-1 relative bg-slate-900 overflow-hidden select-none">
+        <!-- Iframe do PDF -->
         <iframe id="pdfFrame" class="w-full h-full border-0" src="about:blank"></iframe>
+
+        <!-- Visualizador de Imagens (PNG, JPG, JPEG, WEBP) -->
+        <div id="imageViewerContainer" class="hidden absolute inset-0 overflow-auto bg-slate-950 flex items-center justify-center p-4">
+          <img id="docImageEl" src="" alt="Documento Imagem" class="max-w-full max-h-full object-contain shadow-2xl transition-transform duration-200 ease-out origin-center">
+        </div>
         
-        <!-- Indicador de Carregamento Flutuante (Não Bloqueante) -->
+        <!-- Indicador de Carregamento Flutuante -->
         <div id="pdfLoadingState" class="hidden absolute top-3 right-3 bg-slate-900/90 backdrop-blur border border-slate-700/80 text-emerald-400 px-3 py-1.5 rounded-full shadow-lg text-xs flex items-center gap-2 pointer-events-none z-20 transition-opacity duration-300">
           <i class="fa-solid fa-circle-notch fa-spin text-xs text-emerald-400"></i>
-          <span class="text-[11px] font-medium text-slate-200">Carregando PDF...</span>
+          <span id="loadingDocLabel" class="text-[11px] font-medium text-slate-200">Carregando Documento...</span>
         </div>
 
         <!-- Tela de Estado Vazio (quando nenhum documento selecionado) -->
         <div id="pdfEmptyState" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center text-slate-500 space-y-3 z-10">
-          <i class="fa-regular fa-file-pdf text-4xl text-slate-700"></i>
+          <i id="emptyStateIcon" class="fa-regular fa-file-pdf text-4xl text-slate-700"></i>
           <p class="text-xs text-slate-400">Nenhum documento selecionado</p>
         </div>
       </div>
@@ -426,99 +463,284 @@
             </button>
           </div>
 
-          <!-- Beneficiário -->
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label for="input_beneficiario" class="text-xs font-medium text-slate-300">Nome do Beneficiário / Titular</label>
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] text-slate-500 font-mono">beneficiario</span>
-                <button type="button" onclick="copyFieldValue('input_beneficiario', 'Beneficiário', this)" title="Copiar Beneficiário"
-                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                  <i class="fa-regular fa-copy"></i> Copiar
-                </button>
+          <!-- 1. BLOCO DE CLASSIFICAÇÃO: DOMÍNIO E TIPO DE DOCUMENTO NO TOPO -->
+          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2.5 shadow-sm">
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-300 pb-1 border-b border-slate-800">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-sliders text-cyan-400"></i> Classificação do Documento</span>
+              <span id="domainBadgePreview" class="text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-slate-800 text-slate-400">academico</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <!-- 1º: Domínio do Documento -->
+              <div>
+                <label for="select_dominio" class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                  <span class="flex items-center gap-1">
+                    <i class="fa-solid fa-layer-group text-cyan-400 text-[11px]"></i> 1. Domínio
+                  </span>
+                  <span class="text-[9px] text-slate-500 font-mono">dominio</span>
+                </label>
+                <select id="select_dominio" onchange="onDominioChange(); markDirty();"
+                        class="w-full bg-slate-950 border border-slate-700/80 rounded px-2.5 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                  <option value="academico">Acadêmico (Diplomas/Cursos)</option>
+                  <option value="financeiro">Financeiro (PIX/Recibos)</option>
+                  <option value="identificacao">Identificação Civil (RG/CNH/CPF)</option>
+                  <option value="juridico">Jurídico (Contratos/Posse)</option>
+                  <option value="outro">Outros Documentos</option>
+                </select>
+              </div>
+
+              <!-- 2º: Tipo de Documento -->
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label for="select_tipo_documento" class="text-xs font-medium text-slate-300 flex items-center gap-1">
+                    <i class="fa-solid fa-file-contract text-teal-400 text-[11px]"></i> 2. Tipo
+                  </label>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[9px] text-slate-500 font-mono">tipo</span>
+                    <button type="button" onclick="copyFieldValue('select_tipo_documento', 'Tipo', this)" title="Copiar Tipo"
+                            class="text-[10px] text-slate-400 hover:text-emerald-400">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+                <select id="select_tipo_documento" onchange="onTipoDocumentoChange()"
+                        class="w-full bg-slate-950 border border-slate-700/80 rounded px-2.5 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                  <optgroup label="Acadêmico">
+                    <option value="Diploma">Diploma</option>
+                    <option value="Certificado">Certificado</option>
+                    <option value="Histórico Escolar">Histórico Escolar</option>
+                    <option value="Declaração">Declaração</option>
+                    <option value="Currículo">Currículo</option>
+                  </optgroup>
+                  <optgroup label="Financeiro & Pagamentos">
+                    <option value="Comprovante PIX">Comprovante PIX</option>
+                    <option value="Recibo de Pagamento">Recibo de Pagamento</option>
+                    <option value="Boleto Bancário">Boleto Bancário</option>
+                    <option value="Extrato Bancário">Extrato Bancário</option>
+                    <option value="Nota Fiscal">Nota Fiscal</option>
+                  </optgroup>
+                  <optgroup label="Identificação Pessoal">
+                    <option value="RG / Identidade">RG / Identidade</option>
+                    <option value="CNH">CNH (Carteira Nacional de Habilitação)</option>
+                    <option value="CPF">CPF</option>
+                    <option value="Certidão de Nascimento">Certidão de Nascimento</option>
+                    <option value="Certidão de Casamento">Certidão de Casamento</option>
+                  </optgroup>
+                  <optgroup label="Jurídico">
+                    <option value="Contrato">Contrato</option>
+                    <option value="Procuração">Procuração</option>
+                    <option value="Termo de Posse">Termo de Posse</option>
+                  </optgroup>
+                  <optgroup label="Outros">
+                    <option value="Outro">Outro</option>
+                  </optgroup>
+                </select>
               </div>
             </div>
-            <input type="text" id="input_beneficiario" oninput="markDirty()"
-                   class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
           </div>
 
-          <!-- CPF e RG do Beneficiário lado a lado -->
-          <div class="grid grid-cols-2 gap-3">
+          <!-- 2. CARD EXCLUSIVO DE COMPROVANTE PIX / FINANCEIRO (Contextual) -->
+          <div id="pixReceiptCard" class="hidden bg-gradient-to-br from-emerald-950/60 via-slate-900/95 to-slate-950 border border-emerald-500/40 rounded-xl p-3.5 space-y-3 shadow-lg ring-1 ring-emerald-500/20">
+            <div class="flex items-center justify-between border-b border-emerald-500/30 pb-2">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <i class="fa-brands fa-pix text-xs"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-emerald-300 uppercase tracking-wide">Comprovante de Transação PIX</h4>
+                  <span class="text-[10px] text-slate-400">Liquidação Financeira Instantânea BACEN</span>
+                </div>
+              </div>
+              <span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-emerald-500/30">PIX OFICIAL</span>
+            </div>
+
+            <!-- Valor Monetário em Destaque -->
+            <div class="bg-slate-950/80 p-2.5 rounded-lg border border-emerald-500/30 flex items-center justify-between">
+              <div class="flex-1">
+                <label for="input_valor_monetario" class="block text-[10px] font-semibold uppercase text-emerald-400/90">Valor Transferido (R$)</label>
+                <input type="text" id="input_valor_monetario" oninput="markDirty()" placeholder="R$ 0,00"
+                       class="bg-transparent text-lg sm:text-xl font-bold font-mono text-emerald-300 focus:outline-none w-full placeholder-emerald-800">
+              </div>
+              <button type="button" onclick="copyFieldValue('input_valor_monetario', 'Valor PIX', this)" title="Copiar Valor"
+                      class="text-xs text-slate-400 hover:text-emerald-400 px-2 py-1 rounded hover:bg-slate-800 transition">
+                <i class="fa-regular fa-copy"></i>
+              </button>
+            </div>
+
+            <!-- Grid Pagador vs Recebedor -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <!-- Pagador -->
+              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1.5">
+                <div class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                  <i class="fa-solid fa-arrow-up-right-from-square text-rose-400 text-[9px]"></i> Pagador (Origem)
+                </div>
+                <input type="text" id="input_pix_pagador_nome" oninput="markDirty()" placeholder="Nome do Pagador"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
+                <input type="text" id="input_pix_pagador_cpf_cnpj" oninput="markDirty()" placeholder="CPF/CNPJ Mascarado"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
+                <input type="text" id="input_pix_pagador_banco" oninput="markDirty()" placeholder="Banco Origem"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
+              </div>
+
+              <!-- Recebedor / Beneficiário -->
+              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1.5">
+                <div class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                  <i class="fa-solid fa-arrow-down-left-and-up-right-to-center text-emerald-400 text-[9px]"></i> Recebedor (Destino)
+                </div>
+                <input type="text" id="input_pix_recebedor_nome_preview" oninput="syncRecebedorFromPixCard(this.value); markDirty();" placeholder="Nome do Favorecido"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
+                <input type="text" id="input_pix_recebedor_cpf_preview" oninput="syncCpfFromPixCard(this.value); markDirty();" placeholder="CPF/CNPJ Destino"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
+                <input type="text" id="input_pix_recebedor_banco" oninput="markDirty()" placeholder="Banco Destino"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
+              </div>
+            </div>
+
+            <!-- Chave PIX, Identificador E2E e Autenticação -->
+            <div class="space-y-1.5">
+              <!-- Chave PIX -->
+              <div>
+                <div class="flex items-center justify-between mb-0.5">
+                  <label for="input_pix_chave" class="text-[10px] font-medium text-slate-400">Chave PIX Utilizada</label>
+                  <button type="button" onclick="copyFieldValue('input_pix_chave', 'Chave PIX', this)" class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+                <input type="text" id="input_pix_chave" oninput="markDirty()" placeholder="Chave (E-mail, CPF, Celular ou EVP)"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-500">
+              </div>
+
+              <!-- Identificador Fim-a-Fim (E2E ID) -->
+              <div>
+                <div class="flex items-center justify-between mb-0.5">
+                  <label for="input_pix_e2e_id" class="text-[10px] font-medium text-slate-400 flex items-center gap-1">
+                    <span>ID Transação Fim-a-Fim (E2E ID)</span>
+                    <span class="text-[9px] bg-slate-800 text-slate-400 px-1 rounded font-mono">Bacen</span>
+                  </label>
+                  <button type="button" onclick="copyFieldValue('input_pix_e2e_id', 'E2E ID', this)" class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+                <input type="text" id="input_pix_e2e_id" oninput="markDirty()" placeholder="E0000000000000000000000000000000"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500">
+              </div>
+
+              <!-- Autenticação Bancária -->
+              <div>
+                <div class="flex items-center justify-between mb-0.5">
+                  <label for="input_pix_autenticacao" class="text-[10px] font-medium text-slate-400">Autenticação Bancária / Controle</label>
+                  <button type="button" onclick="copyFieldValue('input_pix_autenticacao', 'Autenticação', this)" class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+                <input type="text" id="input_pix_autenticacao" oninput="markDirty()" placeholder="Código de autenticação ou hash de segurança"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-300 focus:outline-none focus:border-emerald-500">
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. BLOCO DE IDENTIFICAÇÃO DO TITULAR / PESSOA (Comum a todos os tipos) -->
+          <div class="space-y-3">
+            <!-- Beneficiário / Titular -->
             <div>
               <div class="flex items-center justify-between mb-1">
-                <label for="input_cpf" class="text-xs font-medium text-slate-300">CPF</label>
+                <label for="input_beneficiario" id="label_beneficiario" class="text-xs font-medium text-slate-300">Nome do Titular / Beneficiário</label>
                 <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-slate-500 font-mono">cpf</span>
-                  <button type="button" onclick="copyFieldValue('input_cpf', 'CPF', this)" title="Copiar CPF"
+                  <span class="text-[10px] text-slate-500 font-mono">beneficiario</span>
+                  <button type="button" onclick="copyFieldValue('input_beneficiario', 'Beneficiário', this)" title="Copiar Beneficiário"
                           class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
                     <i class="fa-regular fa-copy"></i> Copiar
                   </button>
                 </div>
               </div>
-              <input type="text" id="input_cpf" oninput="markDirty()" placeholder="000.000.000-00"
-                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+              <input type="text" id="input_beneficiario" oninput="markDirty()"
+                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
+
+            <!-- CPF e RG do Beneficiário lado a lado -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label for="input_cpf" class="text-xs font-medium text-slate-300">CPF</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-slate-500 font-mono">cpf</span>
+                    <button type="button" onclick="copyFieldValue('input_cpf', 'CPF', this)" title="Copiar CPF"
+                            class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                      <i class="fa-regular fa-copy"></i> Copiar
+                    </button>
+                  </div>
+                </div>
+                <input type="text" id="input_cpf" oninput="markDirty()" placeholder="000.000.000-00"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label for="input_rg" class="text-xs font-medium text-slate-300">RG / Identidade</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-slate-500 font-mono">rg</span>
+                    <button type="button" onclick="copyFieldValue('input_rg', 'RG', this)" title="Copiar RG"
+                            class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                      <i class="fa-regular fa-copy"></i> Copiar
+                    </button>
+                  </div>
+                </div>
+                <input type="text" id="input_rg" oninput="markDirty()" placeholder="Ex: 2030359 SSP-ES"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. BLOCO ESPECÍFICO ACADÊMICO (Contextual: visível no domínio acadêmico) -->
+          <div id="section_academico" class="space-y-3 pt-2 border-t border-slate-800/80">
+            <div class="flex items-center justify-between text-[11px] text-indigo-400 font-semibold">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-graduation-cap"></i> Metadados Acadêmicos</span>
+              <span class="text-[10px] text-slate-500 font-normal">Cursos / Diplomas</span>
+            </div>
+
+            <!-- Natureza do Curso -->
             <div>
               <div class="flex items-center justify-between mb-1">
-                <label for="input_rg" class="text-xs font-medium text-slate-300">RG / Identidade</label>
+                <label for="select_natureza_curso" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                  <i class="fa-solid fa-award text-amber-400"></i>
+                  Natureza / Nível do Curso
+                </label>
                 <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-slate-500 font-mono">rg</span>
-                  <button type="button" onclick="copyFieldValue('input_rg', 'RG', this)" title="Copiar RG"
+                  <span class="text-[10px] text-slate-500 font-mono">natureza_curso</span>
+                  <button type="button" onclick="copyFieldValue('select_natureza_curso', 'Natureza do Curso', this)" title="Copiar Natureza do Curso"
                           class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
                     <i class="fa-regular fa-copy"></i> Copiar
                   </button>
                 </div>
               </div>
-              <input type="text" id="input_rg" oninput="markDirty()" placeholder="Ex: 2030359 SSP-ES"
-                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+              <select id="select_natureza_curso" onchange="markDirty()"
+                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                <option value="">Não identificada / Não se aplica</option>
+                <option value="Graduação / Curso Superior">Graduação / Curso Superior (Bacharelado/Licenciatura/Tecnólogo)</option>
+                <option value="Pós-Graduação Lato Sensu (Especialização/MBA)">Pós-Graduação Lato Sensu (Especialização/MBA)</option>
+                <option value="Pós-Graduação Stricto Sensu (Mestrado/Doutorado)">Pós-Graduação Stricto Sensu (Mestrado/Doutorado)</option>
+                <option value="Curso Técnico / Profissionalizante">Curso Técnico / Profissionalizante</option>
+                <option value="Curso de Extensão / Aperfeiçoamento">Curso de Extensão / Aperfeiçoamento</option>
+                <option value="Educação Básica">Educação Básica (Fundamental / Médio)</option>
+              </select>
             </div>
-          </div>
 
-          <!-- Natureza do Curso -->
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label for="select_natureza_curso" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-                <i class="fa-solid fa-award text-amber-400"></i>
-                Natureza / Nível do Curso
-              </label>
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] text-slate-500 font-mono">natureza_curso</span>
-                <button type="button" onclick="copyFieldValue('select_natureza_curso', 'Natureza do Curso', this)" title="Copiar Natureza do Curso"
-                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                  <i class="fa-regular fa-copy"></i> Copiar
-                </button>
+            <!-- Nome do Curso -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label for="input_curso" class="text-xs font-medium text-slate-300">Nome do Curso</label>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-slate-500 font-mono">curso</span>
+                  <button type="button" onclick="copyFieldValue('input_curso', 'Nome do Curso', this)" title="Copiar Nome do Curso"
+                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
               </div>
+              <textarea id="input_curso" oninput="markDirty()" rows="2"
+                        class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
             </div>
-            <select id="select_natureza_curso" onchange="markDirty()"
-                    class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-              <option value="">Não identificada / Não se aplica</option>
-              <option value="Graduação / Curso Superior">Graduação / Curso Superior (Bacharelado/Licenciatura/Tecnólogo)</option>
-              <option value="Pós-Graduação Lato Sensu (Especialização/MBA)">Pós-Graduação Lato Sensu (Especialização/MBA)</option>
-              <option value="Pós-Graduação Stricto Sensu (Mestrado/Doutorado)">Pós-Graduação Stricto Sensu (Mestrado/Doutorado)</option>
-              <option value="Curso Técnico / Profissionalizante">Curso Técnico / Profissionalizante</option>
-              <option value="Curso de Extensão / Aperfeiçoamento">Curso de Extensão / Aperfeiçoamento</option>
-              <option value="Educação Básica">Educação Básica (Fundamental / Médio)</option>
-            </select>
-          </div>
 
-          <!-- Nome do Curso -->
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label for="input_curso" class="text-xs font-medium text-slate-300">Nome do Curso</label>
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] text-slate-500 font-mono">curso</span>
-                <button type="button" onclick="copyFieldValue('input_curso', 'Nome do Curso', this)" title="Copiar Nome do Curso"
-                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                  <i class="fa-regular fa-copy"></i> Copiar
-                </button>
-              </div>
-            </div>
-            <textarea id="input_curso" oninput="markDirty()" rows="2"
-                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
-          </div>
-
-          <!-- Carga Horária e Data do Documento lado a lado -->
-          <div class="grid grid-cols-2 gap-3">
+            <!-- Carga Horária -->
             <div>
               <div class="flex items-center justify-between mb-1">
                 <label for="input_carga_horaria" class="text-xs font-medium text-slate-300">Carga Horária</label>
@@ -533,9 +755,30 @@
               <input type="text" id="input_carga_horaria" oninput="markDirty()" placeholder="Ex: 750 h/aulas"
                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
+          </div>
+
+          <!-- 5. BLOCO INSTITUIÇÃO EMISSORA E DATA (Comum / Contextual) -->
+          <div class="space-y-3 pt-2 border-t border-slate-800/80">
+            <!-- Faculdade / Instituição Emissora -->
             <div>
               <div class="flex items-center justify-between mb-1">
-                <label for="input_data" class="text-xs font-medium text-slate-300">Data do Documento</label>
+                <label for="input_faculdade" id="label_faculdade" class="text-xs font-medium text-slate-300">Faculdade / Instituição Emissora</label>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-slate-500 font-mono">faculdade</span>
+                  <button type="button" onclick="copyFieldValue('input_faculdade', 'Faculdade', this)" title="Copiar Faculdade"
+                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+              </div>
+              <input type="text" id="input_faculdade" oninput="markDirty()"
+                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+            </div>
+
+            <!-- Data do Documento -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label for="input_data" id="label_data" class="text-xs font-medium text-slate-300">Data do Documento / Conclusão</label>
                 <div class="flex items-center gap-2">
                   <span class="text-[10px] text-slate-500 font-mono">data</span>
                   <button type="button" onclick="copyFieldValue('input_data', 'Data do Documento', this)" title="Copiar Data do Documento"
@@ -547,55 +790,16 @@
               <input type="text" id="input_data" oninput="markDirty()" placeholder="Ex: 18 de dezembro de 2023"
                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
-          </div>
 
-          <!-- Instituição / Faculdade -->
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label for="input_faculdade" class="text-xs font-medium text-slate-300">Faculdade / Instituição Emissora</label>
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] text-slate-500 font-mono">faculdade</span>
-                <button type="button" onclick="copyFieldValue('input_faculdade', 'Faculdade', this)" title="Copiar Faculdade"
-                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                  <i class="fa-regular fa-copy"></i> Copiar
-                </button>
-              </div>
+            <!-- Observações do Revisor Humano -->
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                <span>Anotações / Observações da Conferência</span>
+                <span class="text-[10px] text-slate-500">opcional</span>
+              </label>
+              <textarea id="input_obs" oninput="markDirty()" rows="2" placeholder="Observações manuais sobre o documento..."
+                        class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
             </div>
-            <input type="text" id="input_faculdade" oninput="markDirty()"
-                   class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-          </div>
-
-          <!-- Tipo de Documento -->
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label for="select_tipo_documento" class="text-xs font-medium text-slate-300">Tipo de Documento</label>
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] text-slate-500 font-mono">tipo_documento</span>
-                <button type="button" onclick="copyFieldValue('select_tipo_documento', 'Tipo de Documento', this)" title="Copiar Tipo de Documento"
-                        class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                  <i class="fa-regular fa-copy"></i> Copiar
-                </button>
-              </div>
-            </div>
-            <select id="select_tipo_documento" onchange="markDirty()"
-                    class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-              <option value="Certificado">Certificado</option>
-              <option value="Diploma">Diploma</option>
-              <option value="Histórico Escolar">Histórico Escolar</option>
-              <option value="Declaração">Declaração</option>
-              <option value="Currículo">Currículo</option>
-              <option value="Outro">Outro</option>
-            </select>
-          </div>
-
-          <!-- Observações do Revisor Humano -->
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-              <span>Anotações / Observações da Conferência</span>
-              <span class="text-[10px] text-slate-500">opcional</span>
-            </label>
-            <textarea id="input_obs" oninput="markDirty()" rows="2" placeholder="Observações manuais sobre o documento..."
-                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
           </div>
 
         </div>
@@ -814,6 +1018,34 @@
         <div class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
           <span>Cursos catalogados</span>
           <span class="text-purple-400/80 font-semibold">Títulos</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- LINHA DE INDICADORES FINANCEIROS & PIX -->
+    <div id="biPixSection" class="bg-gradient-to-r from-emerald-950/40 via-slate-900/90 to-emerald-950/20 border border-emerald-500/30 rounded-xl p-3.5 shadow-sm bi-card">
+      <div class="flex items-center justify-between mb-2 pb-1.5 border-b border-emerald-500/20">
+        <div class="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+          <i class="fa-brands fa-pix text-sm text-emerald-400"></i>
+          <span>Métricas de Transações PIX & Documentos Financeiros</span>
+        </div>
+        <span id="kpiPixActiveDocsBadge" class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono font-medium">0 transações</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+          <div class="text-[11px] text-slate-400 mb-0.5">Volume Total Transacionado (R$)</div>
+          <div id="kpiPixTotalValor" class="text-lg sm:text-xl font-bold text-emerald-400 font-mono">R$ 0,00</div>
+          <div class="text-[10px] text-slate-500">Soma dos valores dos comprovantes PIX</div>
+        </div>
+        <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+          <div class="text-[11px] text-slate-400 mb-0.5">Comprovantes PIX Catalogados</div>
+          <div id="kpiPixTotalCount" class="text-lg sm:text-xl font-bold text-cyan-400 font-mono">0</div>
+          <div class="text-[10px] text-slate-500">Recibos com autenticação / E2E</div>
+        </div>
+        <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+          <div class="text-[11px] text-slate-400 mb-0.5">Ticket Médio por Transação</div>
+          <div id="kpiPixTicketMedio" class="text-lg sm:text-xl font-bold text-amber-300 font-mono">R$ 0,00</div>
+          <div class="text-[10px] text-slate-500">Média por comprovante válido</div>
         </div>
       </div>
     </div>
@@ -1475,8 +1707,199 @@
     let currentSelectedMd5 = null;
     let isDirty = false;
     let activeStatusFilter = 'todos';
+    let activeDomainFilter = 'todos';
     let activeNaturezaFilter = ''; // Vazio = todas
     let activeTipoFilter = ''; // Vazio = todos
+
+    // Controle de Zoom e Rotação do Visualizador de Imagens
+    let currentImageScale = 1.0;
+    let currentImageRotation = 0;
+
+    function isImageDoc(doc) {
+      if (!doc) return false;
+      const ext = safeString(doc.extensao || '').toLowerCase();
+      if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) return true;
+      const file = safeString(doc.nome_arquivo || doc.caminho_relativo || '').toLowerCase();
+      return file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg') || file.endsWith('.webp');
+    }
+
+    function applyImageTransform() {
+      const imgEl = document.getElementById('docImageEl');
+      if (imgEl) {
+        imgEl.style.transform = `scale(${currentImageScale}) rotate(${currentImageRotation}deg)`;
+      }
+    }
+
+    function zoomImage(delta) {
+      currentImageScale = Math.max(0.2, Math.min(5.0, currentImageScale + delta));
+      applyImageTransform();
+    }
+
+    function resetImageZoom() {
+      currentImageScale = 1.0;
+      applyImageTransform();
+    }
+
+    function rotateImage() {
+      currentImageRotation = (currentImageRotation + 90) % 360;
+      applyImageTransform();
+    }
+
+    function resetImageTransform() {
+      currentImageScale = 1.0;
+      currentImageRotation = 0;
+      applyImageTransform();
+    }
+
+    function onDominioChange() {
+      const selectDom = document.getElementById('select_dominio');
+      const dom = selectDom ? selectDom.value : 'academico';
+      const badge = document.getElementById('domainBadgePreview');
+      const pixCard = document.getElementById('pixReceiptCard');
+      const secAcademico = document.getElementById('section_academico');
+      const labelBeneficiario = document.getElementById('label_beneficiario');
+      const labelFaculdade = document.getElementById('label_faculdade');
+      const labelData = document.getElementById('label_data');
+
+      if (badge) {
+        badge.innerText = dom;
+        if (dom === 'financeiro') {
+          badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+        } else if (dom === 'identificacao') {
+          badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-cyan-500/20 text-cyan-400 border border-cyan-500/30";
+        } else if (dom === 'juridico') {
+          badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30";
+        } else if (dom === 'outro') {
+          badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30";
+        } else {
+          badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30";
+        }
+      }
+
+      // Visibilidade da seção acadêmica
+      if (secAcademico) {
+        if (dom === 'academico') {
+          secAcademico.classList.remove('hidden');
+        } else {
+          secAcademico.classList.add('hidden');
+        }
+      }
+
+      // Visibilidade do card PIX e adaptação contextual de rótulos
+      if (dom === 'financeiro') {
+        if (pixCard) pixCard.classList.remove('hidden');
+        if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Favorecido / Recebedor (Destino)";
+        if (labelFaculdade) labelFaculdade.innerText = "Instituição Financeira / Banco";
+        if (labelData) labelData.innerText = "Data e Hora da Operação";
+      } else if (dom === 'identificacao') {
+        if (pixCard) pixCard.classList.add('hidden');
+        if (labelBeneficiario) labelBeneficiario.innerText = "Nome Completo do Titular";
+        if (labelFaculdade) labelFaculdade.innerText = "Órgão Emissor / Expedidor (SSP, Detran, PF)";
+        if (labelData) labelData.innerText = "Data de Emissão / Expedição";
+      } else if (dom === 'juridico') {
+        if (pixCard) pixCard.classList.add('hidden');
+        if (labelBeneficiario) labelBeneficiario.innerText = "Parte Principal / Titular / Outorgante";
+        if (labelFaculdade) labelFaculdade.innerText = "Órgão / Cartório / Empresa / Vara";
+        if (labelData) labelData.innerText = "Data do Documento / Assinatura";
+      } else if (dom === 'outro') {
+        if (pixCard) pixCard.classList.add('hidden');
+        if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Titular / Beneficiário";
+        if (labelFaculdade) labelFaculdade.innerText = "Entidade / Instituição Emissora";
+        if (labelData) labelData.innerText = "Data do Documento";
+      } else {
+        // Acadêmico
+        if (pixCard) pixCard.classList.add('hidden');
+        if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Titular / Aluno";
+        if (labelFaculdade) labelFaculdade.innerText = "Faculdade / Instituição Emissora";
+        if (labelData) labelData.innerText = "Data de Conclusão / Emissão";
+      }
+    }
+
+    function onTipoDocumentoChange() {
+      const selectTipo = document.getElementById('select_tipo_documento');
+      const tipo = selectTipo ? selectTipo.value : '';
+      const selectDom = document.getElementById('select_dominio');
+      
+      const mapTipoDom = {
+        'Diploma': 'academico',
+        'Certificado': 'academico',
+        'Histórico Escolar': 'academico',
+        'Declaração': 'academico',
+        'Currículo': 'academico',
+        'Comprovante PIX': 'financeiro',
+        'Recibo de Pagamento': 'financeiro',
+        'Boleto Bancário': 'financeiro',
+        'Extrato Bancário': 'financeiro',
+        'Nota Fiscal': 'financeiro',
+        'RG / Identidade': 'identificacao',
+        'CNH': 'identificacao',
+        'CPF': 'identificacao',
+        'Certidão de Nascimento': 'identificacao',
+        'Certidão de Casamento': 'identificacao',
+        'Contrato': 'juridico',
+        'Procuração': 'juridico',
+        'Termo de Posse': 'juridico'
+      };
+
+      if (selectDom && mapTipoDom[tipo] && selectDom.value !== mapTipoDom[tipo]) {
+        selectDom.value = mapTipoDom[tipo];
+        onDominioChange();
+      }
+      markDirty();
+    }
+
+    function syncRecebedorFromPixCard(val) {
+      const benEl = document.getElementById('input_beneficiario');
+      if (benEl) benEl.value = val;
+    }
+
+    function syncCpfFromPixCard(val) {
+      const cpfEl = document.getElementById('input_cpf');
+      if (cpfEl) cpfEl.value = val;
+    }
+
+    function setDomainFilter(dom) {
+      activeDomainFilter = dom;
+      ['todos', 'academico', 'financeiro', 'outros'].forEach(d => {
+        const btn = document.getElementById(`filter-dom-${d}`);
+        if (!btn) return;
+        if (d === dom) {
+          btn.className = "py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center border border-slate-700 transition truncate";
+        } else {
+          let textCol = 'text-slate-400';
+          if (d === 'academico') textCol = 'text-indigo-300';
+          if (d === 'financeiro') textCol = 'text-emerald-400';
+          if (d === 'outros') textCol = 'text-purple-300';
+          btn.className = `py-1 px-1 rounded bg-slate-900 ${textCol} hover:bg-slate-800 text-center transition truncate`;
+        }
+      });
+
+      const btnClearDom = document.getElementById('btnClearDomain');
+      if (btnClearDom) {
+        if (dom !== 'todos') btnClearDom.classList.remove('hidden');
+        else btnClearDom.classList.add('hidden');
+      }
+
+      const contNat = document.getElementById('containerFilterNatureza');
+      if (contNat) {
+        if (dom === 'financeiro' || dom === 'outros') {
+          contNat.classList.add('hidden');
+          activeNaturezaFilter = '';
+          const selNat = document.getElementById('selectNaturezaFilter');
+          if (selNat) selNat.value = '';
+          const btnClearNat = document.getElementById('btnClearNatureza');
+          if (btnClearNat) btnClearNat.classList.add('hidden');
+        } else {
+          contNat.classList.remove('hidden');
+        }
+      }
+
+      applyFilter(false);
+    }
+
+    function resetDomainFilter() {
+      setDomainFilter('todos');
+    }
 
     // --- Funções Utilitárias de Sanitização e Normalização ---
     function safeString(val) {
@@ -1717,6 +2140,7 @@
         documents = (rawDocs || []).map(doc => {
           if (doc && typeof doc === 'object') {
             delete doc.data_criacao;
+            if (!doc.dominio) doc.dominio = 'academico';
           }
           return doc;
         });
@@ -1782,6 +2206,15 @@
       // Documentos considerados para a contagem de Natureza:
       // Devem respeitar: Status Filter + Search Query + Tipo Filter (NÃO o activeNaturezaFilter)
       const baseDocs = documents.filter(doc => {
+        if (activeDomainFilter && activeDomainFilter !== 'todos') {
+          const dom = safeString(doc.dominio || 'academico').toLowerCase();
+          if (activeDomainFilter === 'outros') {
+            if (dom === 'academico' || dom === 'financeiro') return false;
+          } else if (dom !== activeDomainFilter) {
+            return false;
+          }
+        }
+
         const status = safeString(doc.status_conferencia || 'pendente').toLowerCase();
         if (activeStatusFilter === 'pendente' && status === 'aprovado') return false;
         if (activeStatusFilter === 'aprovado' && status !== 'aprovado') return false;
@@ -1927,6 +2360,15 @@
       // Documentos considerados para a contagem de Tipo:
       // Devem respeitar: Status Filter + Search Query + Natureza Filter (NÃO o activeTipoFilter)
       const baseDocs = documents.filter(doc => {
+        if (activeDomainFilter && activeDomainFilter !== 'todos') {
+          const dom = safeString(doc.dominio || 'academico').toLowerCase();
+          if (activeDomainFilter === 'outros') {
+            if (dom === 'academico' || dom === 'financeiro') return false;
+          } else if (dom !== activeDomainFilter) {
+            return false;
+          }
+        }
+
         const status = safeString(doc.status_conferencia || 'pendente').toLowerCase();
         if (activeStatusFilter === 'pendente' && status === 'aprovado') return false;
         if (activeStatusFilter === 'aprovado' && status !== 'aprovado') return false;
@@ -2077,8 +2519,18 @@
       const obs = normalizeText(doc.observacoes_conferencia);
       const data = normalizeText(doc.data);
       const carga = normalizeText(doc.carga_horaria);
+      const dominio = normalizeText(doc.dominio);
+      const extensao = normalizeText(doc.extensao);
+      const valor = normalizeText(doc.valor_monetario);
+      const de = doc.dados_extras || {};
+      const pixChave = normalizeText(doc.pix_chave || de.pix_chave);
+      const pixE2e = normalizeText(doc.pix_e2e_id || de.pix_e2e_id);
+      const pixAut = normalizeText(doc.pix_autenticacao || de.pix_autenticacao);
+      const pixPag = normalizeText(doc.pix_pagador_nome || de.pix_pagador_nome);
+      const pixPagBanco = normalizeText(doc.pix_pagador_banco || de.pix_pagador_banco);
+      const pixRecBanco = normalizeText(doc.pix_recebedor_banco || de.pix_recebedor_banco);
 
-      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${data} ${carga} ${obs}`;
+      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${data} ${carga} ${obs} ${dominio} ${extensao} ${valor} ${pixChave} ${pixE2e} ${pixAut} ${pixPag} ${pixPagBanco} ${pixRecBanco}`;
 
       return tokens.every(token => {
         // 1. Busca textual direta na junção de todos os campos
@@ -2124,6 +2576,7 @@
 
     function resetFiltersKeepSearch() {
       activeStatusFilter = 'todos';
+      activeDomainFilter = 'todos';
       activeNaturezaFilter = '';
       activeTipoFilter = '';
       document.getElementById('selectNaturezaFilter').value = '';
@@ -2132,12 +2585,30 @@
       document.getElementById('btnClearTipo').classList.add('hidden');
       ['todos', 'pendente', 'aprovado'].forEach(f => {
         const btn = document.getElementById(`filter-${f}`);
+        if (!btn) return;
         if (f === 'todos') {
           btn.className = "flex-1 py-1 rounded bg-slate-800 text-slate-100 font-medium text-center transition border border-slate-700";
         } else {
           btn.className = "flex-1 py-1 rounded bg-slate-900 text-slate-400 hover:bg-slate-800 text-center transition";
         }
       });
+      ['todos', 'academico', 'financeiro', 'outros'].forEach(d => {
+        const btn = document.getElementById(`filter-dom-${d}`);
+        if (!btn) return;
+        if (d === 'todos') {
+          btn.className = "py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center border border-slate-700 transition truncate";
+        } else {
+          let textCol = 'text-slate-400';
+          if (d === 'academico') textCol = 'text-indigo-300';
+          if (d === 'financeiro') textCol = 'text-emerald-400';
+          if (d === 'outros') textCol = 'text-purple-300';
+          btn.className = `py-1 px-1 rounded bg-slate-900 ${textCol} hover:bg-slate-800 text-center transition truncate`;
+        }
+      });
+      const btnClearDom = document.getElementById('btnClearDomain');
+      if (btnClearDom) btnClearDom.classList.add('hidden');
+      const contNat = document.getElementById('containerFilterNatureza');
+      if (contNat) contNat.classList.remove('hidden');
       applyFilter(false);
     }
 
@@ -2148,7 +2619,24 @@
       if (doc.status === 'nao_processado' || safeString(doc.status_conferencia).toLowerCase() === 'nao_processado') return true;
       // 2. Falha na leitura ou processamento (nunca classificado com sucesso)
       if (doc.status === 'erro' || (doc.status && doc.status !== 'sucesso')) return true;
-      // 3. Sem dados essenciais de classificação (beneficiário e curso vazios)
+
+      const dom = safeString(doc.dominio || 'academico').toLowerCase();
+      // 3. Documento financeiro / PIX: válido se tem valor, chave, id e2e ou pagador/recebedor
+      if (dom === 'financeiro') {
+        const de = doc.dados_extras || {};
+        const hasFin = safeString(doc.valor_monetario).trim() ||
+                       safeString(doc.pix_pagador_nome || de.pix_pagador_nome).trim() ||
+                       safeString(doc.pix_e2e_id || de.pix_e2e_id).trim() ||
+                       safeString(doc.pix_chave || de.pix_chave).trim() ||
+                       safeString(doc.beneficiario).trim();
+        return !hasFin;
+      }
+      // 4. Outros domínios (identificação, jurídico, etc.)
+      if (dom !== 'academico') {
+        if (!safeString(doc.beneficiario).trim() && !safeString(doc.tipo_documento).trim()) return true;
+        return false;
+      }
+      // 5. Acadêmico: sem dados essenciais de classificação (beneficiário e curso vazios)
       if (!safeString(doc.beneficiario).trim() && !safeString(doc.curso).trim()) return true;
       return false;
     }
@@ -2157,6 +2645,16 @@
       const rawSearch = (document.getElementById('searchInput').value || '').trim();
       
       filteredDocs = documents.filter(doc => {
+        // 0. Filtro por Domínio
+        if (activeDomainFilter && activeDomainFilter !== 'todos') {
+          const dom = safeString(doc.dominio || 'academico').toLowerCase();
+          if (activeDomainFilter === 'outros') {
+            if (dom === 'academico' || dom === 'financeiro') return false;
+          } else if (dom !== activeDomainFilter) {
+            return false;
+          }
+        }
+
         // 1. Filtro por status de conferência / classificação
         const isUnproc = isDocumentUnprocessed(doc);
         const isAppr = !isUnproc && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
@@ -2221,9 +2719,47 @@
     function updateCounters() {
       const total = documents.length;
 
-      // Contagem de status cruzada com os filtros ativos de Natureza, Tipo e Busca
+      // Contadores por domínio no total geral do acervo
+      let countDomAcad = 0;
+      let countDomFin = 0;
+      let countDomOutros = 0;
+
+      documents.forEach(d => {
+        const dom = safeString(d.dominio || 'academico').toLowerCase();
+        if (dom === 'academico') countDomAcad++;
+        else if (dom === 'financeiro') countDomFin++;
+        else countDomOutros++;
+      });
+
+      const elDomTodos = document.getElementById('count-dom-todos');
+      if (elDomTodos) elDomTodos.innerText = total;
+      const elDomAcad = document.getElementById('count-dom-academico');
+      if (elDomAcad) elDomAcad.innerText = countDomAcad;
+      const elDomFin = document.getElementById('count-dom-financeiro');
+      if (elDomFin) elDomFin.innerText = countDomFin;
+      const elDomOutros = document.getElementById('count-dom-outros');
+      if (elDomOutros) elDomOutros.innerText = countDomOutros;
+
+      const btnClearDom = document.getElementById('btnClearDomain');
+      if (btnClearDom) {
+        if (activeDomainFilter && activeDomainFilter !== 'todos') {
+          btnClearDom.classList.remove('hidden');
+        } else {
+          btnClearDom.classList.add('hidden');
+        }
+      }
+
+      // Contagem de status cruzada com os filtros ativos de Domínio, Natureza, Tipo e Busca
       const rawSearch = (document.getElementById('searchInput').value || '').trim();
       const scopeDocs = documents.filter(doc => {
+        if (activeDomainFilter && activeDomainFilter !== 'todos') {
+          const dom = safeString(doc.dominio || 'academico').toLowerCase();
+          if (activeDomainFilter === 'outros') {
+            if (dom === 'academico' || dom === 'financeiro') return false;
+          } else if (dom !== activeDomainFilter) {
+            return false;
+          }
+        }
         if (activeNaturezaFilter) {
           const docNat = safeString(doc.natureza_curso).trim() || 'Não identificada';
           if (docNat !== activeNaturezaFilter && classifyNatureza(docNat) !== activeNaturezaFilter) return false;
@@ -2252,6 +2788,9 @@
       if (rawSearch) {
         const shortQ = rawSearch.length > 15 ? rawSearch.substring(0, 15) + '...' : rawSearch;
         label.push(`"${shortQ}"`);
+      }
+      if (activeDomainFilter && activeDomainFilter !== 'todos') {
+        label.push(`Domínio: ${activeDomainFilter === 'financeiro' ? 'PIX / Fin' : (activeDomainFilter === 'outros' ? 'Outros' : 'Acadêmico')}`);
       }
       if (activeStatusFilter !== 'todos') {
         if (activeStatusFilter === 'nao_processado') label.push('Não Classificados');
@@ -2325,6 +2864,15 @@
       if (norm.includes('declaracao')) {
         return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-file-lines text-[9px] text-amber-400"></i>${t}</span>`;
       }
+      if (norm.includes('pix') || norm.includes('recibo') || norm.includes('comprovante') || norm.includes('pagamento')) {
+        return `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-brands fa-pix text-[9px] text-emerald-400"></i>${t}</span>`;
+      }
+      if (norm.includes('rg') || norm.includes('cnh') || norm.includes('identidade') || norm.includes('identificacao') || norm.includes('civil')) {
+        return `<span class="bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-regular fa-id-card text-[9px] text-sky-400"></i>${t}</span>`;
+      }
+      if (norm.includes('contrato') || norm.includes('termo') || norm.includes('procuracao')) {
+        return `<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-file-contract text-[9px] text-indigo-400"></i>${t}</span>`;
+      }
       return `<span class="bg-slate-800 text-slate-400 border border-slate-700/80 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-regular fa-file text-[9px]"></i>${t}</span>`;
     }
 
@@ -2377,6 +2925,8 @@
         const isSelected = idx === currentIndex;
         const isUnproc = isDocumentUnprocessed(doc);
         const isApproved = !isUnproc && safeString(doc.status_conferencia || 'pendente').toLowerCase() === 'aprovado';
+        const isImg = isImageDoc(doc);
+        const docDom = safeString(doc.dominio || 'academico').toLowerCase();
         
         const card = document.createElement('div');
         card.className = `p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col gap-1.5 ${
@@ -2396,21 +2946,61 @@
           statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0">Pendente</span>`;
         }
 
-        const naturezaBadge = isUnproc
-          ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1"><i class="fa-solid fa-hourglass-start text-[9px]"></i>Aguardando</span>`
-          : getNaturezaBadge(doc.natureza_curso);
+        const extIcon = isImg 
+          ? `<i class="fa-regular fa-image text-emerald-400 text-[10px]" title="Arquivo Imagem ${safeString(doc.extensao).toUpperCase()}"></i>`
+          : `<i class="fa-regular fa-file-pdf text-rose-400 text-[10px]" title="Documento PDF"></i>`;
+
+        let middleBadge = '';
+        if (docDom === 'financeiro') {
+          const valDisplay = doc.valor_monetario ? doc.valor_monetario : 'PIX';
+          middleBadge = `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold flex items-center gap-1 shrink-0"><i class="fa-brands fa-pix text-[9px]"></i>${valDisplay}</span>`;
+        } else if (docDom === 'identificacao') {
+          middleBadge = `<span class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 shrink-0"><i class="fa-regular fa-id-badge text-[9px]"></i>Identidade</span>`;
+        } else if (docDom === 'juridico') {
+          middleBadge = `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 shrink-0"><i class="fa-solid fa-gavel text-[9px]"></i>Jurídico</span>`;
+        } else if (docDom === 'outro') {
+          middleBadge = `<span class="bg-purple-500/10 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 shrink-0"><i class="fa-regular fa-file text-[9px]"></i>Outro</span>`;
+        } else {
+          middleBadge = isUnproc
+            ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1"><i class="fa-solid fa-hourglass-start text-[9px]"></i>Aguardando</span>`
+            : getNaturezaBadge(doc.natureza_curso);
+        }
+
         const tipoBadge = isUnproc
-          ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1"><i class="fa-regular fa-file-pdf text-[9px]"></i>PDF</span>`
+          ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1">${extIcon}<span>${isImg ? 'IMG' : 'PDF'}</span></span>`
           : getTipoBadge(doc.tipo_documento);
+
         const md5Short = safeString(doc.md5).substring(0, 10);
-        const nome = safeString(doc.beneficiario) || (isUnproc ? (doc.nome_arquivo || 'Arquivo PDF não lido') : 'Sem nome informado');
+        const nome = safeString(doc.beneficiario) || (isUnproc ? (doc.nome_arquivo || 'Arquivo não lido') : 'Sem nome informado');
         const cpf = safeString(doc.cpf);
         const rg = safeString(doc.rg);
-        const curso = safeString(doc.curso) || (isUnproc ? (doc.caminho_relativo || 'Clique em Classificar para extrair dados') : 'Curso não informado');
+
+        let subText = '';
+        if (docDom === 'financeiro') {
+          const de = doc.dados_extras || {};
+          const pagador = doc.pix_pagador_nome || de.pix_pagador_nome || '';
+          const chave = doc.pix_chave || de.pix_chave || '';
+          if (pagador) {
+            subText = `Origem: ${pagador}`;
+          } else if (chave) {
+            subText = `Chave: ${chave}`;
+          } else {
+            subText = safeString(doc.observacoes_conferencia || 'Comprovante PIX');
+          }
+        } else if (docDom === 'identificacao') {
+          const emissor = doc.faculdade ? `Emissor: ${doc.faculdade}` : '';
+          const rgNum = doc.rg ? `RG: ${doc.rg}` : '';
+          subText = [emissor, rgNum].filter(Boolean).join(' • ') || 'Documento de Identificação';
+        } else if (docDom === 'juridico') {
+          subText = safeString(doc.faculdade ? `Órgão: ${doc.faculdade}` : (doc.tipo_documento || 'Documento Jurídico'));
+        } else {
+          subText = safeString(doc.curso) || (isUnproc ? (doc.caminho_relativo || 'Clique em Classificar para extrair dados') : 'Curso não informado');
+        }
 
         card.innerHTML = `
           <div class="flex items-center justify-between gap-1">
             <div class="flex items-center gap-1.5 truncate">
+              ${extIcon}
               <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
               ${tipoBadge}
             </div>
@@ -2418,13 +3008,13 @@
           </div>
           <div class="font-semibold text-slate-100 truncate">${nome}</div>
           <div class="flex items-center justify-between gap-1 pt-0.5">
-            ${naturezaBadge}
+            ${middleBadge}
             <div class="flex items-center gap-1.5 shrink-0">
               ${rg ? `<span class="font-mono text-[10px] text-slate-400 bg-slate-800/80 px-1 rounded" title="RG / Identidade">${rg}</span>` : ''}
               ${cpf ? `<span class="font-mono text-[10px] text-slate-500 shrink-0" title="CPF">${cpf}</span>` : ''}
             </div>
           </div>
-          <div class="text-[11px] text-slate-400 line-clamp-1">${curso}</div>
+          <div class="text-[11px] text-slate-400 line-clamp-1">${subText}</div>
         `;
         listEl.appendChild(card);
       });
@@ -2434,12 +3024,30 @@
       document.getElementById('searchInput').value = '';
       document.getElementById('clearSearchBtn').classList.add('hidden');
       activeStatusFilter = 'todos';
+      activeDomainFilter = 'todos';
       activeNaturezaFilter = '';
       activeTipoFilter = '';
       document.getElementById('selectNaturezaFilter').value = '';
       document.getElementById('btnClearNatureza').classList.add('hidden');
       document.getElementById('selectTipoFilter').value = '';
       document.getElementById('btnClearTipo').classList.add('hidden');
+      ['todos', 'academico', 'financeiro', 'outros'].forEach(d => {
+        const btn = document.getElementById(`filter-dom-${d}`);
+        if (!btn) return;
+        if (d === 'todos') {
+          btn.className = "py-1 px-1 rounded bg-slate-800 text-slate-100 font-medium text-center border border-slate-700 transition truncate";
+        } else {
+          let textCol = 'text-slate-400';
+          if (d === 'academico') textCol = 'text-indigo-300';
+          if (d === 'financeiro') textCol = 'text-emerald-400';
+          if (d === 'outros') textCol = 'text-purple-300';
+          btn.className = `py-1 px-1 rounded bg-slate-900 ${textCol} hover:bg-slate-800 text-center transition truncate`;
+        }
+      });
+      const btnClearDom = document.getElementById('btnClearDomain');
+      if (btnClearDom) btnClearDom.classList.add('hidden');
+      const contNat = document.getElementById('containerFilterNatureza');
+      if (contNat) contNat.classList.remove('hidden');
       setStatusFilter('todos');
     }
 
@@ -2513,6 +3121,59 @@
       pdfFrame.src = `/api/pdf/${md5}#toolbar=1&navpanes=0`;
     }
 
+    function loadMediaForDocument(doc, force = false) {
+      if (!doc || !doc.md5) return;
+      const isImg = isImageDoc(doc);
+      const pdfFrame = document.getElementById('pdfFrame');
+      const imgViewer = document.getElementById('imageViewerContainer');
+      const imgEl = document.getElementById('docImageEl');
+      const imgControls = document.getElementById('imageControls');
+      const docTypeHeaderIcon = document.getElementById('docTypeHeaderIcon');
+      const docTypeHeaderLabel = document.getElementById('docTypeHeaderLabel');
+      const pdfEmpty = document.getElementById('pdfEmptyState');
+      const pdfLoading = document.getElementById('pdfLoadingState');
+
+      if (pdfEmpty) pdfEmpty.classList.add('hidden');
+
+      if (isImg) {
+        // Modo visualização de Imagem
+        if (pdfFrame) {
+          pdfFrame.classList.add('hidden');
+          pdfFrame.src = 'about:blank';
+        }
+        if (imgViewer) imgViewer.classList.remove('hidden');
+        if (imgControls) {
+          imgControls.classList.remove('hidden');
+          imgControls.classList.add('flex');
+        }
+
+        const extLabel = safeString(doc.extensao || 'IMG').replace('.', '').toUpperCase();
+        if (docTypeHeaderIcon) docTypeHeaderIcon.className = "fa-regular fa-image text-emerald-400";
+        if (docTypeHeaderLabel) docTypeHeaderLabel.innerText = `Visualização da Imagem (${extLabel}):`;
+
+        resetImageTransform();
+        if (imgEl) {
+          const cacheBuster = force ? `?t=${Date.now()}` : '';
+          imgEl.src = `/api/arquivo/${doc.md5}${cacheBuster}`;
+        }
+        if (pdfLoading) pdfLoading.classList.add('hidden');
+        currentLoadedPdfMd5 = doc.md5;
+      } else {
+        // Modo visualização de PDF
+        if (imgViewer) imgViewer.classList.add('hidden');
+        if (imgControls) {
+          imgControls.classList.add('hidden');
+          imgControls.classList.remove('flex');
+        }
+        if (pdfFrame) pdfFrame.classList.remove('hidden');
+
+        if (docTypeHeaderIcon) docTypeHeaderIcon.className = "fa-regular fa-file-pdf text-rose-400";
+        if (docTypeHeaderLabel) docTypeHeaderLabel.innerText = "Visualização do PDF:";
+
+        loadPdfInFrame(force ? `${doc.md5}?t=${Date.now()}` : doc.md5, force);
+      }
+    }
+
     function clearSelectionView() {
       currentIndex = -1;
       currentSelectedMd5 = null;
@@ -2526,10 +3187,23 @@
       const pdfFrame = document.getElementById('pdfFrame');
       const pdfLoading = document.getElementById('pdfLoadingState');
       const pdfEmpty = document.getElementById('pdfEmptyState');
+      const imgViewer = document.getElementById('imageViewerContainer');
+      const imgEl = document.getElementById('docImageEl');
+      const imgControls = document.getElementById('imageControls');
 
       if (pdfLoading) pdfLoading.classList.add('hidden');
       if (pdfEmpty) pdfEmpty.classList.remove('hidden');
-      if (pdfFrame) pdfFrame.src = 'about:blank';
+      if (pdfFrame) {
+        pdfFrame.classList.remove('hidden');
+        pdfFrame.src = 'about:blank';
+      }
+      if (imgViewer) imgViewer.classList.add('hidden');
+      if (imgControls) {
+        imgControls.classList.add('hidden');
+        imgControls.classList.remove('flex');
+      }
+      if (imgEl) imgEl.src = '';
+      resetImageTransform();
 
       document.getElementById('pdfMd5Title').innerText = 'Nenhum documento selecionado';
       document.getElementById('openPdfNewTab').href = '#';
@@ -2540,6 +3214,18 @@
       if (fMetodoClean) fMetodoClean.innerText = '-';
       const fTentativaClean = document.getElementById('field_tentativa_ocr');
       if (fTentativaClean) fTentativaClean.innerText = '-';
+
+      const selectDom = document.getElementById('select_dominio');
+      if (selectDom) selectDom.value = 'academico';
+      const inputValor = document.getElementById('input_valor_monetario');
+      if (inputValor) inputValor.value = '';
+      ['input_pix_pagador_nome', 'input_pix_pagador_cpf_cnpj', 'input_pix_pagador_banco',
+       'input_pix_recebedor_nome_preview', 'input_pix_recebedor_cpf_preview', 'input_pix_recebedor_banco',
+       'input_pix_chave', 'input_pix_e2e_id', 'input_pix_autenticacao'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      onDominioChange();
 
       document.getElementById('input_beneficiario').value = '';
       document.getElementById('input_cpf').value = '';
@@ -2572,11 +3258,11 @@
 
       document.getElementById('navCounter').innerText = `${currentIndex + 1} de ${filteredDocs.length}`;
 
-      // Atualiza visualizador do PDF de forma inteligente e segura
-      loadPdfInFrame(doc.md5);
+      // Atualiza visualizador do documento (PDF ou Imagem)
+      loadMediaForDocument(doc);
 
       document.getElementById('pdfMd5Title').innerText = safeString(doc.md5);
-      document.getElementById('openPdfNewTab').href = `/api/pdf/${doc.md5}`;
+      document.getElementById('openPdfNewTab').href = `/api/arquivo/${doc.md5}`;
 
       // Preenche campos do formulário de forma segura
       document.getElementById('field_md5').innerText = safeString(doc.md5);
@@ -2585,6 +3271,31 @@
       if (fMetodo) fMetodo.innerText = safeString(doc.metodo_leitura) || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital');
       const fTentativa = document.getElementById('field_tentativa_ocr');
       if (fTentativa) fTentativa.innerText = doc.tentativa_ocr_llm ? 'Sim' : 'Não';
+
+      // Domínio e campos de comprovante financeiro / PIX
+      const docDominio = safeString(doc.dominio || 'academico').toLowerCase() || 'academico';
+      const selectDom = document.getElementById('select_dominio');
+      if (selectDom) selectDom.value = docDominio;
+
+      const inputValor = document.getElementById('input_valor_monetario');
+      if (inputValor) inputValor.value = safeString(doc.valor_monetario);
+
+      const de = doc.dados_extras || {};
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = safeString(val);
+      };
+      setVal('input_pix_pagador_nome', doc.pix_pagador_nome || de.pix_pagador_nome);
+      setVal('input_pix_pagador_cpf_cnpj', doc.pix_pagador_cpf_cnpj || de.pix_pagador_cpf_cnpj);
+      setVal('input_pix_pagador_banco', doc.pix_pagador_banco || de.pix_pagador_banco);
+      setVal('input_pix_recebedor_nome_preview', doc.pix_recebedor_nome || de.pix_recebedor_nome || doc.beneficiario);
+      setVal('input_pix_recebedor_cpf_preview', doc.pix_recebedor_cpf_cnpj || de.pix_recebedor_cpf_cnpj || doc.cpf);
+      setVal('input_pix_recebedor_banco', doc.pix_recebedor_banco || de.pix_recebedor_banco);
+      setVal('input_pix_chave', doc.pix_chave || de.pix_chave);
+      setVal('input_pix_e2e_id', doc.pix_e2e_id || de.pix_e2e_id);
+      setVal('input_pix_autenticacao', doc.pix_autenticacao || de.pix_autenticacao);
+
+      onDominioChange();
 
       document.getElementById('input_beneficiario').value = safeString(doc.beneficiario);
       document.getElementById('input_cpf').value = safeString(doc.cpf);
@@ -2614,7 +3325,29 @@
       document.getElementById('input_carga_horaria').value = safeString(doc.carga_horaria);
       document.getElementById('input_data').value = safeString(doc.data);
       document.getElementById('input_faculdade').value = safeString(doc.faculdade);
-      document.getElementById('select_tipo_documento').value = safeString(doc.tipo_documento) || 'Certificado';
+      
+      // Tipo de Documento: seleciona ou insere opção se for novo
+      const selectTipo = document.getElementById('select_tipo_documento');
+      const docTipo = safeString(doc.tipo_documento).trim();
+      if (docTipo && selectTipo) {
+        let exists = false;
+        for (let i = 0; i < selectTipo.options.length; i++) {
+          if (selectTipo.options[i].value === docTipo) {
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          const opt = document.createElement('option');
+          opt.value = docTipo;
+          opt.innerText = docTipo;
+          selectTipo.appendChild(opt);
+        }
+        selectTipo.value = docTipo;
+      } else if (selectTipo) {
+        selectTipo.value = 'Certificado';
+      }
+
       document.getElementById('input_obs').value = safeString(doc.observacoes_conferencia);
 
       // Atualiza badge de status
@@ -2656,8 +3389,45 @@
         return null;
       }
       const doc = filteredDocs[currentIndex];
+      const selectDom = document.getElementById('select_dominio');
+      const dominio = selectDom ? selectDom.value : (doc.dominio || 'academico');
+
+      const inputValor = document.getElementById('input_valor_monetario');
+      const valorMonetario = inputValor ? inputValor.value.trim() : (doc.valor_monetario || null);
+
+      const dadosExtras = { ...(doc.dados_extras || {}) };
+
+      const getVal = (id) => {
+        const el = document.getElementById(id);
+        return el ? el.value.trim() : '';
+      };
+
+      const pixPagadorNome = getVal('input_pix_pagador_nome');
+      const pixPagadorCpfCnpj = getVal('input_pix_pagador_cpf_cnpj');
+      const pixPagadorBanco = getVal('input_pix_pagador_banco');
+      const pixRecebedorNome = getVal('input_pix_recebedor_nome_preview') || getVal('input_beneficiario');
+      const pixRecebedorCpfCnpj = getVal('input_pix_recebedor_cpf_preview') || getVal('input_cpf');
+      const pixRecebedorBanco = getVal('input_pix_recebedor_banco');
+      const pixChave = getVal('input_pix_chave');
+      const pixE2eId = getVal('input_pix_e2e_id');
+      const pixAutenticacao = getVal('input_pix_autenticacao');
+
+      if (dominio === 'financeiro' || pixChave || pixE2eId || pixPagadorNome) {
+        dadosExtras.pix_pagador_nome = pixPagadorNome || null;
+        dadosExtras.pix_pagador_cpf_cnpj = pixPagadorCpfCnpj || null;
+        dadosExtras.pix_pagador_banco = pixPagadorBanco || null;
+        dadosExtras.pix_recebedor_nome = pixRecebedorNome || null;
+        dadosExtras.pix_recebedor_cpf_cnpj = pixRecebedorCpfCnpj || null;
+        dadosExtras.pix_recebedor_banco = pixRecebedorBanco || null;
+        dadosExtras.pix_chave = pixChave || null;
+        dadosExtras.pix_e2e_id = pixE2eId || null;
+        dadosExtras.pix_autenticacao = pixAutenticacao || null;
+      }
+
       const res = {
         ...doc,
+        dominio: dominio,
+        valor_monetario: valorMonetario || null,
         beneficiario: document.getElementById('input_beneficiario').value.trim() || null,
         cpf: document.getElementById('input_cpf').value.trim() || null,
         rg: document.getElementById('input_rg').value.trim() || null,
@@ -2667,8 +3437,22 @@
         data: document.getElementById('input_data').value.trim() || null,
         faculdade: document.getElementById('input_faculdade').value.trim() || null,
         tipo_documento: document.getElementById('select_tipo_documento').value || null,
-        observacoes_conferencia: document.getElementById('input_obs').value.trim() || null
+        observacoes_conferencia: document.getElementById('input_obs').value.trim() || null,
+        dados_extras: dadosExtras
       };
+
+      if (dominio === 'financeiro') {
+        res.pix_pagador_nome = pixPagadorNome || null;
+        res.pix_pagador_cpf_cnpj = pixPagadorCpfCnpj || null;
+        res.pix_pagador_banco = pixPagadorBanco || null;
+        res.pix_recebedor_nome = pixRecebedorNome || null;
+        res.pix_recebedor_cpf_cnpj = pixRecebedorCpfCnpj || null;
+        res.pix_recebedor_banco = pixRecebedorBanco || null;
+        res.pix_chave = pixChave || null;
+        res.pix_e2e_id = pixE2eId || null;
+        res.pix_autenticacao = pixAutenticacao || null;
+      }
+
       delete res.data_criacao;
       return res;
     }
@@ -2948,7 +3732,7 @@
     function reloadPdf() {
       const doc = filteredDocs[currentIndex];
       if (!doc) return;
-      loadPdfInFrame(`${doc.md5}?t=${Date.now()}`, true);
+      loadMediaForDocument(doc, true);
       showToast('Visualizador recarregado.', 'info');
     }
 
@@ -3027,6 +3811,10 @@
         return;
       }
 
+      const doc = filteredDocs[currentIndex] || {};
+      const selectDom = document.getElementById('select_dominio');
+      const dominio = selectDom ? selectDom.value : (doc.dominio || 'academico');
+
       const beneficiario = (document.getElementById('input_beneficiario')?.value || '').trim();
       const cpf = (document.getElementById('input_cpf')?.value || '').trim();
       const rg = (document.getElementById('input_rg')?.value || '').trim();
@@ -3038,17 +3826,56 @@
       const faculdade = (document.getElementById('input_faculdade')?.value || '').trim();
       const tipoDoc = (document.getElementById('select_tipo_documento')?.value || '').trim();
 
-      // Monta dados estruturados excluindo metadados de sistema e observações
       const items = [];
-      if (beneficiario) items.push({ label: 'Titular / Beneficiário', val: beneficiario, highlight: true });
-      if (cpf) items.push({ label: 'CPF', val: cpf, mono: true });
-      if (rg) items.push({ label: 'RG / Identidade', val: rg });
-      if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
-      if (curso) items.push({ label: 'Curso', val: curso, highlight: true });
-      if (natureza) items.push({ label: 'Nível / Natureza', val: natureza });
-      if (faculdade) items.push({ label: 'Instituição de Ensino', val: faculdade });
-      if (cargaHoraria) items.push({ label: 'Carga Horária', val: cargaHoraria });
-      if (dataDoc) items.push({ label: 'Data do Documento', val: dataDoc });
+      let boxTitle = 'COMPROVAÇÃO DE QUALIFICAÇÃO / DOCUMENTO ACADÊMICO';
+      let themeColor = '#1e40af'; // Blue
+
+      if (dominio === 'financeiro') {
+        boxTitle = 'COMPROVANTE DE TRANSAÇÃO FINANCEIRA (PIX)';
+        themeColor = '#059669'; // Emerald
+        const getVal = (id) => (document.getElementById(id)?.value || '').trim();
+        const valor = getVal('input_valor_monetario');
+        const pagador = getVal('input_pix_pagador_nome');
+        const pagadorCpf = getVal('input_pix_pagador_cpf_cnpj');
+        const pagadorBanco = getVal('input_pix_pagador_banco');
+        const recBanco = getVal('input_pix_recebedor_banco');
+        const chavePix = getVal('input_pix_chave');
+        const e2eId = getVal('input_pix_e2e_id');
+        const autBanc = getVal('input_pix_autenticacao');
+
+        if (tipoDoc) items.push({ label: 'Tipo de Operação', val: tipoDoc });
+        if (valor) items.push({ label: 'Valor Transferido', val: valor, highlight: true });
+        if (pagador) items.push({ label: 'Pagador (Origem)', val: pagador, highlight: true });
+        if (pagadorCpf) items.push({ label: 'CPF/CNPJ Pagador', val: pagadorCpf, mono: true });
+        if (pagadorBanco) items.push({ label: 'Instituição Origem', val: pagadorBanco });
+        if (beneficiario) items.push({ label: 'Recebedor (Destino)', val: beneficiario, highlight: true });
+        if (cpf) items.push({ label: 'CPF/CNPJ Destino', val: cpf, mono: true });
+        if (recBanco) items.push({ label: 'Instituição Destino', val: recBanco });
+        if (chavePix) items.push({ label: 'Chave PIX Utilizada', val: chavePix, mono: true });
+        if (e2eId) items.push({ label: 'ID Transação (E2E)', val: e2eId, mono: true });
+        if (autBanc) items.push({ label: 'Autenticação Bancária', val: autBanc, mono: true });
+        if (dataDoc) items.push({ label: 'Data e Hora da Operação', val: dataDoc });
+      } else if (dominio === 'identificacao') {
+        boxTitle = 'DOCUMENTO DE IDENTIFICAÇÃO CIVIL';
+        themeColor = '#0284c7'; // Sky
+        if (beneficiario) items.push({ label: 'Nome Completo', val: beneficiario, highlight: true });
+        if (cpf) items.push({ label: 'CPF', val: cpf, mono: true });
+        if (rg) items.push({ label: 'RG / Registro Geral', val: rg, mono: true });
+        if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
+        if (faculdade) items.push({ label: 'Órgão Emissor', val: faculdade });
+        if (dataDoc) items.push({ label: 'Data de Emissão', val: dataDoc });
+      } else {
+        // Acadêmico e outros
+        if (beneficiario) items.push({ label: 'Titular / Beneficiário', val: beneficiario, highlight: true });
+        if (cpf) items.push({ label: 'CPF', val: cpf, mono: true });
+        if (rg) items.push({ label: 'RG / Identidade', val: rg });
+        if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
+        if (curso) items.push({ label: 'Curso', val: curso, highlight: true });
+        if (natureza) items.push({ label: 'Nível / Natureza', val: natureza });
+        if (faculdade) items.push({ label: 'Instituição de Ensino', val: faculdade });
+        if (cargaHoraria) items.push({ label: 'Carga Horária', val: cargaHoraria });
+        if (dataDoc) items.push({ label: 'Data do Documento', val: dataDoc });
+      }
 
       if (items.length === 0) {
         showToast('Nenhum dado extraído disponível para copiar.', 'info');
@@ -3056,11 +3883,9 @@
       }
 
       // --- 1. Formatação Visual Law para Rich Text (Word / Google Docs / LibreOffice) ---
-      // Estilo de Visual Law: Callout box institucional com barra lateral azul marinho (#1e40af),
-      // fundo neutro suave (#f8fafc), tipografia executiva (Calibri/Segoe UI) e tabela limpa.
-      let htmlContent = `<div style="font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 11pt; color: #1e293b; background-color: #f8fafc; border-left: 4.5px solid #1e40af; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; border-radius: 4px; padding: 12px 18px; margin: 12px 0; max-width: 680px;">
-  <div style="font-size: 11.5pt; font-weight: bold; color: #1e3a8a; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; letter-spacing: 0.5px;">
-    COMPROVAÇÃO DE QUALIFICAÇÃO / DOCUMENTO ACADÊMICO
+      let htmlContent = `<div style="font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 11pt; color: #1e293b; background-color: #f8fafc; border-left: 4.5px solid ${themeColor}; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; border-radius: 4px; padding: 12px 18px; margin: 12px 0; max-width: 680px;">
+  <div style="font-size: 11.5pt; font-weight: bold; color: ${themeColor}; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; letter-spacing: 0.5px;">
+    ${boxTitle}
   </div>
   <table style="width: 100%; border-collapse: collapse; font-size: 10.5pt; line-height: 1.55;">`;
 
@@ -3079,7 +3904,7 @@
 
       // --- 2. Formatação Visual Law para Plain Text (Notepad / WhatsApp / Petições em texto simples) ---
       const maxLabelLen = Math.max(...items.map(it => it.label.length));
-      let plainContent = 'COMPROVAÇÃO DE QUALIFICAÇÃO / DOCUMENTO ACADÊMICO\n';
+      let plainContent = `${boxTitle}\n`;
       plainContent += '─'.repeat(60) + '\n';
       items.forEach(it => {
         const paddedLabel = it.label.padEnd(maxLabelLen, ' ');
@@ -4584,6 +5409,57 @@
       const cursoSet = new Set(classifDocs.map(d => safeString(d.curso).trim()).filter(Boolean));
       const elKpiCurso = document.getElementById('kpiCursos');
       if (elKpiCurso) elKpiCurso.innerText = cursoSet.size.toLocaleString('pt-BR');
+
+      // Métricas Financeiras & PIX
+      const pixDocs = allDocs.filter(d => {
+        const dom = safeString(d.dominio).toLowerCase();
+        if (dom === 'financeiro') return true;
+        const tipo = safeString(d.tipo_documento).toLowerCase();
+        if (tipo.includes('pix') || tipo.includes('recibo') || tipo.includes('financeiro') || tipo.includes('pagamento')) return true;
+        if (d.valor_monetario) return true;
+        return false;
+      });
+
+      let totalValorPix = 0.0;
+      let countWithValor = 0;
+
+      pixDocs.forEach(d => {
+        const valStr = safeString(d.valor_monetario);
+        if (valStr) {
+          const clean = valStr.replace(/[^\d.,]/g, '').trim();
+          if (clean) {
+            let num = 0;
+            if (clean.includes(',') && clean.includes('.')) {
+              num = parseFloat(clean.replace(/\./g, '').replace(',', '.'));
+            } else if (clean.includes(',')) {
+              num = parseFloat(clean.replace(',', '.'));
+            } else {
+              num = parseFloat(clean);
+            }
+            if (!isNaN(num) && num > 0) {
+              totalValorPix += num;
+              countWithValor++;
+            }
+          }
+        }
+      });
+
+      const elPixBadge = document.getElementById('kpiPixActiveDocsBadge');
+      if (elPixBadge) elPixBadge.innerText = `${pixDocs.length} transações / recibos`;
+
+      const elPixTotal = document.getElementById('kpiPixTotalValor');
+      if (elPixTotal) {
+        elPixTotal.innerText = totalValorPix.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      }
+
+      const elPixCount = document.getElementById('kpiPixTotalCount');
+      if (elPixCount) elPixCount.innerText = pixDocs.length.toLocaleString('pt-BR');
+
+      const elPixTicket = document.getElementById('kpiPixTicketMedio');
+      if (elPixTicket) {
+        const ticketMedio = countWithValor > 0 ? (totalValorPix / countWithValor) : 0;
+        elPixTicket.innerText = ticketMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      }
 
       // 2. Determina o subconjunto de documentos conforme o escopo selecionado
       let targetDocs = classifDocs;

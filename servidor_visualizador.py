@@ -641,24 +641,26 @@ class ConferenciaServer:
         return client
 
     def build_pdf_index(self):
-        """Indexa os arquivos PDFs da pasta (inclusive subpastas) mapeando seus MD5."""
+        """Indexa os arquivos PDFs e imagens da pasta (inclusive subpastas) mapeando seus MD5."""
         self.md5_to_file.clear()
         if self.pdf_dir.is_file():
             self.pdf_dir = self.pdf_dir.parent.resolve()
         if not self.pdf_dir.exists():
-            print(f"[Aviso] Pasta de PDFs não encontrada: {self.pdf_dir}")
+            print(f"[Aviso] Pasta de documentos não encontrada: {self.pdf_dir}")
             return
 
-        pdf_set = set(self.pdf_dir.rglob("*.pdf")) | set(self.pdf_dir.rglob("*.PDF"))
-        pdf_files = sorted(pdf_set)
-        print(f"[*] Indexando {len(pdf_files)} PDFs na pasta {self.pdf_dir}...")
+        found_set = set()
+        for ext in [".pdf", ".png", ".jpg", ".jpeg", ".webp"]:
+            found_set |= set(self.pdf_dir.rglob(f"*{ext}")) | set(self.pdf_dir.rglob(f"*{ext.upper()}"))
+        pdf_files = sorted(found_set)
+        print(f"[*] Indexando {len(pdf_files)} documentos (PDFs e Imagens) na pasta {self.pdf_dir}...")
         for p in pdf_files:
             try:
                 h = calculate_md5(p).strip().lower()
                 self.md5_to_file[h] = p
             except Exception as e:
                 print(f"[Erro] Falha ao ler {p.name}: {e}")
-        print(f"[*] {len(self.md5_to_file)} PDFs indexados com sucesso pelo hash MD5.")
+        print(f"[*] {len(self.md5_to_file)} documentos indexados com sucesso pelo hash MD5.")
 
     def load_data(self):
         data = []
@@ -730,7 +732,7 @@ class ConferenciaServer:
                 upsert_documents_batch(self.db_path, recovered_docs)
                 sync_to_json(self.db_path, self.json_path, only_processed=True)
 
-        # Complementa com arquivos PDFs indexados da pasta que ainda não foram processados
+        # Complementa com arquivos indexados da pasta que ainda não foram processados
         for h, pdf_file in self.md5_to_file.items():
             if h not in existing_by_md5:
                 try:
@@ -740,10 +742,14 @@ class ConferenciaServer:
                     dt_mod = None
 
                 rel_path = str(pdf_file.relative_to(self.pdf_dir)) if self.pdf_dir in pdf_file.parents else pdf_file.name
+                ext = pdf_file.suffix.lower()
+                is_pix_file = any(k in pdf_file.name.lower() for k in ["pix", "recibo", "comprovante", "pagamento"])
                 unprocessed_doc = {
                     "md5": h,
                     "nome_arquivo": pdf_file.name,
                     "caminho_relativo": rel_path,
+                    "extensao": ext,
+                    "dominio": "financeiro" if is_pix_file else "academico",
                     "data_modificacao": dt_mod,
                     "data": None,
                     "beneficiario": None,
@@ -754,6 +760,7 @@ class ConferenciaServer:
                     "carga_horaria": None,
                     "faculdade": None,
                     "tipo_documento": None,
+                    "valor_monetario": None,
                     "status": "nao_processado",
                     "status_conferencia": "nao_processado",
                     "metodo_leitura": "nao_processado",
@@ -763,7 +770,7 @@ class ConferenciaServer:
                 existing_by_md5[h] = unprocessed_doc
                 data.append(unprocessed_doc)
 
-        # Enriquecimento com nome_arquivo e caminho_relativo para itens existentes caso estejam vazios
+        # Enriquecimento com nome_arquivo, caminho_relativo e extensao para itens existentes caso estejam vazios
         for item in data:
             h = item.get("md5")
             if h and h in self.md5_to_file:
@@ -772,6 +779,8 @@ class ConferenciaServer:
                     item["nome_arquivo"] = pdf_file.name
                 if not item.get("caminho_relativo"):
                     item["caminho_relativo"] = str(pdf_file.relative_to(self.pdf_dir)) if self.pdf_dir in pdf_file.parents else pdf_file.name
+                if not item.get("extensao"):
+                    item["extensao"] = pdf_file.suffix.lower()
 
         return data
 
@@ -818,23 +827,34 @@ class ConferenciaServer:
 
         for idx, item in enumerate(results, 1):
             conf = item.get("status_conferencia", "PENDENTE")
+            dom = item.get("dominio") or "academico"
             lines.append(f"[{idx}/{total}] MD5: {item.get('md5')}")
             lines.append(f"  • Conferência             : {conf.upper()}")
             lines.append(f"  • Status                  : {item.get('status', '').upper()}")
-            lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
+            lines.append(f"  • Domínio                 : {dom.upper()}")
             lines.append(f"  • Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}")
-            lines.append(f"  • Beneficiário       : {item.get('beneficiario') or 'Não informado'}")
-            lines.append(f"  • CPF                : {item.get('cpf') or 'Não informado'}")
-            lines.append(f"  • RG / Identidade    : {item.get('rg') or 'Não informado'}")
-            lines.append(f"  • Curso              : {item.get('curso') or 'Não informado'}")
-            lines.append(f"  • Natureza do Curso  : {item.get('natureza_curso') or 'Não identificada'}")
-            lines.append(f"  • Carga Horária      : {item.get('carga_horaria') or 'Não informada'}")
-            lines.append(f"  • Faculdade          : {item.get('faculdade') or 'Não informada'}")
-            lines.append(f"  • Data do Documento  : {item.get('data') or 'Não informada'}")
+            lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
+            lines.append(f"  • Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}")
+            lines.append(f"  • CPF                     : {item.get('cpf') or 'Não informado'}")
+            lines.append(f"  • RG / Identidade         : {item.get('rg') or 'Não informado'}")
+            if dom == "financeiro" or item.get("valor_monetario") or item.get("pix_pagador_nome"):
+                lines.append(f"  • Valor Monetário         : {item.get('valor_monetario') or 'Não informado'}")
+                lines.append(f"  • Data da Transação       : {item.get('data') or 'Não informada'}")
+                lines.append(f"  • Instituição / Banco     : {item.get('faculdade') or 'Não informada'}")
+                if item.get("pix_pagador_nome"):
+                    lines.append(f"  • Pagador                 : {item.get('pix_pagador_nome')}")
+                if item.get("pix_e2e_id"):
+                    lines.append(f"  • ID Fim-a-Fim (E2E)      : {item.get('pix_e2e_id')}")
+            else:
+                lines.append(f"  • Curso                   : {item.get('curso') or 'Não informado'}")
+                lines.append(f"  • Natureza do Curso       : {item.get('natureza_curso') or 'Não identificada'}")
+                lines.append(f"  • Carga Horária           : {item.get('carga_horaria') or 'Não informada'}")
+                lines.append(f"  • Faculdade               : {item.get('faculdade') or 'Não informada'}")
+                lines.append(f"  • Data do Documento       : {item.get('data') or 'Não informada'}")
             if item.get("observacoes_conferencia"):
-                lines.append(f"  • Obs. Conferência   : {item.get('observacoes_conferencia')}")
+                lines.append(f"  • Obs. Conferência        : {item.get('observacoes_conferencia')}")
             if item.get("erro"):
-                lines.append(f"  • Detalhe do Erro    : {item.get('erro')}")
+                lines.append(f"  • Detalhe do Erro         : {item.get('erro')}")
             lines.append("-" * 80)
 
         lines.append("")
@@ -871,12 +891,22 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.send_header("Content-Length", str(server_ctx.html_path.stat().st_size))
                 self.end_headers()
                 return
-            elif path.startswith("/api/pdf/"):
-                md5_req = path.split("/api/pdf/")[-1].strip().lower()
+            elif path.startswith("/api/pdf/") or path.startswith("/api/arquivo/"):
+                prefix = "/api/pdf/" if path.startswith("/api/pdf/") else "/api/arquivo/"
+                md5_req = path.split(prefix)[-1].strip().lower()
                 pdf_file = server_ctx.md5_to_file.get(md5_req)
                 if pdf_file and pdf_file.exists():
+                    ext = pdf_file.suffix.lower()
+                    mime_types = {
+                        ".pdf": "application/pdf",
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".webp": "image/webp"
+                    }
+                    content_type = mime_types.get(ext, "application/octet-stream")
                     self.send_response(200)
-                    self.send_header("Content-Type", "application/pdf")
+                    self.send_header("Content-Type", content_type)
                     self.send_header("Content-Length", str(pdf_file.stat().st_size))
                     self.end_headers()
                     return
@@ -924,7 +954,7 @@ def create_handler(server_ctx: ConferenciaServer):
                 for item in dados:
                     if "status_conferencia" not in item:
                         item["status_conferencia"] = "pendente"
-                    for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "rg", "data"]:
+                    for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "rg", "data", "valor_monetario", "dominio"]:
                         v = item.get(k)
                         if isinstance(v, list):
                             item[k] = ", ".join(str(x) for x in v if x)
@@ -936,9 +966,10 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.wfile.write(body)
                 return
 
-            # API para servir o PDF por Hash MD5
-            if path.startswith("/api/pdf/"):
-                md5_req = path.split("/api/pdf/")[-1].strip().lower()
+            # API para servir o Documento (PDF ou Imagem) por Hash MD5
+            if path.startswith("/api/pdf/") or path.startswith("/api/arquivo/"):
+                prefix = "/api/pdf/" if path.startswith("/api/pdf/") else "/api/arquivo/"
+                md5_req = path.split(prefix)[-1].strip().lower()
                 pdf_file = server_ctx.md5_to_file.get(md5_req)
 
                 if not pdf_file or not pdf_file.exists():
@@ -947,16 +978,25 @@ def create_handler(server_ctx: ConferenciaServer):
 
                 if pdf_file and pdf_file.exists():
                     size = pdf_file.stat().st_size
+                    ext = pdf_file.suffix.lower()
+                    mime_types = {
+                        ".pdf": "application/pdf",
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".webp": "image/webp"
+                    }
+                    content_type = mime_types.get(ext, "application/octet-stream")
                     self.send_response(200)
-                    self.send_header("Content-Type", "application/pdf")
-                    self.send_header("Content-Disposition", f'inline; filename="{md5_req}.pdf"')
+                    self.send_header("Content-Type", content_type)
+                    self.send_header("Content-Disposition", f'inline; filename="{md5_req}{ext}"')
                     self.send_header("Content-Length", str(size))
                     self.end_headers()
                     with open(pdf_file, "rb") as f:
                         self.wfile.write(f.read())
                     return
                 else:
-                    self.send_error(404, f"Arquivo PDF com MD5 {md5_req} não encontrado.")
+                    self.send_error(404, f"Arquivo com MD5 {md5_req} não encontrado.")
                     return
 
             # API de Configurações do Sistema
@@ -1293,7 +1333,7 @@ def create_handler(server_ctx: ConferenciaServer):
                     novo_doc.pop("data_criacao", None)
 
                     # Sanitiza listas para strings para compatibilidade com o visualizador
-                    for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "rg", "data"]:
+                    for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "rg", "data", "dominio", "valor_monetario"]:
                         v = novo_doc.get(k)
                         if isinstance(v, list):
                             novo_doc[k] = ", ".join(str(x) for x in v if x)

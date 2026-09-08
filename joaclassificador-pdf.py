@@ -27,6 +27,7 @@ import base64
 import io
 import subprocess
 import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Callable, Set
@@ -56,6 +57,14 @@ try:
     import pypdfium2 as pdfium
 except ImportError:
     pdfium = None
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+IMAGE_EXTENSIONS: Set[str] = {".png", ".jpg", ".jpeg", ".webp"}
+SUPPORTED_EXTENSIONS: Set[str] = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
 
 try:
     from openai import OpenAI
@@ -218,10 +227,26 @@ def is_valid_cpf_syntax(cpf: Optional[str], check_checksum: bool = True) -> bool
 
 
 def extract_cpf_fallback(text: str) -> Optional[str]:
-    """Busca padrão de CPF diretamente no texto do documento como contingência."""
-    match = re.search(r"(?:CPF|C\.P\.F)[\s:\.ºn°]*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})", text, re.IGNORECASE)
+    """Busca padrão de CPF diretamente no texto do documento como contingência com validação de checksum."""
+    if not text:
+        return None
+    # 1. Padrão associado explicitamente a CPF / C.P.F / CIC (inclusive em CNH com '4d CPF')
+    match = re.search(r"(?:CPF|C\.P\.F|CIC)[\s:\.ºn°A-Za-z0-9]*?(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b", text, re.IGNORECASE)
     if match:
-        return format_cpf(match.group(1))
+        fmt = format_cpf(match.group(1))
+        if fmt and validate_cpf_checksum(fmt):
+            return fmt
+    # 2. Busca qualquer padrão formatado com dígitos verificadores válidos da Receita
+    for m in re.finditer(r"\b(\d{3}\.\d{3}\.\d{3}-\d{2})\b", text):
+        fmt = format_cpf(m.group(1))
+        if fmt and validate_cpf_checksum(fmt):
+            return fmt
+    # 3. Busca sequência de 11 dígitos contínuos com prefixo CPF
+    match3 = re.search(r"(?:CPF|C\.P\.F)[\s:\.ºn°]*(\d{11})\b", text, re.IGNORECASE)
+    if match3:
+        fmt = format_cpf(match3.group(1))
+        if fmt and validate_cpf_checksum(fmt):
+            return fmt
     return None
 
 
@@ -233,14 +258,14 @@ def extract_rg_fallback(text: str) -> Optional[str]:
     pattern = re.compile(
         r"\b(?:Carteira\s+de\s+Identidade|C[eé]dula\s+de\s+Identidade|Registro\s+Geral|R\.?\s*G\.?|Doc(?:\.|\s+de)?\s+Identidade|Documento\s+de\s+Identidade|Identidade|C\.?I\.?)\b"
         r"(?:\s*(?:n[°ºo\.]*|número|sob\s+o\s+n[°ºo\.]*))?"
-        r"\s*[:\s-]*"
+        r"[\s/A-Z]*\n?"
         r"([A-Z0-9\.\-\/]+(?:\s*(?:(?:SSP|SPTC|PCMG|DGPC|PC|DETRAN|IFP|PM|POL[IÍ]CIA|MAE|MEX|MD|DPF|SESP|[A-Z]{2,4})\b)?(?:\s*[\/\-]?\s*[A-Z]{2})?)?)",
         re.IGNORECASE
     )
 
     for match in pattern.finditer(text):
         val = match.group(1).strip()
-        val = re.split(r"\s+(?:e\s+)?(?:CPF|C\.P\.F|Data|Nascido|Nasc|Expedi[cç]|Filia[cç])\b", val, flags=re.IGNORECASE)[0].strip()
+        val = re.split(r"\s+(?:e\s+)?(?:\d*[a-z]?\s*CPF|C\.P\.F|Data|Nascido|Nasc|Expedi[cç]|Filia[cç])\b", val, flags=re.IGNORECASE)[0].strip()
         val = val.rstrip(".,;:- ")
         digits = re.sub(r"\D", "", val)
         if 5 <= len(digits) <= 14 and len(val) <= 35:
@@ -250,6 +275,151 @@ def extract_rg_fallback(text: str) -> Optional[str]:
                 continue
             return val
     return None
+
+
+def extract_course_fallback(text: str) -> Optional[str]:
+    """Busca nome do curso em frases formais de diploma ou certificado como contingência."""
+    if not text:
+        return None
+    # Padrão 1: conclusão do Curso de [Pedagogia / Direito / Administração] (tolerante a OCR tipo conclusdo / conclusao)
+    m = re.search(r"\b(?:conclus[a-z0-9]{1,3}\s+do\s+)?curso\s+de\s+([A-Za-zÀ-ú\s\-]+?)(?:,\s*em|\s+em\s+\d|\s+e\s+a\s+cola|\s+no\s+ano|\s+com\s+dura|\.|\n|$)", text, re.IGNORECASE)
+    if m:
+        c = m.group(1).strip()
+        if 3 <= len(c) <= 60 and not any(k in c.lower() for k in ["faculdade", "universidade", "instituto", "colegio", "escola"]):
+            return c
+    # Padrão 2: título de Licenciada/Bacharel em [Pedagogia]
+    m2 = re.search(r"\b(?:t[ií]tulo|grau)\s+de\s+(?:Licenciad[ao]|Bacharel(?:ado)?|Tecn[oó]log[ao]|Especialista|Mestre|Doutor)\s+(?:em|de|a)?\s+([A-Za-zÀ-ú\s\-]+?)(?:,\s*em|\s+a\s+[A-Z]|\.|\n|$)", text, re.IGNORECASE)
+    if m2:
+        c2 = m2.group(1).strip()
+        if 3 <= len(c2) <= 60 and not any(k in c2.lower() for k in ["faculdade", "universidade", "instituto", "colegio", "escola"]):
+            return c2
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Extração de Metadados e Fallbacks Especializados (Financeiro / PIX)
+# ---------------------------------------------------------------------------
+def extract_monetary_value(text: str) -> Optional[str]:
+    """Extrai valor monetário em reais (R$) do texto do documento."""
+    if not text:
+        return None
+    # Padrão R$ 1.234,56 ou R$ 1234,56 ou Valor R$ 50,00
+    m = re.search(r"(?:R\$\s*|Valor[\s:]*R\$\s*|Valor[\s:]+)([0-9]{1,3}(?:\.[0-9]{3})*,\s*[0-9]{2})\b", text, re.IGNORECASE)
+    if m:
+        v = m.group(1).replace(" ", "")
+        return f"R$ {v}"
+    # Padrão simplificado R$ 150.00 ou R$ 150,00
+    m2 = re.search(r"R\$\s*([0-9]+(?:[.,][0-9]{2}))\b", text, re.IGNORECASE)
+    if m2:
+        val = m2.group(1).replace(".", ",")
+        return f"R$ {val}"
+    return None
+
+
+def extract_pix_e2e_id(text: str) -> Optional[str]:
+    """Busca identificador Fim-a-Fim (End-to-End ID) de transação PIX (iniciado em E seguido de 30-40 caracteres alfanuméricos)."""
+    if not text:
+        return None
+    m = re.search(r"\b(E\d{8}[0-9A-Za-z]{18,32})\b", text)
+    if m:
+        return m.group(1)
+    m2 = re.search(r"(?:ID\s*(?:da\s*)?transa[çc][ãa]o|Identificador|End-to-End|E2E|Fim[\s-]*a[\s-]*Fim)[\s:]*([E0-9A-Za-z\-]{20,45})", text, re.IGNORECASE)
+    if m2:
+        cand = m2.group(1).strip()
+        if len(cand) >= 20:
+            return cand
+    return None
+
+
+def extract_pix_chave(text: str) -> Optional[str]:
+    """Busca chave PIX identificada no texto."""
+    if not text:
+        return None
+    # 1. Padrão com rótulo: Chave PIX, Chave do recebedor/favorecido/pagador, Chave cadastrada, etc.
+    m = re.search(
+        r"(?:Chave(?:\s+(?:PIX|do\s+(?:recebedor|favorecido|pagador|cliente)|cadastrada|utilizada|de\s+endere[çc]amento))?)\s*[:\s-]+\s*([a-zA-Z0-9\.\-\@\+\(\)\s]{4,60})",
+        text,
+        re.IGNORECASE
+    )
+    if m:
+        cand = m.group(1).strip().rstrip(".,;")
+        cand = cand.split("\n")[0].strip()
+        if len(cand) >= 4 and not re.match(r"^(?:da|do|de|o|a)\b", cand, re.IGNORECASE):
+            return cand
+    # 2. Busca direta por e-mail no comprovante PIX
+    if "pix" in text.lower():
+        m_email = re.search(r"\b([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)\b", text)
+        if m_email:
+            return m_email.group(1).strip()
+    return None
+
+
+def extract_pix_authentication(text: str) -> Optional[str]:
+    """Busca código de autenticação bancária / hash de segurança no comprovante."""
+    if not text:
+        return None
+    m = re.search(r"(?:Autentica[çc][ãa]o|C[oó]digo\s*de\s*autentica[çc][ãa]o|Controle)[\s:]*([0-9A-Za-z\.\-\:]{8,45})", text, re.IGNORECASE)
+    if m:
+        cand = m.group(1).strip().rstrip(".,;")
+        if len(cand) >= 8:
+            return cand
+    return None
+
+
+def load_image_to_base64(
+    image_path: Union[str, Path],
+    max_dimension: int = 2048,
+    quality: int = 85
+) -> List[str]:
+    """
+    Carrega arquivo de imagem nativo (PNG, JPG, JPEG, WEBP) e converte para base64 JPEG
+    otimizado para leitura visual (OCR) multimodal via LLM.
+    """
+    try:
+        from PIL import Image
+        with Image.open(str(image_path)) as img:
+            if img.mode in ("RGBA", "LA", "P"):
+                rgb_img = Image.new("RGB", img.size, (255, 255, 255))
+                if img.mode == "RGBA":
+                    rgb_img.paste(img, mask=img.split()[3])
+                else:
+                    rgb_img.paste(img.convert("RGB"))
+                img = rgb_img
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+
+            w, h = img.size
+            if max(w, h) > max_dimension:
+                scale_ratio = max_dimension / float(max(w, h))
+                new_w = int(w * scale_ratio)
+                new_h = int(h * scale_ratio)
+                resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+                img = img.resize((new_w, new_h), resample_filter)
+
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=quality, optimize=True)
+            return [base64.b64encode(buf.getvalue()).decode("utf-8")]
+    except Exception as e:
+        print(f"[Aviso] Falha ao converter imagem {image_path} para base64: {e}")
+        return []
+
+
+def get_document_images_for_vision(
+    file_path: Union[str, Path],
+    max_pages: int = 2,
+    scale: float = 1.5,
+    quality: int = 80
+) -> List[str]:
+    """
+    Retorna lista de imagens base64 seja o arquivo um PDF ou imagem nativa (PNG, JPG, JPEG, WEBP).
+    """
+    p = Path(file_path)
+    ext = p.suffix.lower()
+    if ext in IMAGE_EXTENSIONS:
+        return load_image_to_base64(p, quality=quality)
+    elif ext == ".pdf":
+        return render_pdf_pages_to_base64(str(p), max_pages=max_pages, scale=scale, quality=quality)
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -295,9 +465,9 @@ def extract_pdf_text(pdf_path: str, max_pages: int = 4) -> str:
 
 def render_pdf_pages_to_base64(
     pdf_path: str,
-    max_pages: int = 2,
-    scale: float = 1.5,
-    quality: int = 80
+    max_pages: int = 4,
+    scale: float = 2.0,
+    quality: int = 85
 ) -> List[str]:
     """
     Renderiza páginas do PDF em imagens JPEG codificadas em base64 para leitura visual (OCR) via LLM.
@@ -336,6 +506,116 @@ def render_pdf_pages_to_base64(
             pass
 
     return images_b64
+
+
+# ---------------------------------------------------------------------------
+# OCR Local Rápido de Contingência (Tesseract)
+# ---------------------------------------------------------------------------
+def run_tesseract_ocr_on_image(img: Any, try_rotation: bool = True) -> str:
+    """
+    Executa OCR local rápido via Tesseract em uma imagem PIL ou array.
+    Testa automaticamente rotação em 180° se a primeira passada não encontrar CPF ou texto suficiente.
+    """
+    if not shutil.which("tesseract"):
+        return ""
+
+    if Image is not None and not isinstance(img, Image.Image):
+        try:
+            img = Image.fromarray(img)
+        except Exception:
+            return ""
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        tmp_path = f.name
+        img.save(tmp_path)
+
+    def _exec_tess(p: str) -> str:
+        for lang in ["por+eng", "eng"]:
+            try:
+                proc = subprocess.run(
+                    ["tesseract", p, "stdout", "-l", lang],
+                    capture_output=True,
+                    text=True,
+                    timeout=12
+                )
+                if proc.returncode == 0 and proc.stdout.strip():
+                    return proc.stdout.strip()
+            except Exception:
+                pass
+        return ""
+
+    text = _exec_tess(tmp_path)
+
+    # Se não encontrou CPF ou o texto for muito curto, tenta rotação de 180 graus (documentos de cabeça para baixo)
+    if try_rotation:
+        has_cpf = bool(re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", text))
+        if not has_cpf:
+            try:
+                img_180 = img.rotate(180, expand=True)
+                img_180.save(tmp_path)
+                text_180 = _exec_tess(tmp_path)
+                if re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", text_180) or len(text_180) > len(text):
+                    text = text_180
+            except Exception:
+                pass
+
+    if os.path.exists(tmp_path):
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+    return text.strip()
+
+
+def extract_tesseract_text_from_pdf(
+    pdf_path: Union[str, Path],
+    max_pages: int = 4
+) -> str:
+    """
+    Extrai texto complementar via Tesseract local das imagens embutidas e das páginas do PDF.
+    Captura CPFs, RGs e dados pessoais em alta resolução (ex: recortes do app CDT/SENATRAN).
+    """
+    if not shutil.which("tesseract"):
+        return ""
+
+    extracted_parts: List[str] = []
+
+    # 1. Analisa imagens embutidas em alta resolução (fotos de CNH, RG, CPF inseridas no PDF)
+    if pdfium is not None:
+        try:
+            pdf = pdfium.PdfDocument(str(pdf_path))
+            num_pages = min(len(pdf), max_pages)
+            for i in range(num_pages):
+                page = pdf[i]
+                for obj in page.get_objects():
+                    if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE:
+                        bm = obj.get_bitmap()
+                        pil_img = bm.to_pil()
+                        if pil_img.width >= 200 and pil_img.height >= 200:
+                            t = run_tesseract_ocr_on_image(pil_img, try_rotation=True)
+                            if t and len(t) >= 15:
+                                extracted_parts.append(t)
+        except Exception:
+            pass
+
+    # 2. Se nenhuma imagem embutida foi encontrada ou se ainda não achou CPF, renderiza as páginas
+    combined = "\n\n".join(extracted_parts)
+    if not re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", combined):
+        if pdfium is not None:
+            try:
+                pdf = pdfium.PdfDocument(str(pdf_path))
+                num_pages = min(len(pdf), max_pages)
+                for i in range(num_pages):
+                    page = pdf[i]
+                    p_img = page.render(scale=2.0).to_pil()
+                    t = run_tesseract_ocr_on_image(p_img, try_rotation=True)
+                    if t and len(t) >= 15:
+                        extracted_parts.append(t)
+            except Exception:
+                pass
+
+    return "\n\n".join(extracted_parts).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -806,9 +1086,9 @@ class OpenAIClient(BaseLLMClient):
 
 
 # ---------------------------------------------------------------------------
-# Prompts de Extração (Texto e Visão / OCR)
+# Prompts Universais de Extração (Texto e Visão / OCR Multimodal)
 # ---------------------------------------------------------------------------
-def build_vision_prompt(extra_context: str = "") -> str:
+def build_universal_vision_prompt(extra_context: str = "") -> str:
     ctx_note = ""
     if extra_context:
         ctx_note = f"""
@@ -816,37 +1096,54 @@ OBSERVAÇÃO DA LEITURA TEXTUAL PRÉVIA:
 \"\"\"
 {extra_context[:1200]}
 \"\"\"
-Atenção: Na leitura da camada de texto digital, o 'tipo_documento' NÃO pôde ser determinado com precisão ou ficou não identificado. Analise os elementos visuais das páginas do documento (título principal, cabeçalho, carimbos, assinaturas, selos, brasões e formatação) para classificar o tipo_documento corretamente (ex: Diploma, Certificado, Histórico Escolar, Declaração, etc.).
+Atenção: Analise com precisão os elementos visuais das páginas (títulos, logotipos de faculdades ou bancos, cabeçalhos, comprovantes PIX, tabelas, selos, carimbos, assinaturas e formatação) para classificar o domínio e tipo de documento.
 """
 
-    return f"""Analise visualmente as imagens deste documento acadêmico e extraia as informações com a máxima precisão via OCR.
+    return f"""Você é um especialista em OCR multimodal e classificação de documentos oficiais brasileiros.
+Analise visualmente as imagens deste documento (que pode ser acadêmico, comprovante financeiro/PIX, identificação civil, jurídico ou outro) e extraia todas as entidades estruturadas.
 {ctx_note}
 Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as chaves exatas abaixo:
-- "data": Data principal do documento (data de emissão do diploma, conclusão do curso ou colação de grau, ex: "18 de dezembro de 2023" ou "18/12/2023"). Se não encontrar, retorne null.
-- "beneficiario": Nome completo do aluno / diplomado / titular do documento. Se não encontrar, retorne null.
-- "cpf": CPF do beneficiário / titular identificado no documento (ex: "000.000.000-00" ou apenas números). Se não houver menção ao CPF, retorne null.
-- "rg": Número da Cédula de Identidade / RG / Registro Geral do titular (incluindo órgão emissor e UF se constar, ex: "12.345.678-9 SSP/SP" ou "MG-12.345.678"). Se não houver menção ao RG, retorne null.
-- "curso": Nome completo e oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Licenciatura em Pedagogia", "Bacharelado em Administração"). Se não encontrar, retorne null.
-- "natureza_curso": Nível ou natureza acadêmica do curso identificado no documento. Classifique em uma das opções:
-    * "Graduação / Curso Superior" (para Bacharelado, Licenciatura, Tecnólogo)
-    * "Pós-Graduação Lato Sensu (Especialização/MBA)"
-    * "Pós-Graduação Stricto Sensu (Mestrado/Doutorado)"
-    * "Curso Técnico / Profissionalizante"
-    * "Curso de Extensão / Aperfeiçoamento"
-    * "Educação Básica" (Fundamental / Médio)
-    * Ou null se não for possível determinar ou não for curso.
-- "carga_horaria": Carga horária total do curso (ex: "750 h/aulas", "360 horas", "750h"). Se não encontrar, retorne null.
-- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato canônico "Nome Completo por Extenso (SIGLA)" (ex: "Faculdades Integradas Vale do Rio Verde (FIVAR)", "Universidade de São Paulo (USP)"). Sempre coloque o nome por extenso primeiro e a sigla entre parênteses ao final. Se não encontrar, retorne null.
-- "tipo_documento": Classificação do documento (ex: "Diploma", "Certificado", "Histórico Escolar", "Declaração", "Currículo", "Outro"). Se mesmo após análise visual não for possível classificar, informe "Não identificado".
+
+1. DOMÍNIO E CLASSIFICAÇÃO:
+- "dominio": Classifique em uma das seguintes opções estritas:
+    * "academico" (para diplomas, certificados de cursos, históricos escolares, declarações de matrícula/conclusão, carteiras de estudante)
+    * "financeiro" (para comprovantes PIX, recibos de pagamento, transferências bancárias, boletos, extratos, notas fiscais)
+    * "identificacao" (para RG, CNH, CPF, Título de Eleitor, Certidão de Nascimento/Casamento, Passaporte, Registro Profissional)
+    * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
+    * "outro" (para quaisquer outros documentos não contemplados acima)
+- "tipo_documento": Nome específico do documento (ex: "Comprovante PIX", "Recibo de Pagamento", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro"). Se não puder identificar, retorne "Não identificado".
+
+2. CAMPOS UNIVERSAIS:
+- "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
+- "beneficiario": Nome do titular, aluno ou recebedor/favorecido do pagamento. Se não encontrar, retorne null.
+- "cpf": CPF do titular ou recebedor identificado (ex: "000.000.000-00" ou apenas números). Se não houver menção, retorne null.
+- "rg": Número da Cédula de Identidade / RG do titular incluindo órgão emissor/UF (ex: "12.345.678-9 SSP/SP"). Se não houver, retorne null.
+- "valor_monetario": Se for comprovante financeiro ou PIX, informe o valor monetário com 'R$' (ex: "R$ 150,00" ou "R$ 1.250,50"). Para outros documentos, retorne null.
+
+3. CAMPOS ACADÊMICOS (se aplicável):
+- "curso": Nome oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Bacharelado em Administração"). Se não for curso, retorne null.
+- "natureza_curso": Nível acadêmico: "Graduação / Curso Superior", "Pós-Graduação Lato Sensu (Especialização/MBA)", "Pós-Graduação Stricto Sensu (Mestrado/Doutorado)", "Curso Técnico / Profissionalizante", "Curso de Extensão / Aperfeiçoamento", "Educação Básica" ou null.
+- "carga_horaria": Carga horária total (ex: "750 h/aulas", "360 horas", "750h"). Se não houver, retorne null.
+- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se não houver, retorne null.
+
+4. CAMPOS ESPECÍFICOS DE PIX / FINANCEIRO (preencha se for documento financeiro/PIX, senão retorne null):
+- "pix_pagador_nome": Nome completo do pagador da transferência.
+- "pix_pagador_cpf_cnpj": CPF ou CNPJ mascarado ou completo do pagador (ex: "***.123.456-**").
+- "pix_pagador_banco": Banco / PSP de origem do pagador.
+- "pix_recebedor_banco": Banco / PSP de destino do recebedor.
+- "pix_chave": Chave PIX utilizada (e-mail, CPF/CNPJ, telefone ou chave EVP aleatória).
+- "pix_e2e_id": Identificador fim-a-fim da transação (ID E2E com 32 a 40 caracteres iniciado por 'E', ex: "E00416968202609081430s0123456789").
+- "pix_autenticacao": Código de autenticação bancária ou hash de controle de segurança.
 
 REGRAS:
-1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação fora do JSON.
+1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
 2. Não invente nenhuma informação. Se não estiver visível na imagem, preencha o valor como null.
 """
 
 
-def build_prompt(document_text: str) -> str:
-    return f"""Analise o seguinte texto extraído de um documento acadêmico (diploma, certificado, histórico escolar, declaração, currículo, etc.) e extraia as informações com a máxima precisão.
+def build_universal_prompt(document_text: str) -> str:
+    return f"""Você é um especialista em classificação de documentos oficiais brasileiros e extração estruturada de dados.
+Analise o texto extraído deste documento (que pode ser acadêmico, comprovante financeiro/PIX, identificação, jurídico ou outro) e extraia todas as entidades estruturadas.
 
 Texto extraído do documento:
 \"\"\"
@@ -854,31 +1151,50 @@ Texto extraído do documento:
 \"\"\"
 
 Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as chaves exatas abaixo:
-- "data": Data principal do documento (data de emissão do diploma, conclusão do curso ou colação de grau, ex: "18 de dezembro de 2023" ou "18/12/2023"). Se não encontrar, retorne null.
-- "beneficiario": Nome completo do aluno / diplomado / titular do certificado. Se não encontrar, retorne null.
-- "cpf": CPF do beneficiário / titular identificado no texto (ex: "000.000.000-00" ou números). Se não houver menção ao CPF, retorne null.
-- "rg": Número da Cédula de Identidade / RG / Registro Geral do titular (incluindo órgão emissor e UF se constar, ex: "12.345.678-9 SSP/SP" ou "MG-12.345.678"). Se não houver menção ao RG, retorne null.
-- "curso": Nome completo e oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Bacharelado em Administração"). Se não encontrar, retorne null.
-- "natureza_curso": Nível ou natureza acadêmica do curso identificado no documento. Classifique em uma das opções:
-    * "Graduação / Curso Superior" (para Bacharelado, Licenciatura, Tecnólogo)
-    * "Pós-Graduação Lato Sensu (Especialização/MBA)"
-    * "Pós-Graduação Stricto Sensu (Mestrado/Doutorado)"
-    * "Curso Técnico / Profissionalizante"
-    * "Curso de Extensão / Aperfeiçoamento"
-    * "Educação Básica" (Fundamental / Médio)
-    * Ou null se não for possível determinar ou não for curso.
-- "carga_horaria": Carga horária total do curso (ex: "750 h/aulas", "360 horas", "750h"). Se não encontrar, retorne null.
-- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato canônico "Nome Completo por Extenso (SIGLA)" (ex: "Faculdades Integradas Vale do Rio Verde (FIVAR)", "Universidade de São Paulo (USP)"). Sempre coloque o nome por extenso primeiro e a sigla entre parênteses ao final. Se não encontrar, retorne null.
-- "tipo_documento": Classificação do documento (ex: "Diploma", "Certificado", "Currículo", "Histórico Escolar", "Declaração", "Outro").
+
+1. DOMÍNIO E CLASSIFICAÇÃO:
+- "dominio": Classifique em uma das seguintes opções estritas:
+    * "academico" (para diplomas, certificados de cursos, históricos escolares, declarações de matrícula/conclusão, carteiras de estudante)
+    * "financeiro" (para comprovantes PIX, recibos de pagamento, transferências bancárias, boletos, extratos, notas fiscais)
+    * "identificacao" (para RG, CNH, CPF, Título de Eleitor, Certidão de Nascimento/Casamento, Passaporte, Registro Profissional)
+    * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
+    * "outro" (para quaisquer outros documentos não contemplados acima)
+- "tipo_documento": Nome específico do documento (ex: "Comprovante PIX", "Recibo de Pagamento", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro"). Se não puder identificar, retorne "Não identificado".
+
+2. CAMPOS UNIVERSAIS:
+- "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
+- "beneficiario": Nome do titular, aluno ou recebedor/favorecido do pagamento. Se não encontrar, retorne null.
+- "cpf": CPF do titular ou recebedor identificado (ex: "000.000.000-00" ou apenas números). Se não houver menção, retorne null.
+- "rg": Número da Cédula de Identidade / RG do titular incluindo órgão emissor/UF (ex: "12.345.678-9 SSP/SP"). Se não houver, retorne null.
+- "valor_monetario": Se for comprovante financeiro ou PIX, informe o valor monetário com 'R$' (ex: "R$ 150,00" ou "R$ 1.250,50"). Para outros documentos, retorne null.
+
+3. CAMPOS ACADÊMICOS (se aplicável):
+- "curso": Nome oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Bacharelado em Administração"). Se não for curso, retorne null.
+- "natureza_curso": Nível acadêmico: "Graduação / Curso Superior", "Pós-Graduação Lato Sensu (Especialização/MBA)", "Pós-Graduação Stricto Sensu (Mestrado/Doutorado)", "Curso Técnico / Profissionalizante", "Curso de Extensão / Aperfeiçoamento", "Educação Básica" ou null.
+- "carga_horaria": Carga horária total (ex: "750 h/aulas", "360 horas", "750h"). Se não houver, retorne null.
+- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se não houver, retorne null.
+
+4. CAMPOS ESPECÍFICOS DE PIX / FINANCEIRO (preencha se for documento financeiro/PIX, senão retorne null):
+- "pix_pagador_nome": Nome completo do pagador da transferência.
+- "pix_pagador_cpf_cnpj": CPF ou CNPJ mascarado ou completo do pagador (ex: "***.123.456-**").
+- "pix_pagador_banco": Banco / PSP de origem do pagador.
+- "pix_recebedor_banco": Banco / PSP de destino do recebedor.
+- "pix_chave": Chave PIX utilizada (e-mail, CPF/CNPJ, telefone ou chave EVP aleatória).
+- "pix_e2e_id": Identificador fim-a-fim da transação (ID E2E com 32 a 40 caracteres iniciado por 'E', ex: "E00416968202609081430s0123456789").
+- "pix_autenticacao": Código de autenticação bancária ou hash de controle de segurança.
 
 REGRAS:
-1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação fora do JSON.
-2. Não invente nenhuma informação. Se não estiver explícito no texto, preencha o valor como null.
+1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
+2. Não invente nenhuma informação. Se não estiver explícito no texto, preencha como null.
 """
+
+# Aliases para retrocompatibilidade
+build_vision_prompt = build_universal_vision_prompt
+build_prompt = build_universal_prompt
 
 
 # ---------------------------------------------------------------------------
-# Processamento de um único PDF
+# Processamento Universal de Documentos (PDF e Imagens PNG/JPG/JPEG/WEBP)
 # ---------------------------------------------------------------------------
 def process_single_pdf(
     pdf_path: Path,
@@ -888,11 +1204,18 @@ def process_single_pdf(
     skip_ocr: bool = False,
     metadata: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:
-    # Metadados do arquivo (MD5, data da última alteração)
+    pdf_path = Path(pdf_path)
+    # Metadados do arquivo (MD5, data da última alteração, extensão)
     meta = metadata or get_file_metadata(pdf_path)
+    ext = meta.get("extensao") or pdf_path.suffix.lower()
+    is_image = ext in IMAGE_EXTENSIONS
 
     res_dict = {
         "md5": meta["md5"],
+        "nome_arquivo": pdf_path.name,
+        "caminho_relativo": meta.get("caminho_relativo") or pdf_path.name,
+        "extensao": ext,
+        "dominio": "academico",
         "data_modificacao": meta.get("data_modificacao"),
         "data": None,
         "beneficiario": None,
@@ -903,18 +1226,15 @@ def process_single_pdf(
         "carga_horaria": None,
         "faculdade": None,
         "tipo_documento": None,
+        "valor_monetario": None,
         "status": "pendente",
         "erro": None,
-        "metodo_leitura": "texto_digital",
-        "tentativa_ocr_llm": False,
+        "metodo_leitura": "imagem_ocr_llm" if is_image else "texto_digital",
+        "tentativa_ocr_llm": is_image,
         "processado_em": datetime.now().isoformat()
     }
 
     try:
-        # Extração de texto da camada digital nativa
-        text = extract_pdf_text(str(pdf_path), max_pages=max_pages)
-        has_text = bool(text and len(text.strip()) >= 15)
-
         # Helper para sanitização de strings e listas
         def _clean_str(v):
             if isinstance(v, list):
@@ -923,158 +1243,330 @@ def process_single_pdf(
                 return v.strip() or None
             return v
 
+        text = ""
+        has_text = False
+        extracted_data = {}
+
         # ---------------------------------------------------------------------
-        # CASO 1: Arquivo sem texto legível digitalmente OU force_ocr -> OCR usando a LLM
+        # RAMO A: ARQUIVO DE IMAGEM NATIVA (PNG, JPG, JPEG, WEBP)
         # ---------------------------------------------------------------------
-        if not has_text or force_ocr:
+        if is_image:
             if skip_ocr:
                 res_dict["status"] = "erro"
-                res_dict["erro"] = "Documento sem texto legível digitalmente (requer OCR, mas --skip-ocr está ativo)."
+                res_dict["erro"] = "Arquivo de imagem requer visão computacional (OCR), mas --skip-ocr está ativo."
                 return res_dict
 
-            images = render_pdf_pages_to_base64(str(pdf_path), max_pages=min(max_pages, 2))
+            images = load_image_to_base64(pdf_path)
             if not images:
                 res_dict["status"] = "erro"
-                res_dict["erro"] = "Documento sem texto legível digitalmente e falha ao renderizar páginas para OCR."
+                res_dict["erro"] = f"Falha ao carregar e converter imagem '{pdf_path.name}' para processamento visual."
                 return res_dict
 
+            # OCR local preliminar rápido via Tesseract na imagem
+            tess_text = ""
+            if Image is not None:
+                try:
+                    pil_im = Image.open(pdf_path)
+                    tess_text = run_tesseract_ocr_on_image(pil_im, try_rotation=True)
+                except Exception:
+                    pass
+
             try:
-                extra_ctx = text if (force_ocr and has_text) else None
-                vision_prompt = build_vision_prompt(extra_context=extra_ctx)
+                vision_prompt = build_universal_vision_prompt(extra_context=tess_text if tess_text else "")
                 extracted_data = client.generate_json_with_images(vision_prompt, images)
-                res_dict["metodo_leitura"] = "ocr_llm" if not has_text else "hibrido_texto_e_ocr_llm"
+                res_dict["metodo_leitura"] = "imagem_ocr_llm"
                 res_dict["tentativa_ocr_llm"] = True
             except Exception as e:
-                # Fallback gracioso: se a chamada com imagens falhar (ex: modelo sem suporte a visão)
-                # mas o documento possuir camada de texto digital, aproveita a leitura do texto:
-                if has_text:
+                if tess_text:
                     try:
-                        print(f"[*] Chamada de visão falhou ({e}). Fazendo fallback para texto digital...")
-                        prompt = build_prompt(text)
+                        prompt = build_universal_prompt(tess_text)
                         extracted_data = client.generate_json(prompt)
-                        res_dict["metodo_leitura"] = "texto_digital"
+                        res_dict["metodo_leitura"] = "imagem_tesseract_llm"
                         res_dict["tentativa_ocr_llm"] = True
                     except Exception as e2:
                         res_dict["status"] = "erro"
-                        res_dict["erro"] = f"Falha no OCR via LLM ({e}) e na leitura textual ({e2})"
+                        res_dict["erro"] = f"Falha no processamento visual da imagem ({e}) e no OCR textual ({e2})"
                         res_dict["tentativa_ocr_llm"] = True
                         return res_dict
                 else:
                     res_dict["status"] = "erro"
-                    res_dict["erro"] = f"Falha no OCR via LLM: {e}"
+                    res_dict["erro"] = f"Falha no processamento visual da imagem via LLM: {e}"
                     res_dict["tentativa_ocr_llm"] = True
                     return res_dict
-        else:
-            # Leitura normal da camada de texto digital via LLM
-            prompt = build_prompt(text)
-            extracted_data = client.generate_json(prompt)
-            res_dict["metodo_leitura"] = "texto_digital"
 
-        # Preenchimento e sanitização dos campos extraídos
+        # ---------------------------------------------------------------------
+        # RAMO B: DOCUMENTO PDF (Camada de Texto Digital com Fallback para OCR)
+        # ---------------------------------------------------------------------
+        else:
+            text = extract_pdf_text(str(pdf_path), max_pages=max_pages)
+            has_text = bool(text and len(text.strip()) >= 15)
+            tess_text = ""
+
+            if not has_text or force_ocr:
+                if skip_ocr:
+                    res_dict["status"] = "erro"
+                    res_dict["erro"] = "Documento sem texto legível digitalmente (requer OCR, mas --skip-ocr está ativo)."
+                    return res_dict
+
+                # 1. OCR complementar rápido (Tesseract em imagens embutidas e páginas)
+                tess_text = extract_tesseract_text_from_pdf(pdf_path, max_pages=max_pages)
+                combined_text = f"{text}\n\n{tess_text}".strip() if (text and tess_text) else (tess_text or text)
+
+                images = render_pdf_pages_to_base64(str(pdf_path), max_pages=min(max_pages, 4))
+                if not images and not combined_text:
+                    res_dict["status"] = "erro"
+                    res_dict["erro"] = "Documento sem texto legível digitalmente e falha ao renderizar páginas para OCR."
+                    return res_dict
+
+                try:
+                    extra_ctx = combined_text if combined_text else None
+                    vision_prompt = build_universal_vision_prompt(extra_context=extra_ctx)
+                    if images:
+                        extracted_data = client.generate_json_with_images(vision_prompt, images)
+                    else:
+                        prompt = build_universal_prompt(combined_text)
+                        extracted_data = client.generate_json(prompt)
+                    res_dict["metodo_leitura"] = "ocr_llm" if not has_text else "hibrido_texto_e_ocr_llm"
+                    res_dict["tentativa_ocr_llm"] = True
+                except Exception as e:
+                    if combined_text:
+                        try:
+                            print(f"[*] Chamada de visão falhou ({e}). Fazendo fallback para texto OCR Tesseract...")
+                            prompt = build_universal_prompt(combined_text)
+                            extracted_data = client.generate_json(prompt)
+                            res_dict["metodo_leitura"] = "ocr_tesseract_llm"
+                            res_dict["tentativa_ocr_llm"] = True
+                        except Exception as e2:
+                            res_dict["status"] = "erro"
+                            res_dict["erro"] = f"Falha no OCR via LLM ({e}) e na leitura textual ({e2})"
+                            res_dict["tentativa_ocr_llm"] = True
+                            extracted_data = {}
+                    else:
+                        res_dict["status"] = "erro"
+                        res_dict["erro"] = f"Falha no OCR via LLM: {e}"
+                        res_dict["tentativa_ocr_llm"] = True
+                        return res_dict
+            else:
+                # Leitura normal da camada de texto digital via LLM
+                prompt = build_universal_prompt(text)
+                extracted_data = client.generate_json(prompt)
+                res_dict["metodo_leitura"] = "texto_digital"
+
+        # Preenchimento e sanitização dos campos gerais
         res_dict["data"] = _clean_str(extracted_data.get("data"))
         res_dict["beneficiario"] = _clean_str(extracted_data.get("beneficiario"))
 
         # Tratamento e fallback para CPF
         cpf_val = extracted_data.get("cpf")
         formatted_cpf = format_cpf(cpf_val)
-        if not formatted_cpf and has_text:
-            formatted_cpf = extract_cpf_fallback(text)
+        if not formatted_cpf or not is_valid_cpf_syntax(formatted_cpf):
+            if has_text:
+                formatted_cpf = extract_cpf_fallback(text)
+            if (not formatted_cpf or not is_valid_cpf_syntax(formatted_cpf)):
+                if not tess_text and not is_image:
+                    try:
+                        tess_text = extract_tesseract_text_from_pdf(pdf_path, max_pages=max_pages)
+                    except Exception:
+                        pass
+                if tess_text:
+                    formatted_cpf = extract_cpf_fallback(tess_text)
         res_dict["cpf"] = formatted_cpf
 
         # Tratamento e fallback para RG / Identidade
         rg_val = _clean_str(extracted_data.get("rg"))
-        if not rg_val and has_text:
-            rg_val = extract_rg_fallback(text)
+        if not rg_val:
+            if has_text:
+                rg_val = extract_rg_fallback(text)
+            if not rg_val:
+                if not tess_text and not is_image:
+                    try:
+                        tess_text = extract_tesseract_text_from_pdf(pdf_path, max_pages=max_pages)
+                    except Exception:
+                        pass
+                if tess_text:
+                    rg_val = extract_rg_fallback(tess_text)
         res_dict["rg"] = rg_val
 
-        res_dict["curso"] = _clean_str(extracted_data.get("curso"))
+        # Campos acadêmicos
+        raw_curso = _clean_str(extracted_data.get("curso"))
+        if not raw_curso or any(k in raw_curso.lower() for k in ["faculdade", "universidade", "instituto", "colegio", "escola"]):
+            c_fallback = (extract_course_fallback(text) if has_text else None) or (extract_course_fallback(tess_text) if tess_text else None)
+            if not c_fallback and not tess_text and not is_image:
+                try:
+                    tess_text = extract_tesseract_text_from_pdf(pdf_path, max_pages=max_pages)
+                except Exception:
+                    pass
+                if tess_text:
+                    c_fallback = extract_course_fallback(tess_text)
+            if c_fallback:
+                raw_curso = c_fallback
+            elif any(k in str(raw_curso).lower() for k in ["faculdade", "universidade", "instituto", "colegio", "escola"]):
+                raw_curso = None
+        res_dict["curso"] = raw_curso
         res_dict["natureza_curso"] = _clean_str(extracted_data.get("natureza_curso"))
         res_dict["carga_horaria"] = _clean_str(extracted_data.get("carga_horaria"))
         res_dict["faculdade"] = normalizar_instituicao(_clean_str(extracted_data.get("faculdade")))
-        res_dict["tipo_documento"] = _clean_str(extracted_data.get("tipo_documento"))
+
+        # Classificação e campos financeiros / PIX
+        dominio_raw = _clean_str(extracted_data.get("dominio"))
+        tipo_doc_raw = _clean_str(extracted_data.get("tipo_documento"))
+        valor_raw = _clean_str(extracted_data.get("valor_monetario"))
+
+        pix_pagador_nome = _clean_str(extracted_data.get("pix_pagador_nome"))
+        pix_pagador_cpf_cnpj = _clean_str(extracted_data.get("pix_pagador_cpf_cnpj"))
+        pix_pagador_banco = _clean_str(extracted_data.get("pix_pagador_banco"))
+        pix_recebedor_banco = _clean_str(extracted_data.get("pix_recebedor_banco"))
+        pix_chave = _clean_str(extracted_data.get("pix_chave"))
+        pix_e2e_id = _clean_str(extracted_data.get("pix_e2e_id"))
+        pix_autenticacao = _clean_str(extracted_data.get("pix_autenticacao"))
+
+        # Fallbacks regex para comprovantes quando houver texto disponível
+        if has_text:
+            if not valor_raw:
+                valor_raw = extract_monetary_value(text)
+            if not pix_e2e_id:
+                pix_e2e_id = extract_pix_e2e_id(text)
+            if not pix_chave:
+                pix_chave = extract_pix_chave(text)
+            if not pix_autenticacao:
+                pix_autenticacao = extract_pix_authentication(text)
+
+        # Heurística inteligente para consolidação do domínio
+        tipo_lower = str(tipo_doc_raw or "").lower()
+        has_pix_signal = bool(
+            pix_e2e_id or pix_chave or pix_pagador_nome or
+            "pix" in tipo_lower or "comprovante" in tipo_lower or
+            "recibo" in tipo_lower or "pagamento" in tipo_lower or
+            "transferência" in tipo_lower or "transferencia" in tipo_lower
+        )
+
+        if has_pix_signal or valor_raw or dominio_raw == "financeiro":
+            dominio = "financeiro"
+            if not tipo_doc_raw or tipo_lower in ["não identificado", "nao identificado", "outro", "não informado", "nao informado"]:
+                tipo_doc_raw = "Comprovante PIX" if ("pix" in tipo_lower or pix_e2e_id or pix_chave) else "Recibo de Pagamento"
+            if not res_dict.get("faculdade") and pix_pagador_banco:
+                res_dict["faculdade"] = pix_pagador_banco
+        elif any(k in tipo_lower for k in ["rg", "cnh", "identidade", "cpf", "certidão", "certidao", "eleitor", "passaporte"]):
+            dominio = "identificacao"
+        elif any(k in tipo_lower for k in ["contrato", "procuração", "procuracao", "posse", "juridico", "petição", "peticao"]):
+            dominio = "juridico"
+        elif dominio_raw in ["academico", "financeiro", "identificacao", "juridico", "outro"]:
+            dominio = dominio_raw
+        else:
+            dominio = "academico"
+
+        res_dict["dominio"] = dominio
+        res_dict["tipo_documento"] = tipo_doc_raw
+        res_dict["valor_monetario"] = valor_raw
+
+        # Atribuição de campos específicos de PIX
+        if pix_pagador_nome: res_dict["pix_pagador_nome"] = pix_pagador_nome
+        if pix_pagador_cpf_cnpj: res_dict["pix_pagador_cpf_cnpj"] = pix_pagador_cpf_cnpj
+        if pix_pagador_banco: res_dict["pix_pagador_banco"] = pix_pagador_banco
+        if pix_recebedor_banco: res_dict["pix_recebedor_banco"] = pix_recebedor_banco
+        if pix_chave: res_dict["pix_chave"] = pix_chave
+        if pix_e2e_id: res_dict["pix_e2e_id"] = pix_e2e_id
+        if pix_autenticacao: res_dict["pix_autenticacao"] = pix_autenticacao
 
         # ---------------------------------------------------------------------
-        # CASO 2: Tinha camada de leitura, mas:
-        # A) O tipo_documento ficou "Não identificado" / "Outro" / None
-        # OU
-        # B) Foi detectado um CPF, mas com sintaxe errada (tamanho != 11, formatação incorreta ou dígitos inválidos)
-        # OU
-        # C) Nem beneficiário (aluno) nem curso foram identificados (ex: texto ilegível/fonte sem mapa)
-        # Tenta OCR via LLM uma única vez ("Caso não seja identificado novamente, não insista mais").
+        # CASO 2 (Somente PDF com texto digital): Se dados essenciais falharam,
+        # faz tentativa de OCR local rápido (Tesseract) e/ou multimodal via LLM
         # ---------------------------------------------------------------------
-        tipo_atual = (res_dict.get("tipo_documento") or "").strip().lower()
-        is_tipo_unidentified = (not tipo_atual) or tipo_atual in [
-            "não identificado", "nao identificado", "outro", "não informado", "nao informado"
-        ]
+        if not is_image and has_text and dominio != "financeiro" and not res_dict.get("tentativa_ocr_llm") and not skip_ocr:
+            tipo_atual = (res_dict.get("tipo_documento") or "").strip().lower()
+            is_tipo_unidentified = (not tipo_atual) or tipo_atual in [
+                "não identificado", "nao identificado", "outro", "não informado", "nao informado"
+            ]
+            cpf_atual = res_dict.get("cpf")
+            is_cpf_flawed = bool(not cpf_atual or not is_valid_cpf_syntax(cpf_atual))
+            is_dados_principais_missing = (not res_dict.get("beneficiario")) and (not res_dict.get("curso"))
 
-        cpf_atual = res_dict.get("cpf")
-        is_cpf_flawed = bool(cpf_atual and not is_valid_cpf_syntax(cpf_atual))
+            if is_tipo_unidentified or is_cpf_flawed or is_dados_principais_missing:
+                # 1. Tenta resgatar dados críticos via Tesseract local rápido
+                if not tess_text:
+                    tess_text = extract_tesseract_text_from_pdf(pdf_path, max_pages=max_pages)
 
-        is_dados_principais_missing = (not res_dict.get("beneficiario")) and (not res_dict.get("curso"))
-
-        precisa_releitura_ocr = (is_tipo_unidentified or is_cpf_flawed or is_dados_principais_missing)
-
-        if has_text and precisa_releitura_ocr and not res_dict.get("tentativa_ocr_llm") and not skip_ocr:
-            res_dict["tentativa_ocr_llm"] = True
-            try:
-                images = render_pdf_pages_to_base64(str(pdf_path), max_pages=min(max_pages, 2))
-                if images:
-                    extra_notes = []
-                    if is_tipo_unidentified:
-                        extra_notes.append("O 'tipo_documento' não pôde ser determinado com precisão na leitura textual.")
+                if tess_text:
                     if is_cpf_flawed:
-                        extra_notes.append(f"O CPF extraído da camada de texto ({cpf_atual}) está com sintaxe ou dígitos incorretos. Verifique visualmente com atenção o CPF impresso no documento.")
-                    if is_dados_principais_missing:
-                        extra_notes.append("O nome do aluno (beneficiário) e/ou curso não foram encontrados no texto digital. Verifique atentamente o documento visualmente.")
+                        cand_cpf = extract_cpf_fallback(tess_text)
+                        if cand_cpf and is_valid_cpf_syntax(cand_cpf):
+                            res_dict["cpf"] = cand_cpf
+                            is_cpf_flawed = False
+                    if not res_dict.get("rg"):
+                        cand_rg = extract_rg_fallback(tess_text)
+                        if cand_rg:
+                            res_dict["rg"] = cand_rg
 
-                    context_msg = f"{text}\n\n" + "\n".join(extra_notes)
-                    vision_prompt = build_vision_prompt(extra_context=context_msg)
-                    ocr_data = client.generate_json_with_images(vision_prompt, images)
+                # 2. Se o documento ainda estiver sem tipo ou sem dados principais, escala para OCR Multimodal
+                if is_tipo_unidentified or is_dados_principais_missing:
+                    res_dict["tentativa_ocr_llm"] = True
+                    try:
+                        images = render_pdf_pages_to_base64(str(pdf_path), max_pages=min(max_pages, 4))
+                        if images:
+                            context_msg = f"{text}\n\nTexto OCR complementar:\n{tess_text}\n\nAtenção: O tipo de documento ou titular não puderam ser plenamente identificados no texto. Verifique visualmente."
+                            vision_prompt = build_universal_vision_prompt(extra_context=context_msg)
+                            ocr_data = client.generate_json_with_images(vision_prompt, images)
 
-                    # 1. Atualiza tipo de documento se OCR classificou
-                    if is_tipo_unidentified:
-                        new_tipo = _clean_str(ocr_data.get("tipo_documento"))
-                        if new_tipo and new_tipo.lower() not in [
-                            "não identificado", "nao identificado", "outro", "não informado", "nao informado"
-                        ]:
-                            res_dict["tipo_documento"] = new_tipo
-                            res_dict["metodo_leitura"] = "hibrido_texto_e_ocr_llm"
+                            if is_tipo_unidentified:
+                                new_tipo = _clean_str(ocr_data.get("tipo_documento"))
+                                if new_tipo and new_tipo.lower() not in ["não identificado", "nao identificado", "outro"]:
+                                    res_dict["tipo_documento"] = new_tipo
+                                    res_dict["metodo_leitura"] = "hibrido_texto_e_ocr_llm"
 
-                    # 2. Atualiza CPF se OCR encontrou CPF com sintaxe correta
-                    new_cpf_raw = ocr_data.get("cpf")
-                    if new_cpf_raw:
-                        formatted_new_cpf = format_cpf(new_cpf_raw)
-                        if formatted_new_cpf and is_valid_cpf_syntax(formatted_new_cpf):
-                            res_dict["cpf"] = formatted_new_cpf
-                            res_dict["metodo_leitura"] = "hibrido_texto_e_ocr_llm"
+                            new_cpf_raw = ocr_data.get("cpf")
+                            if new_cpf_raw:
+                                formatted_new_cpf = format_cpf(new_cpf_raw)
+                                if formatted_new_cpf and is_valid_cpf_syntax(formatted_new_cpf):
+                                    res_dict["cpf"] = formatted_new_cpf
+                                    res_dict["metodo_leitura"] = "hibrido_texto_e_ocr_llm"
 
-                    # 3. Aproveita outros dados que o OCR possa ter localizado e que estavam vazios
-                    if not res_dict["beneficiario"] and ocr_data.get("beneficiario"):
-                        res_dict["beneficiario"] = _clean_str(ocr_data.get("beneficiario"))
-                    if not res_dict["rg"] and ocr_data.get("rg"):
-                        res_dict["rg"] = _clean_str(ocr_data.get("rg"))
-                    if not res_dict["curso"] and ocr_data.get("curso"):
-                        res_dict["curso"] = _clean_str(ocr_data.get("curso"))
-                    if not res_dict["natureza_curso"] and ocr_data.get("natureza_curso"):
-                        res_dict["natureza_curso"] = _clean_str(ocr_data.get("natureza_curso"))
-                    if not res_dict["carga_horaria"] and ocr_data.get("carga_horaria"):
-                        res_dict["carga_horaria"] = _clean_str(ocr_data.get("carga_horaria"))
-                    if not res_dict["faculdade"] and ocr_data.get("faculdade"):
-                        res_dict["faculdade"] = normalizar_instituicao(_clean_str(ocr_data.get("faculdade")))
-                    if not res_dict["data"] and ocr_data.get("data"):
-                        res_dict["data"] = _clean_str(ocr_data.get("data"))
-            except Exception:
-                # Se falhar a tentativa de OCR ou continuar não identificado, não insiste mais
-                pass
+                            if not res_dict["beneficiario"] and ocr_data.get("beneficiario"):
+                                res_dict["beneficiario"] = _clean_str(ocr_data.get("beneficiario"))
+                            if not res_dict["rg"] and ocr_data.get("rg"):
+                                res_dict["rg"] = _clean_str(ocr_data.get("rg"))
+                            if not res_dict["curso"] or any(k in str(res_dict["curso"]).lower() for k in ["faculdade", "universidade", "instituto", "colegio"]):
+                                if ocr_data.get("curso") and not any(k in str(ocr_data.get("curso")).lower() for k in ["faculdade", "universidade", "instituto", "colegio"]):
+                                    res_dict["curso"] = _clean_str(ocr_data.get("curso"))
+                                else:
+                                    cf = (extract_course_fallback(text) if has_text else None) or (extract_course_fallback(tess_text) if tess_text else None)
+                                    if cf:
+                                        res_dict["curso"] = cf
+                            if not res_dict["natureza_curso"] and ocr_data.get("natureza_curso"):
+                                res_dict["natureza_curso"] = _clean_str(ocr_data.get("natureza_curso"))
+                            if not res_dict["carga_horaria"] and ocr_data.get("carga_horaria"):
+                                res_dict["carga_horaria"] = _clean_str(ocr_data.get("carga_horaria"))
+                            if not res_dict["faculdade"] and ocr_data.get("faculdade"):
+                                res_dict["faculdade"] = normalizar_instituicao(_clean_str(ocr_data.get("faculdade")))
+                            if not res_dict["data"] and ocr_data.get("data"):
+                                res_dict["data"] = _clean_str(ocr_data.get("data"))
+                    except Exception:
+                        pass
 
-        # Validação de sucesso: pelo menos algum campo relevante identificado
+        # 3. Rede de segurança final para CPF, RG e Curso caso ainda estejam vazios e haja texto do Tesseract
+        if (not res_dict.get("cpf") or not is_valid_cpf_syntax(res_dict.get("cpf"))) and tess_text:
+            cand_cpf = extract_cpf_fallback(tess_text)
+            if cand_cpf and is_valid_cpf_syntax(cand_cpf):
+                res_dict["cpf"] = cand_cpf
+        if not res_dict.get("rg") and tess_text:
+            cand_rg = extract_rg_fallback(tess_text)
+            if cand_rg:
+                res_dict["rg"] = cand_rg
+        if not res_dict.get("curso") or any(k in str(res_dict.get("curso")).lower() for k in ["faculdade", "universidade", "instituto", "colegio"]):
+            cf = (extract_course_fallback(text) if has_text else None) or (extract_course_fallback(tess_text) if tess_text else None)
+            if cf:
+                res_dict["curso"] = cf
+
+        # Validação de sucesso adaptativa para múltiplos domínios
         campos_uteis = [
-            res_dict["beneficiario"],
-            res_dict["curso"],
-            res_dict["cpf"],
-            res_dict["rg"],
-            res_dict["faculdade"],
-            res_dict["tipo_documento"]
+            res_dict.get("beneficiario"),
+            res_dict.get("curso"),
+            res_dict.get("cpf"),
+            res_dict.get("rg"),
+            res_dict.get("faculdade"),
+            res_dict.get("tipo_documento"),
+            res_dict.get("valor_monetario"),
+            res_dict.get("pix_pagador_nome"),
+            res_dict.get("pix_e2e_id")
         ]
         if any(campos_uteis):
             res_dict["status"] = "sucesso"
@@ -1090,31 +1582,57 @@ def process_single_pdf(
     return res_dict
 
 
+process_single_document = process_single_pdf
+
+
+
 # ---------------------------------------------------------------------------
 # Formatação de Saídas (JSON e TXT)
 # ---------------------------------------------------------------------------
 def format_single_txt(item: Dict[str, Any]) -> str:
     metodo = item.get("metodo_leitura", "texto_digital")
-    if item.get("tentativa_ocr_llm"):
+    if item.get("tentativa_ocr_llm") and "ocr" not in metodo.lower():
         metodo += " (OCR LLM acionado)"
-    return f"""--------------------------------------------------------------------------------
+
+    dom = item.get("dominio") or "academico"
+    ext = item.get("extensao") or ""
+
+    txt = f"""--------------------------------------------------------------------------------
 MD5                     : {item.get('md5')}
 Status                  : {item.get('status', '').upper()}
+Domínio                 : {dom.upper()}
+Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}
+Extensão                : {ext.upper() if ext else 'N/A'}
 Método de Leitura       : {metodo}
 Data da Última Alteração: {item.get('data_modificacao')}
-Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}
-Beneficiário        : {item.get('beneficiario') or 'Não informado'}
-CPF                 : {item.get('cpf') or 'Não informado'}
-RG / Identidade     : {item.get('rg') or 'Não informado'}
-Curso               : {item.get('curso') or 'Não informado'}
-Natureza do Curso   : {item.get('natureza_curso') or 'Não identificada'}
-Carga Horária       : {item.get('carga_horaria') or 'Não informada'}
-Faculdade           : {item.get('faculdade') or 'Não informada'}
-Data do Documento   : {item.get('data') or 'Não informada'}
-Processado em       : {item.get('processado_em')}
-{f"Erro                : {item.get('erro')}" if item.get('erro') else ""}
---------------------------------------------------------------------------------
+Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}
+CPF                     : {item.get('cpf') or 'Não informado'}
+RG / Identidade         : {item.get('rg') or 'Não informado'}
 """
+    if dom == "financeiro" or item.get("valor_monetario") or item.get("pix_pagador_nome"):
+        txt += f"""Valor Monetário         : {item.get('valor_monetario') or 'Não informado'}
+Data da Transação       : {item.get('data') or 'Não informada'}
+Instituição / Banco     : {item.get('faculdade') or 'Não informada'}
+Pagador                 : {item.get('pix_pagador_nome') or 'Não informado'}
+CPF/CNPJ do Pagador     : {item.get('pix_pagador_cpf_cnpj') or 'Não informado'}
+Banco Origem (Pagador)  : {item.get('pix_pagador_banco') or 'Não informado'}
+Banco Destino (Receb.)  : {item.get('pix_recebedor_banco') or 'Não informado'}
+Chave PIX               : {item.get('pix_chave') or 'Não informada'}
+ID Fim-a-Fim (E2E)      : {item.get('pix_e2e_id') or 'Não informado'}
+Autenticação Bancária   : {item.get('pix_autenticacao') or 'Não informada'}
+"""
+    else:
+        txt += f"""Curso                   : {item.get('curso') or 'Não informado'}
+Natureza do Curso       : {item.get('natureza_curso') or 'Não identificada'}
+Carga Horária           : {item.get('carga_horaria') or 'Não informada'}
+Faculdade / Instituição : {item.get('faculdade') or 'Não informada'}
+Data do Documento       : {item.get('data') or 'Não informada'}
+"""
+
+    txt += f"""Processado em           : {item.get('processado_em')}
+{f"Erro                    : {item.get('erro')}" if item.get('erro') else ""}--------------------------------------------------------------------------------
+"""
+    return txt
 
 
 def generate_consolidated_txt(
@@ -1141,20 +1659,31 @@ def generate_consolidated_txt(
     ]
 
     for idx, item in enumerate(results, 1):
+        dom = item.get("dominio") or "academico"
         lines.append(f"[{idx}/{total}] MD5: {item.get('md5')}")
         lines.append(f"  • Status                  : {item.get('status', '').upper()}")
-        lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
+        lines.append(f"  • Domínio                 : {dom.upper()}")
         lines.append(f"  • Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}")
-        lines.append(f"  • Beneficiário       : {item.get('beneficiario') or 'Não informado'}")
-        lines.append(f"  • CPF                : {item.get('cpf') or 'Não informado'}")
-        lines.append(f"  • RG / Identidade    : {item.get('rg') or 'Não informado'}")
-        lines.append(f"  • Curso              : {item.get('curso') or 'Não informado'}")
-        lines.append(f"  • Natureza do Curso  : {item.get('natureza_curso') or 'Não identificada'}")
-        lines.append(f"  • Carga Horária      : {item.get('carga_horaria') or 'Não informada'}")
-        lines.append(f"  • Faculdade          : {item.get('faculdade') or 'Não informada'}")
-        lines.append(f"  • Data do Documento  : {item.get('data') or 'Não informada'}")
+        lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
+        lines.append(f"  • Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}")
+        lines.append(f"  • CPF                     : {item.get('cpf') or 'Não informado'}")
+        lines.append(f"  • RG / Identidade         : {item.get('rg') or 'Não informado'}")
+        if dom == "financeiro" or item.get("valor_monetario") or item.get("pix_pagador_nome"):
+            lines.append(f"  • Valor Monetário         : {item.get('valor_monetario') or 'Não informado'}")
+            lines.append(f"  • Data da Transação       : {item.get('data') or 'Não informada'}")
+            lines.append(f"  • Instituição / Banco     : {item.get('faculdade') or 'Não informada'}")
+            if item.get("pix_pagador_nome"):
+                lines.append(f"  • Pagador                 : {item.get('pix_pagador_nome')}")
+            if item.get("pix_e2e_id"):
+                lines.append(f"  • ID Fim-a-Fim (E2E)      : {item.get('pix_e2e_id')}")
+        else:
+            lines.append(f"  • Curso                   : {item.get('curso') or 'Não informado'}")
+            lines.append(f"  • Natureza do Curso       : {item.get('natureza_curso') or 'Não identificada'}")
+            lines.append(f"  • Carga Horária           : {item.get('carga_horaria') or 'Não informada'}")
+            lines.append(f"  • Faculdade               : {item.get('faculdade') or 'Não informada'}")
+            lines.append(f"  • Data do Documento       : {item.get('data') or 'Não informada'}")
         if item.get("erro"):
-            lines.append(f"  • Detalhe do Erro    : {item.get('erro')}")
+            lines.append(f"  • Detalhe do Erro         : {item.get('erro')}")
         lines.append("-" * 80)
 
     lines.append("")
@@ -1228,8 +1757,14 @@ def count_pdfs_in_path(p: Path) -> int:
     if not p.exists():
         return 0
     if p.is_file():
-        return 1 if p.suffix.lower() == ".pdf" else 0
-    return len(list(p.glob("*.pdf")) + list(p.glob("*.PDF")))
+        return 1 if p.suffix.lower() in SUPPORTED_EXTENSIONS else 0
+    cnt = 0
+    for ext in SUPPORTED_EXTENSIONS:
+        cnt += len(list(p.glob(f"*{ext}"))) + len(list(p.glob(f"*{ext.upper()}")))
+    return cnt
+
+
+count_documents_in_path = count_pdfs_in_path
 
 
 def get_available_ollama_models(
@@ -1629,27 +2164,30 @@ def run_batch_classification(
 
     pdf_files = []
     if in_p.is_file():
-        if in_p.suffix.lower() == ".pdf":
+        if in_p.suffix.lower() in SUPPORTED_EXTENSIONS:
             pdf_files.append(in_p)
         else:
-            err_msg = f"O arquivo indicado não é um PDF: {in_p}"
+            err_msg = f"O arquivo indicado não possui formato suportado (PDF, PNG, JPG, JPEG, WEBP): {in_p}"
             print(f"[ERRO] {err_msg}")
             notify({"event": "error", "error": err_msg})
             return {"status": "erro", "mensagem": err_msg, "total": 0, "results": []}
     else:
-        pdf_set = set(in_p.glob("*.pdf")) | set(in_p.glob("*.PDF"))
-        if not pdf_set:
-            pdf_set = set(in_p.rglob("*.pdf")) | set(in_p.rglob("*.PDF"))
-        pdf_files = sorted(list(pdf_set))
+        found_set = set()
+        for ext in SUPPORTED_EXTENSIONS:
+            found_set |= set(in_p.glob(f"*{ext}")) | set(in_p.glob(f"*{ext.upper()}"))
+        if not found_set:
+            for ext in SUPPORTED_EXTENSIONS:
+                found_set |= set(in_p.rglob(f"*{ext}")) | set(in_p.rglob(f"*{ext.upper()}"))
+        pdf_files = sorted(list(found_set))
 
     if not pdf_files:
-        msg = f"Nenhum arquivo PDF encontrado em: {in_p}"
+        msg = f"Nenhum documento suportado (PDF/Imagem) encontrado em: {in_p}"
         print(f"[AVISO] {msg}")
         notify({"event": "warning", "message": msg})
         return {"status": "aviso", "mensagem": msg, "total": 0, "results": []}
 
-    print(f"[*] Total de PDFs identificados: {len(pdf_files)}")
-    notify({"event": "init", "total_files": len(pdf_files), "message": f"{len(pdf_files)} PDFs identificados."})
+    print(f"[*] Total de documentos identificados: {len(pdf_files)}")
+    notify({"event": "init", "total_files": len(pdf_files), "message": f"{len(pdf_files)} documentos identificados."})
 
     # Inicialização do Cliente LLM
     if client is None:
