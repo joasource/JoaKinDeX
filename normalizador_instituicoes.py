@@ -24,6 +24,12 @@ import unicodedata
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
+try:
+    from db_manager import get_db_path, upsert_documents_batch
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from db_manager import get_db_path, upsert_documents_batch
+
 # Conectivos que devem permanecer em minúsculas no padrão brasileiro de títulos
 CONNECTIVES = {
     "de", "da", "do", "das", "dos",
@@ -293,6 +299,14 @@ def uniformizar_base_dados(
     with open(tmp_json, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     tmp_json.replace(p_json)
+
+    # Atualização do banco SQLite correspondente se existir
+    try:
+        p_db = get_db_path(p_json)
+        if p_db.exists():
+            upsert_documents_batch(p_db, data)
+    except Exception as e_db:
+        print(f"[Aviso] Não foi possível atualizar SQLite na normalização: {e_db}")
 
     # Atualização do relatório de texto TXT consolidado
     p_txt = p_json.with_suffix(".txt")

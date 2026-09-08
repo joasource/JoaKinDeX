@@ -83,6 +83,30 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
 
+try:
+    from db_manager import (
+        get_db_path,
+        init_database,
+        upsert_document,
+        upsert_documents_batch,
+        get_document_by_md5,
+        get_all_documents,
+        update_conference_status,
+        sync_to_json
+    )
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from db_manager import (
+        get_db_path,
+        init_database,
+        upsert_document,
+        upsert_documents_batch,
+        get_document_by_md5,
+        get_all_documents,
+        update_conference_status,
+        sync_to_json
+    )
+
 
 def clean_path_input(raw: Any) -> str:
     """Remove aspas simples/duplas e espaços das extremidades de caminhos colados no console."""
@@ -559,6 +583,8 @@ class ConferenciaServer:
             self.json_path = (self.json_path / "classificacao_diplomas.json").resolve()
         if self.pdf_dir.is_file():
             self.pdf_dir = self.pdf_dir.parent.resolve()
+        self.db_path = get_db_path(self.json_path)
+        init_database(self.db_path, initial_json_path=self.json_path)
         self.html_path = Path(html_path).resolve()
         self.provider = provider or "ollama"
         self.model = model
@@ -639,8 +665,24 @@ class ConferenciaServer:
         existing_by_md5 = {}
         if self.json_path.is_dir():
             self.json_path = (self.json_path / "classificacao_diplomas.json").resolve()
+        self.db_path = get_db_path(self.json_path)
+        init_database(self.db_path, initial_json_path=self.json_path)
 
-        if self.json_path.exists() and self.json_path.is_file():
+        # 1. Carrega registros prioritariamente do SQLite
+        try:
+            db_docs = get_all_documents(self.db_path)
+            for item in db_docs:
+                if isinstance(item, dict) and item.get("md5"):
+                    item.pop("data_criacao", None)
+                    h = str(item["md5"]).strip().lower()
+                    item["md5"] = h
+                    existing_by_md5[h] = item
+                    data.append(item)
+        except Exception as e:
+            print(f"[Erro SQLite] Falha ao ler banco SQLite ({self.db_path}): {e}")
+
+        # Fallback para JSON consolidado caso SQLite esteja vazio
+        if not data and self.json_path.exists() and self.json_path.is_file():
             try:
                 with open(self.json_path, "r", encoding="utf-8") as f:
                     loaded = json.load(f)
@@ -652,6 +694,8 @@ class ConferenciaServer:
                                 item["md5"] = h
                                 existing_by_md5[h] = item
                                 data.append(item)
+                        if data:
+                            upsert_documents_batch(self.db_path, data)
             except Exception as e:
                 print(f"[Erro] Falha ao ler JSON ({self.json_path}): {e}")
                 data = []
@@ -660,6 +704,7 @@ class ConferenciaServer:
         indiv_dir = self.json_path.parent / "individuais"
         if indiv_dir.exists():
             recovered = 0
+            recovered_docs = []
             try:
                 for entry in os.scandir(indiv_dir):
                     if entry.is_file() and entry.name.endswith(".json") and not entry.name.startswith("."):
@@ -673,6 +718,7 @@ class ConferenciaServer:
                                         item["md5"] = str(item["md5"]).strip().lower()
                                         existing_by_md5[item["md5"]] = item
                                         data.append(item)
+                                        recovered_docs.append(item)
                                         recovered += 1
                             except Exception:
                                 continue
@@ -680,8 +726,9 @@ class ConferenciaServer:
                 print(f"[Erro] Falha ao escanear pasta individuais: {e}")
 
             if recovered > 0:
-                print(f"[*] Visualizador sincronizou {recovered} documento(s) da pasta 'individuais/' para o relatório consolidado.")
-                self.save_data(data)
+                print(f"[*] Visualizador sincronizou {recovered} documento(s) da pasta 'individuais/' para o banco SQLite e JSON.")
+                upsert_documents_batch(self.db_path, recovered_docs)
+                sync_to_json(self.db_path, self.json_path, only_processed=True)
 
         # Complementa com arquivos PDFs indexados da pasta que ainda não foram processados
         for h, pdf_file in self.md5_to_file.items():
@@ -731,18 +778,23 @@ class ConferenciaServer:
     def save_data(self, data):
         if self.json_path.is_dir():
             self.json_path = (self.json_path / "classificacao_diplomas.json").resolve()
-        self.json_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_json = self.json_path.parent / f".tmp_{self.json_path.name}"
+        self.db_path = get_db_path(self.json_path)
+        init_database(self.db_path)
+
         # No arquivo consolidado em disco, salva apenas os documentos que já foram de fato processados
         processed_data = []
         for d in data:
             if d.get("status") != "nao_processado":
                 d.pop("data_criacao", None)
                 processed_data.append(d)
-        with open(tmp_json, "w", encoding="utf-8") as f:
-            json.dump(processed_data, f, ensure_ascii=False, indent=2)
-        tmp_json.replace(self.json_path)
-        # Atualiza também o relatório TXT consolidado correspondente
+
+        # 1. Salva no banco SQLite com WAL mode e ACID
+        upsert_documents_batch(self.db_path, processed_data)
+
+        # 2. Sincroniza para o arquivo JSON consolidado atômico
+        sync_to_json(self.db_path, self.json_path, only_processed=True)
+
+        # 3. Atualiza também o relatório TXT consolidado correspondente
         self.update_txt_report(processed_data)
 
     def update_txt_report(self, results):
@@ -852,6 +904,8 @@ def create_handler(server_ctx: ConferenciaServer):
                 info = {
                     "json_path": str(server_ctx.json_path),
                     "json_name": server_ctx.json_path.name,
+                    "db_path": str(server_ctx.db_path),
+                    "db_name": server_ctx.db_path.name,
                     "pdf_dir": str(server_ctx.pdf_dir),
                     "pdf_count": len(server_ctx.md5_to_file),
                     "doc_count": len(server_ctx.load_data())
@@ -1117,26 +1171,19 @@ def create_handler(server_ctx: ConferenciaServer):
 
             # Salvar edição de um documento
             if path == "/api/salvar":
-                dados_atuais = server_ctx.load_data()
                 item_editado = payload.get("item")
                 if item_editado and "md5" in item_editado:
                     item_editado.pop("data_criacao", None)
                     if item_editado.get("faculdade"):
                         item_editado["faculdade"] = normalizar_instituicao(item_editado.get("faculdade"))
-                    target_md5 = item_editado["md5"]
-                    found = False
-                    for idx, doc in enumerate(dados_atuais):
-                        if doc.get("md5") == target_md5:
-                            item_editado["revisado_em"] = datetime.now().isoformat()
-                            dados_atuais[idx] = item_editado
-                            found = True
-                            break
-                    if not found:
-                        dados_atuais.append(item_editado)
+                    target_md5 = str(item_editado["md5"]).strip().lower()
+                    item_editado["md5"] = target_md5
+                    item_editado["revisado_em"] = datetime.now().isoformat()
 
-                    server_ctx.save_data(dados_atuais)
+                    # 1. Gravação instantânea no SQLite WAL
+                    upsert_document(server_ctx.db_path, item_editado)
 
-                    # Se existir pasta 'individuais' correspondente, atualiza o arquivo individual também
+                    # 2. Se existir pasta 'individuais' correspondente, atualiza o arquivo individual também
                     indiv_dir = server_ctx.json_path.parent / "individuais"
                     if indiv_dir.exists():
                         indiv_file = indiv_dir / f"{target_md5}.json"
@@ -1145,6 +1192,11 @@ def create_handler(server_ctx: ConferenciaServer):
                                 json.dump(item_editado, fi, ensure_ascii=False, indent=2)
                         except Exception:
                             pass
+
+                    # 3. Sincronização atômica para JSON e TXT consolidado
+                    sync_to_json(server_ctx.db_path, server_ctx.json_path, only_processed=True)
+                    all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
+                    server_ctx.update_txt_report(all_processed)
 
                     resp = json.dumps({"status": "sucesso", "mensagem": "Documento salvo com sucesso!"}).encode("utf-8")
                     self.send_response(200)
@@ -1156,20 +1208,36 @@ def create_handler(server_ctx: ConferenciaServer):
 
             # Aprovação de conferência
             if path == "/api/aprovar":
-                target_md5 = payload.get("md5")
-                dados_atuais = server_ctx.load_data()
-                found = False
-                for doc in dados_atuais:
-                    if doc.get("md5") == target_md5:
-                        doc["status_conferencia"] = "aprovado"
-                        doc["conferido_em"] = datetime.now().isoformat()
-                        if "observacoes_conferencia" in payload:
-                            doc["observacoes_conferencia"] = payload["observacoes_conferencia"]
-                        found = True
-                        break
+                target_md5 = str(payload.get("md5") or "").strip().lower()
+                obs = payload.get("observacoes_conferencia")
 
-                if found:
-                    server_ctx.save_data(dados_atuais)
+                # 1. Atualização instantânea no SQLite WAL (< 0.1ms)
+                updated = update_conference_status(server_ctx.db_path, target_md5, "aprovado", obs)
+
+                if updated:
+                    # 2. Se existir pasta 'individuais' correspondente, atualiza o arquivo individual também
+                    indiv_dir = server_ctx.json_path.parent / "individuais"
+                    if indiv_dir.exists():
+                        indiv_file = indiv_dir / f"{target_md5}.json"
+                        if indiv_file.exists():
+                            try:
+                                with open(indiv_file, "r", encoding="utf-8") as fi:
+                                    indiv_data = json.load(fi)
+                                if isinstance(indiv_data, dict):
+                                    indiv_data["status_conferencia"] = "aprovado"
+                                    indiv_data["conferido_em"] = datetime.now().isoformat()
+                                    if obs is not None:
+                                        indiv_data["observacoes_conferencia"] = obs
+                                    with open(indiv_file, "w", encoding="utf-8") as fi:
+                                        json.dump(indiv_data, fi, ensure_ascii=False, indent=2)
+                            except Exception:
+                                pass
+
+                    # 3. Sincronização atômica para JSON e TXT consolidado
+                    sync_to_json(server_ctx.db_path, server_ctx.json_path, only_processed=True)
+                    all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
+                    server_ctx.update_txt_report(all_processed)
+
                     resp = json.dumps({"status": "sucesso", "mensagem": "Conferência aprovada com sucesso!"}).encode("utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -1233,28 +1301,23 @@ def create_handler(server_ctx: ConferenciaServer):
                     if novo_doc.get("faculdade"):
                         novo_doc["faculdade"] = normalizar_instituicao(novo_doc.get("faculdade"))
 
-                    dados_atuais = server_ctx.load_data()
-                    found = False
-                    for idx, doc in enumerate(dados_atuais):
-                        if doc.get("md5", "").strip().lower() == target_md5:
-                            prev_conf = doc.get("status_conferencia")
-                            if prev_conf in ["aprovado", "pendente"]:
-                                novo_doc["status_conferencia"] = prev_conf
-                            else:
-                                novo_doc["status_conferencia"] = "pendente"
-
-                            if "observacoes_conferencia" in doc and doc["observacoes_conferencia"]:
-                                novo_doc["observacoes_conferencia"] = doc["observacoes_conferencia"]
-                            dados_atuais[idx] = novo_doc
-                            found = True
-                            break
-                    if not found:
+                    # Preserva conferência anterior se houver
+                    prev_doc = get_document_by_md5(server_ctx.db_path, target_md5)
+                    if prev_doc:
+                        prev_conf = prev_doc.get("status_conferencia")
+                        if prev_conf in ["aprovado", "pendente"]:
+                            novo_doc["status_conferencia"] = prev_conf
+                        else:
+                            novo_doc["status_conferencia"] = "pendente"
+                        if prev_doc.get("observacoes_conferencia"):
+                            novo_doc["observacoes_conferencia"] = prev_doc["observacoes_conferencia"]
+                    else:
                         novo_doc["status_conferencia"] = "pendente"
-                        dados_atuais.append(novo_doc)
 
-                    server_ctx.save_data(dados_atuais)
+                    # 1. Salva no banco SQLite WAL
+                    upsert_document(server_ctx.db_path, novo_doc)
 
-                    # Se existir pasta 'individuais' correspondente, atualiza o arquivo individual também
+                    # 2. Se existir pasta 'individuais' correspondente, atualiza o arquivo individual também
                     indiv_dir = server_ctx.json_path.parent / "individuais"
                     if indiv_dir.exists():
                         indiv_file = indiv_dir / f"{target_md5}.json"
@@ -1263,6 +1326,11 @@ def create_handler(server_ctx: ConferenciaServer):
                                 json.dump(novo_doc, fi, ensure_ascii=False, indent=2)
                         except Exception:
                             pass
+
+                    # 3. Sincroniza com JSON e TXT consolidado
+                    sync_to_json(server_ctx.db_path, server_ctx.json_path, only_processed=True)
+                    all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
+                    server_ctx.update_txt_report(all_processed)
 
                     active_prov = req_prov or server_ctx.provider or "ollama"
                     provider_label = "OpenAI API" if active_prov == "openai" else "Ollama"
@@ -1333,6 +1401,8 @@ def create_handler(server_ctx: ConferenciaServer):
                     p_json = Path(resolve_json_path(new_json)).expanduser().resolve()
                     if p_json != server_ctx.json_path:
                         server_ctx.json_path = p_json
+                        server_ctx.db_path = get_db_path(p_json)
+                        init_database(server_ctx.db_path, initial_json_path=server_ctx.json_path)
                         server_ctx.load_data()
 
                 new_prov = updates_visualizador.get("provider") or updates_classificador.get("provider")
@@ -1367,6 +1437,7 @@ def create_handler(server_ctx: ConferenciaServer):
                     "doc_count": len(server_ctx.load_data()),
                     "pdf_dir": str(server_ctx.pdf_dir),
                     "json_path": str(server_ctx.json_path),
+                    "db_path": str(server_ctx.db_path),
                     "provider": server_ctx.provider,
                     "model": server_ctx.model
                 }, ensure_ascii=False).encode("utf-8")
@@ -1383,6 +1454,8 @@ def create_handler(server_ctx: ConferenciaServer):
                 factory = get_factory_defaults()
                 server_ctx.pdf_dir = Path(factory["visualizador"]["pdf_dir"]).resolve()
                 server_ctx.json_path = Path(factory["visualizador"]["json_path"]).resolve()
+                server_ctx.db_path = get_db_path(server_ctx.json_path)
+                init_database(server_ctx.db_path, initial_json_path=server_ctx.json_path)
                 server_ctx.provider = factory["visualizador"]["provider"]
                 server_ctx.model = factory["visualizador"]["model"]
                 server_ctx.ollama_url = factory["visualizador"]["ollama_url"]
@@ -1423,6 +1496,8 @@ def create_handler(server_ctx: ConferenciaServer):
                         p_json = Path(resolve_json_path(new_json)).expanduser().resolve()
                         if p_json != server_ctx.json_path:
                             server_ctx.json_path = p_json
+                            server_ctx.db_path = get_db_path(p_json)
+                            init_database(server_ctx.db_path, initial_json_path=server_ctx.json_path)
                             server_ctx.load_data()
 
                 ok, msg = server_ctx.batch_manager.start(payload)
@@ -1770,7 +1845,8 @@ def main():
     print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
     print(f"👉 Acesse no seu navegador: http://localhost:{port_final}")
     print(f"   (ou pelo IP da máquina: http://127.0.0.1:{port_final})")
-    print(f"📄 Arquivo JSON monitorado : {ctx.json_path}")
+    print(f"💾 Banco de Dados SQLite   : {ctx.db_path} (WAL mode ativo)")
+    print(f"📄 Arquivo JSON espelhado  : {ctx.json_path}")
     print(f"📁 Pasta de PDFs indexada  : {ctx.pdf_dir} ({len(ctx.md5_to_file)} PDFs)")
     print("=" * 70)
     print("Pressione Ctrl+C a qualquer momento para encerrar o servidor.\n")

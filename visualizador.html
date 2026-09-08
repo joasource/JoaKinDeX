@@ -1052,9 +1052,9 @@
               <p class="text-[10px] text-slate-400">Local onde estão os documentos originais a serem classificados e visualizados (edição manual ou seleção via caixa).</p>
             </div>
 
-            <!-- Pasta de Saída / Arquivo JSON -->
+            <!-- Pasta de Saída / Arquivo JSON e Banco SQLite -->
             <div class="space-y-1">
-              <label class="block text-[11px] font-medium text-slate-300">Pasta de Saída / Arquivo JSON:</label>
+              <label class="block text-[11px] font-medium text-slate-300">Pasta de Saída / Arquivo JSON e Banco SQLite:</label>
               <div class="flex gap-2">
                 <input type="text" id="cfgInputJsonPath" placeholder="./saida/classificacao_diplomas.json"
                        class="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
@@ -1064,7 +1064,7 @@
                   <span>Selecionar Pasta...</span>
                 </button>
               </div>
-              <p class="text-[10px] text-slate-400">Caminho do arquivo consolidado ou pasta de saída (edição manual ou seleção via caixa).</p>
+              <p class="text-[10px] text-slate-400">Armazenamento primário em SQLite WAL (alta performance) com espelhamento contínuo em JSON e TXT.</p>
             </div>
 
             <!-- Indicadores em tempo real -->
@@ -1078,6 +1078,7 @@
                 <div>
                   <span class="text-slate-400">Documentos no banco:</span>
                   <span id="cfgCountDocs" class="ml-1 font-bold text-cyan-400">0</span>
+                  <span class="ml-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30 font-semibold"><i class="fa-solid fa-database mr-1"></i>SQLite WAL</span>
                 </div>
               </div>
               <button type="button" onclick="testAndRefreshFolders()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 text-xs flex items-center gap-1.5 transition">

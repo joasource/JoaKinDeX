@@ -92,6 +92,28 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
 
+try:
+    from db_manager import (
+        get_db_path,
+        init_database,
+        upsert_document,
+        upsert_documents_batch,
+        get_document_by_md5,
+        get_all_documents,
+        sync_to_json
+    )
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from db_manager import (
+        get_db_path,
+        init_database,
+        upsert_document,
+        upsert_documents_batch,
+        get_document_by_md5,
+        get_all_documents,
+        sync_to_json
+    )
+
 
 
 def load_dotenv_if_present(env_path: Optional[Path] = None):
@@ -1150,18 +1172,26 @@ def save_consolidated_reports(
     model_name: str
 ) -> None:
     """
-    Salva os relatórios consolidado JSON e TXT de forma atômica para evitar perda ou
+    Salva os relatórios consolidado SQLite, JSON e TXT de forma atômica para evitar perda ou
     corrupção de dados em caso de parada forçada (Ctrl+C, kill ou reinicialização).
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     consolidated_json_path = out_dir / "classificacao_diplomas.json"
     consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
+    consolidated_db_path = get_db_path(out_dir)
     results = sorted(list(items_dict.values()), key=lambda x: str(x.get("md5", "")))
     for r in results:
         if isinstance(r, dict):
             r.pop("data_criacao", None)
 
-    # 1. JSON consolidado atômico
+    # 1. Banco SQLite relacional (WAL mode e ACID)
+    try:
+        init_database(consolidated_db_path)
+        upsert_documents_batch(consolidated_db_path, results)
+    except Exception as e:
+        print(f"[Aviso] Falha ao gravar SQLite {consolidated_db_path.name}: {e}")
+
+    # 2. JSON consolidado atômico
     tmp_json = out_dir / f".tmp_{consolidated_json_path.name}"
     try:
         with open(tmp_json, "w", encoding="utf-8") as f:
@@ -1170,7 +1200,7 @@ def save_consolidated_reports(
     except Exception as e:
         print(f"[Aviso] Falha ao gravar {consolidated_json_path.name}: {e}")
 
-    # 2. TXT consolidado atômico
+    # 3. TXT consolidado atômico
     try:
         report_text = generate_consolidated_txt(results, provider_name, model_name)
         tmp_txt = out_dir / f".tmp_{consolidated_txt_path.name}"
@@ -1656,25 +1686,41 @@ def run_batch_classification(
 
     consolidated_json_path = out_dir / "classificacao_diplomas.json"
     consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
+    consolidated_db_path = get_db_path(out_dir)
     existing_by_md5 = {}
 
-    # 1. Carrega processamentos anteriores do JSON consolidado (se existir e não for --force)
+    # Inicializa banco SQLite (auto-migra do JSON consolidado caso o banco esteja vazio)
+    init_database(consolidated_db_path, initial_json_path=consolidated_json_path)
+
+    # 1. Carrega processamentos anteriores prioritariamente do SQLite
+    count_from_db = 0
     count_from_consolidated = 0
-    if consolidated_json_path.exists() and not force:
+    if not force:
         try:
-            with open(consolidated_json_path, "r", encoding="utf-8") as f:
-                old_data = json.load(f)
-                if isinstance(old_data, list):
-                    for item in old_data:
-                        if isinstance(item, dict) and "md5" in item:
-                            item.pop("data_criacao", None)
-                            existing_by_md5[item["md5"]] = item
-                            count_from_consolidated += 1
+            db_docs = get_all_documents(consolidated_db_path)
+            if db_docs:
+                for item in db_docs:
+                    if isinstance(item, dict) and "md5" in item:
+                        item.pop("data_criacao", None)
+                        existing_by_md5[item["md5"]] = item
+                        count_from_db += 1
+            elif consolidated_json_path.exists():
+                with open(consolidated_json_path, "r", encoding="utf-8") as f:
+                    old_data = json.load(f)
+                    if isinstance(old_data, list):
+                        for item in old_data:
+                            if isinstance(item, dict) and "md5" in item:
+                                item.pop("data_criacao", None)
+                                existing_by_md5[item["md5"]] = item
+                                count_from_consolidated += 1
+                        if old_data:
+                            upsert_documents_batch(consolidated_db_path, old_data)
         except Exception as e:
-            print(f"[Aviso] Não foi possível ler {consolidated_json_path.name}: {e}")
+            print(f"[Aviso] Não foi possível ler histórico do banco de dados: {e}")
 
     # 2. Carrega / reconcilia arquivos da pasta 'individuais'
     count_from_indiv = 0
+    indiv_recovered = []
     if indiv_dir.exists() and not force:
         try:
             for entry in os.scandir(indiv_dir):
@@ -1687,17 +1733,26 @@ def run_batch_classification(
                                 if isinstance(item, dict) and item.get("md5"):
                                     item.pop("data_criacao", None)
                                     existing_by_md5[item["md5"]] = item
+                                    indiv_recovered.append(item)
                                     count_from_indiv += 1
                         except Exception:
                             continue
         except Exception as e:
             print(f"[Aviso] Erro ao ler pasta de arquivos individuais: {e}")
 
+        if indiv_recovered:
+            try:
+                upsert_documents_batch(consolidated_db_path, indiv_recovered)
+            except Exception:
+                pass
+
     effective_model_name = getattr(client, "model", model_name)
 
     if existing_by_md5:
         details = []
-        if count_from_consolidated > 0:
+        if count_from_db > 0:
+            details.append(f"{count_from_db} do banco SQLite")
+        elif count_from_consolidated > 0:
             details.append(f"{count_from_consolidated} do JSON consolidado")
         if count_from_indiv > 0:
             details.append(f"{count_from_indiv} recuperados da pasta individuais/")
@@ -1706,7 +1761,7 @@ def run_batch_classification(
 
         if count_from_indiv > 0:
             save_consolidated_reports(existing_by_md5, out_dir, provider, effective_model_name)
-            print(f"[*] Relatório consolidado sincronizado com sucesso ({len(existing_by_md5)} documentos salvos).")
+            print(f"[*] Relatórios sincronizados com sucesso ({len(existing_by_md5)} documentos salvos).")
 
     # 3. Indexa hashes MD5 dos PDFs de entrada
     if stop_checker and stop_checker():
@@ -1887,6 +1942,12 @@ def run_batch_classification(
                 except Exception as e:
                     print(f"[Aviso] Falha ao gravar {single_txt_path.name}: {e}")
 
+            # Persiste imediatamente no SQLite para garantia ACID e tolerância a falhas
+            try:
+                upsert_document(consolidated_db_path, res)
+            except Exception as e_up:
+                print(f"[Aviso] Falha ao persistir no SQLite ({res.get('md5')}): {e_up}")
+
             return res
 
         if workers > 1:
@@ -2010,6 +2071,7 @@ def run_batch_classification(
             "erros": erros_totais,
             "results": results,
             "json_path": str(consolidated_json_path),
+            "db_path": str(consolidated_db_path),
             "txt_path": str(consolidated_txt_path),
             "mensagem": "Processamento interrompido pelo usuário."
         }
@@ -2020,6 +2082,7 @@ def run_batch_classification(
     print(f"Classificados OK  : {sucessos_totais}")
     print(f"Erros             : {erros_totais}")
     print("-" * 60)
+    print(f"Banco SQLite consolidado   : {consolidated_db_path}")
     print(f"Relatório JSON consolidado : {consolidated_json_path}")
     print(f"Relatório TXT consolidado  : {consolidated_txt_path}")
     if not no_individual:
@@ -2045,6 +2108,7 @@ def run_batch_classification(
         "erros": erros_totais,
         "results": results,
         "json_path": str(consolidated_json_path),
+        "db_path": str(consolidated_db_path),
         "txt_path": str(consolidated_txt_path),
         "mensagem": "Processamento concluído com sucesso!"
     }
