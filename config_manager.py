@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-joaclassificador - Gerenciador de Configurações Persistentes
+JoaKinDeX - Gerenciador de Configurações Persistentes
 Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 
-Módulo de gerenciamento de configurações persistentes para o joaclassificador-pdf e servidor_visualizador.
+Módulo de gerenciamento de configurações persistentes para o JoaKinDeX e servidor_visualizador.
 Permite salvar opções alteradas pelos usuários, manter padrões de fábrica neutros
 e restaurar configurações tanto interativamente quanto via CLI (--reset-config).
 """
 
-__project__ = "joaclassificador"
+__project__ = "JoaKinDeX"
 __author__ = "Joaquim Ferreira Silva Neto"
 __email__ = "joaquimfsneto@gmail.com"
 __version__ = "1.0.0"
@@ -18,12 +18,18 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-CONFIG_FILE_NAME = ".joaclassificador_config.json"
+CONFIG_FILE_NAME = ".joakindex_config.json"
+LEGACY_CONFIG_FILE_NAME = ".joaclassificador_config.json"
 
 
 def get_config_file_path() -> Path:
     """Retorna o caminho absoluto do arquivo de configuração no diretório da aplicação."""
-    return Path(__file__).resolve().parent / CONFIG_FILE_NAME
+    p = Path(__file__).resolve().parent / CONFIG_FILE_NAME
+    if not p.exists():
+        legacy = Path(__file__).resolve().parent / LEGACY_CONFIG_FILE_NAME
+        if legacy.exists():
+            return legacy
+    return p
 
 
 def get_factory_defaults() -> Dict[str, Any]:

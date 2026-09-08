@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-joaclassificador - Servidor Web Local para Conferência Humana de Diplomas e Certificados
+JoaKinDeX - Servidor Web Local para Conferência Humana de Diplomas e Certificados
 Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 
 Permite visualizar o PDF lado a lado com o JSON extraído, editar dados e salvar alterações.
 """
 
-__project__ = "joaclassificador"
+__project__ = "JoaKinDeX"
 __author__ = "Joaquim Ferreira Silva Neto"
 __email__ = "joaquimfsneto@gmail.com"
 __version__ = "1.0.0"
@@ -41,7 +41,10 @@ try:
     )
 except Exception:
     import importlib.util
-    spec = importlib.util.spec_from_file_location("classificador", Path(__file__).parent / "joaclassificador-pdf.py")
+    main_py = Path(__file__).parent / "joakindex.py"
+    if not main_py.exists():
+        main_py = Path(__file__).parent / "joaclassificador-pdf.py"
+    spec = importlib.util.spec_from_file_location("classificador", main_py)
     classificador = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(classificador)
     process_single_pdf = classificador.process_single_pdf
@@ -182,7 +185,7 @@ def prompt_interactive_config(default_pdf_dir: str, default_json_path: str, defa
     as pastas de entrada de PDFs e de saída de JSONs antes de iniciar o servidor.
     """
     print("\n" + "=" * 70)
-    print("⚙️  JOACLASSIFICADOR - CONFIGURAÇÃO DO VISUALIZADOR")
+    print("⚙️  JoaKinDeX - CONFIGURAÇÃO DO VISUALIZADOR")
     print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
     print("=" * 70)
     print("Pressione ENTER para aceitar o valor padrão sugerido entre colchetes.\n")
@@ -511,7 +514,7 @@ class BatchManager:
                     self._add_log(f"ℹ️ {self.state['message']}")
 
             if not run_batch_classification:
-                raise RuntimeError("Função run_batch_classification não pôde ser importada de joaclassificador-pdf.py")
+                raise RuntimeError("Função run_batch_classification não pôde ser importada de joakindex.py")
 
             summary = run_batch_classification(
                 input_path=input_dir,
@@ -815,7 +818,7 @@ class ConferenciaServer:
 
         lines = [
             "=" * 80,
-            "JOACLASSIFICADOR - RELATÓRIO DE CLASSIFICAÇÃO E CONFERÊNCIA (REVISADO)",
+            "JOAKINDEX - RELATÓRIO DE CLASSIFICAÇÃO E CONFERÊNCIA (REVISADO)",
             "Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>",
             f"Data/Hora de Revisão : {now_str}",
             f"Total de Documentos  : {total}",
@@ -1801,7 +1804,7 @@ def main():
     if getattr(args, "uniformizar_instituicoes", False):
         target_json = resolve_json_path(args.json_path)
         print("\n" + "=" * 70)
-        print("🎓 JOACLASSIFICADOR - UNIFORMIZAÇÃO INTELIGENTE DE INSTITUIÇÕES")
+        print("🎓 JoaKinDeX - UNIFORMIZAÇÃO INTELIGENTE DE INSTITUIÇÕES")
         print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
         print("=" * 70)
         print(f"\n[✨] Processando arquivo em: {target_json}")
@@ -1881,7 +1884,7 @@ def main():
     httpd = ReusableThreadingHTTPServer(server_address, handler)
 
     print("\n" + "=" * 70)
-    print("🚀 JOACLASSIFICADOR - VISUALIZADOR DE CONFERÊNCIA HUMANA")
+    print("🚀 JoaKinDeX - VISUALIZADOR DE CONFERÊNCIA HUMANA")
     print("   Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>")
     print(f"👉 Acesse no seu navegador: http://localhost:{port_final}")
     print(f"   (ou pelo IP da máquina: http://127.0.0.1:{port_final})")

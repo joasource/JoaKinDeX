@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-joaclassificador - Gerenciador de Banco de Dados SQLite de Alta Performance
+JoaKinDeX - Gerenciador de Banco de Dados SQLite de Alta Performance
 Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 
 Fornece armazenamento relacional embutido (SQLite WAL), transações ACID,

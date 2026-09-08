@@ -1,16 +1,16 @@
-# joaclassificador
+# JoaKinDeX
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Ollama](https://img.shields.io/badge/LLM-Ollama%20%7C%20OpenAI-orange.svg)](https://ollama.com/)
-[![GitHub](https://img.shields.io/badge/GitHub-joasource-181717?logo=github)](https://github.com/joasource/joaclassificador-pdf)
+[![GitHub](https://img.shields.io/badge/GitHub-joasource-181717?logo=github)](https://github.com/joasource/JoaKinDeX)
 [![Autor](https://img.shields.io/badge/Autor-Joaquim%20Ferreira%20Silva%20Neto-blue?logo=gmail&logoColor=white)](mailto:joaquimfsneto@gmail.com)
 
-**joaclassificador** (também referenciado como `joaclassificador-pdf`) é uma ferramenta de linha de comando (CLI) e interface web para **classificação e extração estruturada de diplomas, certificados e documentos acadêmicos em massa**, utilizando modelos locais (**Ollama**) ou em nuvem (**OpenAI API**).
+**JoaKinDeX** (anteriormente `joaclassificador-pdf`) é uma ferramenta de linha de comando (CLI) e interface web para **classificação, indexação e extração estruturada de diplomas, certificados e documentos acadêmicos em massa**, utilizando modelos locais (**Ollama**) ou em nuvem (**OpenAI API**).
 
 > **Criado e desenvolvido por:** **Joaquim Ferreira Silva Neto** ([joaquimfsneto@gmail.com](mailto:joaquimfsneto@gmail.com)).
 
-O projeto é focado em privacidade, conformidade e auditoria: identifica os arquivos pelo **Hash MD5** e metadados de sistema, extrai o **CPF do beneficiário**, determina a **natureza acadêmica do curso** e inclui uma interface web interativa com tela dividida (*split-screen*) para **conferência humana lado a lado** com o PDF original.
+O projeto é focado em privacidade, conformidade e auditoria: identifica os arquivos pelo **Hash MD5** e metadados de sistema, extrai o **CPF do beneficiário**, determina a **natureza acadêmica do curso**, detecta **múltiplos documentos em um mesmo arquivo (dossiê)** e inclui uma interface web interativa com tela dividida (*split-screen*) para **conferência humana lado a lado** com o PDF original.
 
 ---
 
@@ -63,17 +63,20 @@ O projeto é focado em privacidade, conformidade e auditoria: identifica os arqu
 ## 📁 Estrutura do Repositório
 
 ```text
-joaclassificador-pdf/
-├── joaclassificador-pdf        # Executável CLI (Linux/macOS)
-├── joaclassificador-pdf.py     # Código-fonte principal em Python
-├── servidor_visualizador.py    # Servidor HTTP leve para conferência
-├── iniciar_visualizador.sh     # Script para iniciar a interface web
-├── visualizador.html           # Interface web com PDF e formulário
-├── docker-compose.yml          # Container Cloudflare Tunnel (acesso remoto HTTPS)
-├── .env.example                # Exemplo de configuração do token da Cloudflare
-├── requirements.txt            # Dependências Python (pip)
-├── environment.yml             # Arquivo de especificação do ambiente Conda
-└── README.md                   # Documentação do projeto
+JoaKinDeX/
+├── joakindex               # Executável CLI (Linux/macOS)
+├── joakindex.py            # Código-fonte principal em Python
+├── db_manager.py           # Gerenciador de Banco de Dados SQLite WAL
+├── config_manager.py       # Gerenciador de configurações persistentes
+├── normalizador_instituicoes.py # Normalizador inteligente de instituições
+├── servidor_visualizador.py # Servidor HTTP leve para conferência e BI
+├── iniciar_visualizador.sh # Script para iniciar a interface web
+├── visualizador.html       # Interface web com PDF, formulário e BI
+├── docker-compose.yml      # Container Cloudflare Tunnel (acesso remoto HTTPS)
+├── .env.example            # Exemplo de configuração do token da Cloudflare
+├── requirements.txt        # Dependências Python (pip)
+├── environment.yml         # Arquivo de especificação do ambiente Conda
+└── README.md               # Documentação do projeto
 ```
 
 ---
@@ -82,8 +85,8 @@ joaclassificador-pdf/
 
 ### 1. Clonar o Repositório
 ```bash
-git clone https://github.com/joasource/joaclassificador-pdf.git
-cd joaclassificador-pdf
+git clone https://github.com/joasource/JoaKinDeX.git
+cd JoaKinDeX
 ```
 
 ### 2. Criar e Ativar Ambiente Virtual
@@ -132,7 +135,7 @@ pip install -r requirements.txt
 Ao executar o comando sem argumentos, o **menu interativo** é aberto no terminal para guiar a configuração:
 
 ```bash
-./joaclassificador-pdf
+./joakindex
 # ou:
 ./executar.sh
 ```
@@ -156,10 +159,10 @@ Se você informar os parâmetros na chamada do comando, ele executa **diretament
 #### Com Ollama (Padrão):
 ```bash
 # Execução direta com pasta personalizada:
-./joaclassificador-pdf -i ./meus_pdfs -o ./saida
+./joakindex -i ./meus_pdfs -o ./saida
 
 # Especificando outro modelo:
-./joaclassificador-pdf -i ./meus_pdfs -o ./saida -m llama3
+./joakindex -i ./meus_pdfs -o ./saida -m llama3
 ```
 
 #### Com a API da OpenAI (Paralelismo em Nuvem):
@@ -169,7 +172,7 @@ A chave da OpenAI pode ser fornecida de **4 formas simples**:
 1. **Direto no Menu Interativo**: Ao escolher a opção `2) OpenAI`, o menu solicita a chave e a máscara com segurança se já existir no ambiente.
 2. **Via Linha de Comando (CLI)** usando o parâmetro `-k` ou `--openai-key`:
    ```bash
-   ./joaclassificador-pdf -i ./meus_pdfs -o ./saida -p openai -m gpt-4o-mini -k "sk-proj-sua-chave" -w 4
+   ./joakindex -i ./meus_pdfs -o ./saida -p openai -m gpt-4o-mini -k "sk-proj-sua-chave" -w 4
    ```
 3. **No arquivo `.env`** (recomendado para persistência):
    Basta criar um arquivo `.env` na raiz do projeto:
@@ -179,16 +182,16 @@ A chave da OpenAI pode ser fornecida de **4 formas simples**:
 4. **Via variável de ambiente no terminal**:
    ```bash
    export OPENAI_API_KEY="sk-proj-sua-chave-aqui"
-   ./joaclassificador-pdf -i ./meus_pdfs -o ./saida -p openai -m gpt-4o-mini -w 4
+   ./joakindex -i ./meus_pdfs -o ./saida -p openai -m gpt-4o-mini -w 4
    ```
 
 #### Forçar Menu Interativo ou Modo Batch:
 ```bash
 # Força a abertura do menu interativo (usando os parâmetros passados como valor inicial):
-./joaclassificador-pdf -i ./meus_pdfs --prompt
+./joakindex -i ./meus_pdfs --prompt
 
 # Modo silencioso/batch (executa sem perguntas interativas):
-./joaclassificador-pdf -y
+./joakindex -y
 ```
 
 ---
@@ -367,6 +370,6 @@ Para acessar o visualizador de outros dispositivos (ou máquinas Windows na rede
 
 Desenvolvido por **Joaquim Ferreira Silva Neto** ([@joasource](https://github.com/joasource) | [joaquimfsneto@gmail.com](mailto:joaquimfsneto@gmail.com)).
 
-Projeto: **joaclassificador** (`joaclassificador-pdf`).
+Projeto: **JoaKinDeX** (`joakindex`).
 
 Distribuído sob a licença MIT. Consulte o arquivo [`LICENSE`](LICENSE) para obter mais detalhes.

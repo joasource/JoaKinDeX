@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-joaclassificador - Normalizador Inteligente de Instituições de Ensino
+JoaKinDeX - Normalizador Inteligente de Instituições de Ensino
 Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 
 Módulo responsável por uniformizar e consolidar nomes de instituições de ensino,
@@ -11,7 +11,7 @@ sufixos empresariais (LTDA, S/A) e artefatos de OCR.
 Garante acurácia estatística no painel de BI, relatórios e contagens agregadas.
 """
 
-__project__ = "joaclassificador"
+__project__ = "JoaKinDeX"
 __author__ = "Joaquim Ferreira Silva Neto"
 __email__ = "joaquimfsneto@gmail.com"
 __version__ = "1.0.0"
@@ -315,7 +315,7 @@ def uniformizar_base_dados(
             from io import StringIO
             buf = StringIO()
             buf.write("=" * 80 + "\n")
-            buf.write("RELATÓRIO CONSOLIDADO DE CLASSIFICAÇÃO DE DOCUMENTOS (JOACLASSIFICADOR)\n")
+            buf.write("RELATÓRIO CONSOLIDADO DE CLASSIFICAÇÃO DE DOCUMENTOS (JOAKINDEX)\n")
             buf.write(f"Total de registros processados: {len(data)}\n")
             buf.write(f"Instituições de ensino canônicas distintas: {len(inst_posteriores)}\n")
             buf.write("=" * 80 + "\n\n")

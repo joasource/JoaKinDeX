@@ -19,6 +19,7 @@ pdf/
 # Logs e configurações locais
 *.log
 .env
+.joakindex_config.json
 .joaclassificador_config.json
 .tmp_*
 .DS_Store
