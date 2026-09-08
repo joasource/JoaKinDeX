@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-JoaKinDeX - Classificador de Documentos Acadêmicos em Massa (Diplomas/Certificados)
+JoaKinDeX - Central de Indexação & Classificação Documental Multidomínio
 Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 """
 
@@ -2943,7 +2943,7 @@ def run_batch_classification(
 # ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(
-        description="Classificador e Extrator de Diplomas/Certificados em PDFs em Massa (Identificação por MD5, CPF e Natureza do Curso)."
+        description="JoaKinDeX - Central de Indexação e Classificação Documental Multidomínio (Acadêmico, Civil e Financeiro)."
     )
     parser.add_argument(
         "-i", "--input",

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-JoaKinDeX - Servidor Web Local para Conferência Humana de Diplomas e Certificados
+JoaKinDeX - Central de Indexação & Conferência Documental (Servidor Web)
 Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 
 Permite visualizar o PDF lado a lado com o JSON extraído, editar dados e salvar alterações.
@@ -1686,7 +1686,7 @@ def create_handler(server_ctx: ConferenciaServer):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Servidor Web do Visualizador de Conferência Humana de Diplomas e Certificados."
+        description="Servidor Web da Central de Indexação & Conferência Documental (JoaKinDeX)."
     )
     parser.add_argument(
         "-p", "--pdf-dir", "-i", "--input",
