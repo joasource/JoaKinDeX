@@ -239,27 +239,32 @@
       border-color: #6ee7b7 !important;
     }
 
-    html.theme-light #pillDominio.bg-cyan-500\/20 {
+    html.theme-light #pillDominio.bg-cyan-500\/20,
+    html.theme-light #g-pillDominio.bg-cyan-500\/20 {
       background-color: #cffafe !important;
       color: #155e75 !important;
       border-color: #67e8f9 !important;
     }
-    html.theme-light #pillInstituicao.bg-amber-500\/20 {
+    html.theme-light #pillInstituicao.bg-amber-500\/20,
+    html.theme-light #g-pillInstituicao.bg-amber-500\/20 {
       background-color: #fef3c7 !important;
       color: #78350f !important;
       border-color: #fcd34d !important;
     }
-    html.theme-light #pillTipo.bg-teal-500\/20 {
+    html.theme-light #pillTipo.bg-teal-500\/20,
+    html.theme-light #g-pillTipo.bg-teal-500\/20 {
       background-color: #ccfbf1 !important;
       color: #115e59 !important;
       border-color: #5eead4 !important;
     }
-    html.theme-light #pillNatureza.bg-indigo-500\/20 {
+    html.theme-light #pillNatureza.bg-indigo-500\/20,
+    html.theme-light #g-pillNatureza.bg-indigo-500\/20 {
       background-color: #e0e7ff !important;
       color: #3730a3 !important;
       border-color: #a5b4fc !important;
     }
-    html.theme-light #pillStatus.bg-emerald-500\/20 {
+    html.theme-light #pillStatus.bg-emerald-500\/20,
+    html.theme-light #g-pillStatus.bg-emerald-500\/20 {
       background-color: #d1fae5 !important;
       color: #065f46 !important;
       border-color: #6ee7b7 !important;
@@ -403,6 +408,23 @@
       border-color: #10b981 !important;
       box-shadow: 0 0 0 1px #10b981 !important;
     }
+    html.theme-light #galleryFilterPopoversBar {
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light #g-popoverDominio,
+    html.theme-light #g-popoverInstituicao,
+    html.theme-light #g-popoverTipo,
+    html.theme-light #g-popoverNatureza,
+    html.theme-light #g-popoverStatus,
+    html.theme-light #popoverDominio,
+    html.theme-light #popoverInstituicao,
+    html.theme-light #popoverTipo,
+    html.theme-light #popoverNatureza,
+    html.theme-light #popoverStatus {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    }
 
     /* Modais */
     html.theme-light #configModal > div:last-child,
@@ -448,18 +470,18 @@
         </div>
       </div>
 
-      <!-- Centro: SELETOR DE ABAS PRINCIPAIS (CONFERÊNCIA vs PAINEL DE BI) -->
+      <!-- Centro: SELETOR DE ABAS PRINCIPAIS (GALERIA vs CONFERÊNCIA vs PAINEL DE BI) -->
       <div class="flex items-center bg-slate-900/90 p-1 rounded-lg border border-slate-800 shadow-inner shrink-0">
-        <button id="tabMainConferencia" onclick="switchMainTab('conferencia')"
-                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-emerald-600 text-white shadow">
-          <i class="fa-solid fa-table-columns text-emerald-100"></i>
-          <span>Conferência</span>
-        </button>
         <button id="tabMainGaleria" onclick="switchMainTab('galeria')"
-                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
-          <i class="fa-solid fa-grip text-amber-400"></i>
+                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-amber-600 text-white shadow">
+          <i class="fa-solid fa-grip text-amber-200"></i>
           <span>Galeria</span>
-          <span id="tabBadgeGaleriaCount" class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded-full font-mono">0</span>
+          <span id="tabBadgeGaleriaCount" class="text-[10px] bg-amber-900/60 text-amber-200 border border-amber-400/40 px-1.5 py-0.2 rounded-full font-mono">0</span>
+        </button>
+        <button id="tabMainConferencia" onclick="switchMainTab('conferencia')"
+                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+          <i class="fa-solid fa-table-columns text-emerald-400"></i>
+          <span>Conferência</span>
         </button>
         <button id="tabMainBI" onclick="switchMainTab('bi')"
                 class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
@@ -536,7 +558,7 @@
     <div class="bg-slate-900/95 border-t border-slate-900 px-4 py-1.5 flex items-center justify-between gap-4 text-xs">
       
       <!-- TOOLBAR CONFERÊNCIA -->
-      <div id="conferenciaToolbar" class="w-full flex items-center justify-between gap-4">
+      <div id="conferenciaToolbar" class="hidden w-full items-center justify-between gap-4">
         
         <!-- Esquerda: Navegação entre Documentos -->
         <div id="conferenciaNavControls" class="flex items-center gap-2 shrink-0">
@@ -630,7 +652,7 @@
       </div>
 
       <!-- TOOLBAR GALERIA DE DOCUMENTOS (PAPERLESS-NGX MOSAIC) -->
-      <div id="galeriaToolbar" class="hidden w-full items-center justify-between gap-4">
+      <div id="galeriaToolbar" class="w-full flex items-center justify-between gap-4">
         <!-- Esquerda: Título do contexto e contador rápido -->
         <div class="flex items-center gap-2.5 text-xs text-slate-300 font-medium">
           <i class="fa-solid fa-grip text-amber-400 text-sm"></i>
@@ -658,7 +680,7 @@
   </header>
 
   <!-- CORPO PRINCIPAL: Lista Lateral + Divisão Lado a Lado (Conferência) -->
-  <main id="viewConferencia" class="flex-1 min-h-0 flex overflow-hidden split-pane">
+  <main id="viewConferencia" class="hidden flex-1 min-h-0 overflow-hidden split-pane">
 
     <!-- 1. BARRA LATERAL ESQUERDA: LISTA DE DOCUMENTOS E FILTROS -->
     <aside id="sidebar" class="w-84 sm:w-96 bg-slate-950/70 border-r border-slate-800 flex flex-col shrink-0">
@@ -1604,7 +1626,7 @@
   <!-- ==================================================================== -->
   <!-- 2. GALERIA DE DOCUMENTOS (MOSAICO DE THUMBNAILS - ESTILO PAPERLESS) -->
   <!-- ==================================================================== -->
-  <main id="viewGaleria" class="flex-1 min-h-0 flex flex-col overflow-hidden split-pane bg-slate-950 hidden select-none">
+  <main id="viewGaleria" class="flex-1 min-h-0 flex flex-col overflow-hidden split-pane bg-slate-950 select-none">
     
     <!-- BARRA SUPERIOR DE FILTROS & CONTROLES DA GALERIA -->
     <div id="galleryControlsBar" class="bg-slate-900/90 border-b border-slate-800 px-4 py-2.5 space-y-2.5 shrink-0 select-none">
@@ -1647,7 +1669,169 @@
         </div>
       </div>
 
-      <!-- LINHA 2: Ordenação, Densidade de Grid, Seleção em Lote e Itens por Página -->
+      <!-- LINHA 2: FILTROS DE TAG EM CARDS FLUTUANTES (HIERARQUIA CONCEITUAL: DOMÍNIO, INSTITUIÇÃO, TIPO, NÍVEL, STATUS) -->
+      <div id="galleryFilterPopoversBar" class="relative pt-1 border-t border-slate-800/80 select-none">
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-[11px]">
+          <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mr-1 hidden sm:inline">Tags:</span>
+
+          <!-- 1. Domínio (Macro-Universo) -->
+          <button type="button" id="g-pillDominio" onclick="toggleFilterPopover('g-popoverDominio')"
+                  class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                  title="Filtrar por domínio do documento">
+            <i class="fa-solid fa-layer-group text-cyan-400 text-[10.5px]"></i>
+            <span id="g-labelPillDominio">Domínio</span>
+            <i id="g-chevronPillDominio" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
+            <span id="g-clearPillDominio" onclick="event.stopPropagation(); resetDomainFilter();"
+                  class="hidden text-[10px] text-cyan-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-cyan-500/30 rounded" title="Limpar domínio">✕</span>
+          </button>
+
+          <!-- 2. Instituição / Emissor -->
+          <button type="button" id="g-pillInstituicao" onclick="toggleFilterPopover('g-popoverInstituicao')"
+                  class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                  title="Filtrar por faculdade ou instituição emissora">
+            <i class="fa-solid fa-building-columns text-amber-400 text-[10.5px]"></i>
+            <span id="g-labelPillInstituicao">Instituição</span>
+            <i id="g-chevronPillInstituicao" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
+            <span id="g-clearPillInstituicao" onclick="event.stopPropagation(); resetInstituicaoFilter();"
+                  class="hidden text-[10px] text-amber-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-amber-500/30 rounded" title="Limpar instituição">✕</span>
+          </button>
+
+          <!-- 3. Tipo de Documento -->
+          <button type="button" id="g-pillTipo" onclick="toggleFilterPopover('g-popoverTipo')"
+                  class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                  title="Filtrar por tipo de documento">
+            <i class="fa-solid fa-file-contract text-teal-400 text-[10.5px]"></i>
+            <span id="g-labelPillTipo">Tipo</span>
+            <i id="g-chevronPillTipo" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
+            <span id="g-clearPillTipo" onclick="event.stopPropagation(); resetTipoFilter();"
+                  class="hidden text-[10px] text-teal-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-teal-500/30 rounded" title="Limpar tipo">✕</span>
+          </button>
+
+          <!-- 4. Nível / Natureza (ocultável se Domínio não for acadêmico) -->
+          <div id="g-containerFilterNatureza" class="inline-block shrink-0">
+            <button type="button" id="g-pillNatureza" onclick="toggleFilterPopover('g-popoverNatureza')"
+                    class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                    title="Filtrar por nível ou natureza acadêmica">
+              <i class="fa-solid fa-award text-indigo-400 text-[10.5px]"></i>
+              <span id="g-labelPillNatureza">Nível</span>
+              <i id="g-chevronPillNatureza" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
+              <span id="g-clearPillNatureza" onclick="event.stopPropagation(); resetNaturezaFilter();"
+                    class="hidden text-[10px] text-indigo-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-indigo-500/30 rounded" title="Limpar nível">✕</span>
+            </button>
+          </div>
+
+          <!-- 5. Status da Conferência -->
+          <button type="button" id="g-pillStatus" onclick="toggleFilterPopover('g-popoverStatus')"
+                  class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                  title="Filtrar por status de conferência humana">
+            <i class="fa-solid fa-list-check text-emerald-400 text-[10.5px]"></i>
+            <span id="g-labelPillStatus">Status</span>
+            <i id="g-chevronPillStatus" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
+            <span id="g-clearPillStatus" onclick="event.stopPropagation(); resetStatusFilter();"
+                  class="hidden text-[10px] text-emerald-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-emerald-500/30 rounded" title="Limpar status">✕</span>
+          </button>
+
+          <!-- Botão Limpar Todos os Filtros Ativos da Galeria -->
+          <button type="button" id="g-btnClearAllFilters" onclick="resetAllFilters()"
+                  class="hidden px-2 py-1 rounded-lg text-[11px] font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/30 transition shrink-0 items-center gap-1"
+                  title="Limpar todos os filtros ativos">
+            <i class="fa-solid fa-filter-circle-xmark text-[10px]"></i>
+            <span>Limpar</span>
+          </button>
+        </div>
+
+        <!-- POPOVER 1: DOMÍNIO DO DOCUMENTO -->
+        <div id="g-popoverDominio" class="hidden absolute left-0 max-w-3xl w-full top-full mt-1.5 z-50 bg-slate-900/98 border border-slate-700/90 rounded-xl shadow-2xl p-3.5 text-xs backdrop-blur-md">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+            <div class="flex items-center gap-2 font-medium text-slate-200">
+              <i class="fa-solid fa-layer-group text-cyan-400 text-[11px]"></i>
+              <span>Domínio do Documento</span>
+              <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção de Tags)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="g-btnClearDomain" onclick="resetDomainFilter()" class="hidden text-[11px] text-cyan-400 hover:underline">Limpar</button>
+              <button type="button" onclick="closeAllFilterPopovers()" class="text-slate-400 hover:text-white p-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div id="g-dominioChips" class="flex flex-wrap gap-1.5 pt-0.5"></div>
+        </div>
+
+        <!-- POPOVER 2: INSTITUIÇÃO / EMISSOR -->
+        <div id="g-popoverInstituicao" class="hidden absolute left-0 max-w-3xl w-full top-full mt-1.5 z-50 bg-slate-900/98 border border-slate-700/90 rounded-xl shadow-2xl p-3.5 text-xs backdrop-blur-md">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+            <div class="flex items-center gap-2 font-medium text-slate-200">
+              <i class="fa-solid fa-building-columns text-amber-400 text-[11px]"></i>
+              <span>Instituição / Emissor</span>
+              <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção de Tags)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="g-btnClearInstituicao" onclick="resetInstituicaoFilter()" class="hidden text-[11px] text-amber-400 hover:underline">Limpar</button>
+              <button type="button" onclick="closeAllFilterPopovers()" class="text-slate-400 hover:text-white p-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div class="relative mb-2">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-[10px] text-slate-500"></i>
+            <input type="text" id="g-inputSearchInst" oninput="onInstSearchInput()" placeholder="Filtrar instituições..."
+                   class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-7 pr-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500">
+          </div>
+          <div id="g-instituicaoChips" class="flex flex-wrap gap-1.5 max-h-60 overflow-y-auto pr-0.5 no-scrollbar"></div>
+        </div>
+
+        <!-- POPOVER 3: TIPO DE DOCUMENTO -->
+        <div id="g-popoverTipo" class="hidden absolute left-0 max-w-3xl w-full top-full mt-1.5 z-50 bg-slate-900/98 border border-slate-700/90 rounded-xl shadow-2xl p-3.5 text-xs backdrop-blur-md">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+            <div class="flex items-center gap-2 font-medium text-slate-200">
+              <i class="fa-solid fa-file-contract text-teal-400 text-[11px]"></i>
+              <span>Tipo de Documento</span>
+              <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção de Tags)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="g-btnClearTipo" onclick="resetTipoFilter()" class="hidden text-[11px] text-teal-400 hover:underline">Limpar</button>
+              <button type="button" onclick="closeAllFilterPopovers()" class="text-slate-400 hover:text-white p-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div class="relative mb-2">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-[10px] text-slate-500"></i>
+            <input type="text" id="g-inputSearchTipo" oninput="onTipoSearchInput()" placeholder="Filtrar tipos..."
+                   class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-7 pr-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
+          </div>
+          <div id="g-tipoChips" class="flex flex-wrap gap-1.5 max-h-60 overflow-y-auto pr-0.5 no-scrollbar"></div>
+        </div>
+
+        <!-- POPOVER 4: NÍVEL / NATUREZA -->
+        <div id="g-popoverNatureza" class="hidden absolute left-0 max-w-3xl w-full top-full mt-1.5 z-50 bg-slate-900/98 border border-slate-700/90 rounded-xl shadow-2xl p-3.5 text-xs backdrop-blur-md">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+            <div class="flex items-center gap-2 font-medium text-slate-200">
+              <i class="fa-solid fa-award text-indigo-400 text-[11px]"></i>
+              <span>Nível / Natureza do Curso</span>
+              <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção de Tags)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="g-btnClearNatureza" onclick="resetNaturezaFilter()" class="hidden text-[11px] text-indigo-400 hover:underline">Limpar</button>
+              <button type="button" onclick="closeAllFilterPopovers()" class="text-slate-400 hover:text-white p-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div id="g-naturezaChips" class="flex flex-wrap gap-1.5 max-h-60 overflow-y-auto pr-0.5 no-scrollbar"></div>
+        </div>
+
+        <!-- POPOVER 5: STATUS DA CONFERÊNCIA -->
+        <div id="g-popoverStatus" class="hidden absolute left-0 max-w-3xl w-full top-full mt-1.5 z-50 bg-slate-900/98 border border-slate-700/90 rounded-xl shadow-2xl p-3.5 text-xs backdrop-blur-md">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+            <div class="flex items-center gap-2 font-medium text-slate-200">
+              <i class="fa-solid fa-list-check text-emerald-400 text-[11px]"></i>
+              <span>Status da Conferência</span>
+              <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção de Tags)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="g-btnClearStatus" onclick="resetStatusFilter()" class="hidden text-[11px] text-emerald-400 hover:underline">Limpar</button>
+              <button type="button" onclick="closeAllFilterPopovers()" class="text-slate-400 hover:text-white p-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div id="g-statusChips" class="flex flex-wrap gap-1.5 pt-0.5"></div>
+        </div>
+      </div>
+
+      <!-- LINHA 3: Ordenação, Densidade de Grid, Seleção em Lote e Itens por Página -->
       <div class="flex items-center justify-between gap-4 flex-wrap text-xs pt-1 border-t border-slate-800/80">
         <!-- Esquerda: Ordenação & Densidade -->
         <div class="flex items-center gap-3 flex-wrap">
@@ -2934,7 +3118,8 @@
     }
 
     function closeAllFilterPopovers() {
-      ['popoverInstituicao', 'popoverTipo', 'popoverNatureza', 'popoverStatus', 'popoverDominio'].forEach(id => {
+      ['popoverInstituicao', 'popoverTipo', 'popoverNatureza', 'popoverStatus', 'popoverDominio',
+       'g-popoverInstituicao', 'g-popoverTipo', 'g-popoverNatureza', 'g-popoverStatus', 'g-popoverDominio'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -3071,8 +3256,10 @@
     // Fecha popovers e dropdowns ao clicar fora ou ao pressionar Escape
     document.addEventListener('click', (e) => {
       if (openFilterPopoverId) {
-        const bar = document.getElementById('filterPopoversBar');
-        if (bar && !bar.contains(e.target)) {
+        const bar1 = document.getElementById('filterPopoversBar');
+        const bar2 = document.getElementById('galleryFilterPopoversBar');
+        const clickedInside = (bar1 && bar1.contains(e.target)) || (bar2 && bar2.contains(e.target));
+        if (!clickedInside) {
           closeAllFilterPopovers();
         }
       }
@@ -3097,158 +3284,162 @@
 
     // Atualiza estado visual e rótulos das Pílulas de Filtro Flutuantes (Ordenadas por Hierarquia Conceitual)
     function updateFilterPillsUI() {
-      // 1. Domínio (Hierarquia 1 - Macro-Universo)
-      const pillDom = document.getElementById('pillDominio');
-      const lblDom = document.getElementById('labelPillDominio');
-      const chevDom = document.getElementById('chevronPillDominio');
-      const clrDom = document.getElementById('clearPillDominio');
-      if (pillDom && lblDom) {
-        if (selectedDominios.size > 0) {
-          pillDom.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm";
-          if (selectedDominios.size === 1) {
-            const dVal = Array.from(selectedDominios)[0];
-            const dMap = { academico: 'Acadêmico', financeiro: 'PIX / Fin', outros: 'Outros', identificacao: 'Identificação' };
-            lblDom.innerText = dMap[dVal] || dVal;
-          } else {
-            lblDom.innerText = `Domínio (${selectedDominios.size})`;
-          }
-          if (chevDom) chevDom.classList.add('hidden');
-          if (clrDom) clrDom.classList.remove('hidden');
-        } else {
-          pillDom.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
-          lblDom.innerText = "Domínio";
-          lblDom.title = "Filtrar por domínio de documento";
-          if (chevDom) chevDom.classList.remove('hidden');
-          if (clrDom) clrDom.classList.add('hidden');
-        }
-      }
+      const prefixes = ['', 'g-'];
 
-      // 2. Instituição / Emissor (Hierarquia 2 - Quem emitiu)
-      const pillInst = document.getElementById('pillInstituicao');
-      const lblInst = document.getElementById('labelPillInstituicao');
-      const chevInst = document.getElementById('chevronPillInstituicao');
-      const clrInst = document.getElementById('clearPillInstituicao');
-      if (pillInst && lblInst) {
-        if (selectedInstituicoes.size > 0) {
-          pillInst.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm";
-          if (selectedInstituicoes.size === 1) {
-            const instVal = Array.from(selectedInstituicoes)[0];
-            const shortName = instVal.length > 14 ? instVal.substring(0, 12) + '...' : instVal;
-            lblInst.innerText = shortName;
-            lblInst.title = instVal;
+      prefixes.forEach(p => {
+        // 1. Domínio (Hierarquia 1 - Macro-Universo)
+        const pillDom = document.getElementById(`${p}pillDominio`);
+        const lblDom = document.getElementById(`${p}labelPillDominio`);
+        const chevDom = document.getElementById(`${p}chevronPillDominio`);
+        const clrDom = document.getElementById(`${p}clearPillDominio`);
+        if (pillDom && lblDom) {
+          if (selectedDominios.size > 0) {
+            pillDom.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm";
+            if (selectedDominios.size === 1) {
+              const dVal = Array.from(selectedDominios)[0];
+              const dMap = { academico: 'Acadêmico', financeiro: 'PIX / Fin', outros: 'Outros', identificacao: 'Identificação' };
+              lblDom.innerText = dMap[dVal] || dVal;
+            } else {
+              lblDom.innerText = `Domínio (${selectedDominios.size})`;
+            }
+            if (chevDom) chevDom.classList.add('hidden');
+            if (clrDom) clrDom.classList.remove('hidden');
           } else {
-            lblInst.innerText = `Instituição (${selectedInstituicoes.size})`;
-            lblInst.title = Array.from(selectedInstituicoes).join(', ');
+            pillDom.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
+            lblDom.innerText = "Domínio";
+            lblDom.title = "Filtrar por domínio de documento";
+            if (chevDom) chevDom.classList.remove('hidden');
+            if (clrDom) clrDom.classList.add('hidden');
           }
-          if (chevInst) chevInst.classList.add('hidden');
-          if (clrInst) clrInst.classList.remove('hidden');
-        } else {
-          pillInst.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
-          lblInst.innerText = "Instituição";
-          lblInst.title = "Filtrar por faculdade ou instituição emissora";
-          if (chevInst) chevInst.classList.remove('hidden');
-          if (clrInst) clrInst.classList.add('hidden');
         }
-      }
 
-      // 3. Tipo de Documento (Hierarquia 3 - Formato documental)
-      const pillTipo = document.getElementById('pillTipo');
-      const lblTipo = document.getElementById('labelPillTipo');
-      const chevTipo = document.getElementById('chevronPillTipo');
-      const clrTipo = document.getElementById('clearPillTipo');
-      if (pillTipo && lblTipo) {
-        if (selectedTipos.size > 0) {
-          pillTipo.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-teal-500/20 text-teal-300 border-teal-500/40 shadow-sm";
-          if (selectedTipos.size === 1) {
-            const tipoVal = Array.from(selectedTipos)[0];
-            const shortTipo = tipoVal.length > 14 ? tipoVal.substring(0, 12) + '...' : tipoVal;
-            lblTipo.innerText = shortTipo;
-            lblTipo.title = tipoVal;
+        // 2. Instituição / Emissor (Hierarquia 2 - Quem emitiu)
+        const pillInst = document.getElementById(`${p}pillInstituicao`);
+        const lblInst = document.getElementById(`${p}labelPillInstituicao`);
+        const chevInst = document.getElementById(`${p}chevronPillInstituicao`);
+        const clrInst = document.getElementById(`${p}clearPillInstituicao`);
+        if (pillInst && lblInst) {
+          if (selectedInstituicoes.size > 0) {
+            pillInst.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm";
+            if (selectedInstituicoes.size === 1) {
+              const instVal = Array.from(selectedInstituicoes)[0];
+              const shortName = instVal.length > 14 ? instVal.substring(0, 12) + '...' : instVal;
+              lblInst.innerText = shortName;
+              lblInst.title = instVal;
+            } else {
+              lblInst.innerText = `Instituição (${selectedInstituicoes.size})`;
+              lblInst.title = Array.from(selectedInstituicoes).join(', ');
+            }
+            if (chevInst) chevInst.classList.add('hidden');
+            if (clrInst) clrInst.classList.remove('hidden');
           } else {
-            lblTipo.innerText = `Tipo (${selectedTipos.size})`;
-            lblTipo.title = Array.from(selectedTipos).join(', ');
+            pillInst.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
+            lblInst.innerText = "Instituição";
+            lblInst.title = "Filtrar por faculdade ou instituição emissora";
+            if (chevInst) chevInst.classList.remove('hidden');
+            if (clrInst) clrInst.classList.add('hidden');
           }
-          if (chevTipo) chevTipo.classList.add('hidden');
-          if (clrTipo) clrTipo.classList.remove('hidden');
-        } else {
-          pillTipo.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
-          lblTipo.innerText = "Tipo";
-          lblTipo.title = "Filtrar por tipo de documento";
-          if (chevTipo) chevTipo.classList.remove('hidden');
-          if (clrTipo) clrTipo.classList.add('hidden');
         }
-      }
 
-      // 4. Nível / Natureza do Curso (Hierarquia 4 - Grau acadêmico)
-      const pillNat = document.getElementById('pillNatureza');
-      const lblNat = document.getElementById('labelPillNatureza');
-      const chevNat = document.getElementById('chevronPillNatureza');
-      const clrNat = document.getElementById('clearPillNatureza');
-      if (pillNat && lblNat) {
-        if (selectedNaturezas.size > 0) {
-          pillNat.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm";
-          if (selectedNaturezas.size === 1) {
-            const natVal = Array.from(selectedNaturezas)[0];
-            lblNat.innerText = formatShortNature(natVal);
-            lblNat.title = natVal;
+        // 3. Tipo de Documento (Hierarquia 3 - Formato documental)
+        const pillTipo = document.getElementById(`${p}pillTipo`);
+        const lblTipo = document.getElementById(`${p}labelPillTipo`);
+        const chevTipo = document.getElementById(`${p}chevronPillTipo`);
+        const clrTipo = document.getElementById(`${p}clearPillTipo`);
+        if (pillTipo && lblTipo) {
+          if (selectedTipos.size > 0) {
+            pillTipo.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-teal-500/20 text-teal-300 border-teal-500/40 shadow-sm";
+            if (selectedTipos.size === 1) {
+              const tipoVal = Array.from(selectedTipos)[0];
+              const shortTipo = tipoVal.length > 14 ? tipoVal.substring(0, 12) + '...' : tipoVal;
+              lblTipo.innerText = shortTipo;
+              lblTipo.title = tipoVal;
+            } else {
+              lblTipo.innerText = `Tipo (${selectedTipos.size})`;
+              lblTipo.title = Array.from(selectedTipos).join(', ');
+            }
+            if (chevTipo) chevTipo.classList.add('hidden');
+            if (clrTipo) clrTipo.classList.remove('hidden');
           } else {
-            lblNat.innerText = `Nível (${selectedNaturezas.size})`;
-            lblNat.title = Array.from(selectedNaturezas).map(formatShortNature).join(', ');
+            pillTipo.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
+            lblTipo.innerText = "Tipo";
+            lblTipo.title = "Filtrar por tipo de documento";
+            if (chevTipo) chevTipo.classList.remove('hidden');
+            if (clrTipo) clrTipo.classList.add('hidden');
           }
-          if (chevNat) chevNat.classList.add('hidden');
-          if (clrNat) clrNat.classList.remove('hidden');
-        } else {
-          pillNat.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
-          lblNat.innerText = "Nível";
-          lblNat.title = "Filtrar por nível ou natureza acadêmica";
-          if (chevNat) chevNat.classList.remove('hidden');
-          if (clrNat) clrNat.classList.add('hidden');
         }
-      }
 
-      // 5. Status da Conferência (Hierarquia 5 - Fluxo operacional)
-      const pillStat = document.getElementById('pillStatus');
-      const lblStat = document.getElementById('labelPillStatus');
-      const chevStat = document.getElementById('chevronPillStatus');
-      const clrStat = document.getElementById('clearPillStatus');
-      if (pillStat && lblStat) {
-        if (selectedStatus.size > 0) {
-          pillStat.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm";
-          if (selectedStatus.size === 1) {
-            const stVal = Array.from(selectedStatus)[0];
-            lblStat.innerText = stVal === 'nao_processado' ? 'Não Lido' : (stVal === 'pendente' ? 'Pendentes' : 'Aprovados');
+        // 4. Nível / Natureza do Curso (Hierarquia 4 - Grau acadêmico)
+        const pillNat = document.getElementById(`${p}pillNatureza`);
+        const lblNat = document.getElementById(`${p}labelPillNatureza`);
+        const chevNat = document.getElementById(`${p}chevronPillNatureza`);
+        const clrNat = document.getElementById(`${p}clearPillNatureza`);
+        if (pillNat && lblNat) {
+          if (selectedNaturezas.size > 0) {
+            pillNat.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm";
+            if (selectedNaturezas.size === 1) {
+              const natVal = Array.from(selectedNaturezas)[0];
+              lblNat.innerText = formatShortNature(natVal);
+              lblNat.title = natVal;
+            } else {
+              lblNat.innerText = `Nível (${selectedNaturezas.size})`;
+              lblNat.title = Array.from(selectedNaturezas).map(formatShortNature).join(', ');
+            }
+            if (chevNat) chevNat.classList.add('hidden');
+            if (clrNat) clrNat.classList.remove('hidden');
           } else {
-            lblStat.innerText = `Status (${selectedStatus.size})`;
+            pillNat.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
+            lblNat.innerText = "Nível";
+            lblNat.title = "Filtrar por nível ou natureza acadêmica";
+            if (chevNat) chevNat.classList.remove('hidden');
+            if (clrNat) clrNat.classList.add('hidden');
           }
-          if (chevStat) chevStat.classList.add('hidden');
-          if (clrStat) clrStat.classList.remove('hidden');
-        } else {
-          pillStat.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
-          lblStat.innerText = "Status";
-          lblStat.title = "Filtrar por status de conferência";
-          if (chevStat) chevStat.classList.remove('hidden');
-          if (clrStat) clrStat.classList.add('hidden');
         }
-      }
 
-      // 6. Botão Limpar Tudo (aparece se houver algum filtro ativo)
-      const btnClearAll = document.getElementById('btnClearAllFilters');
-      if (btnClearAll) {
-        const hasAnyActive = (
-          selectedDominios.size > 0 ||
-          selectedInstituicoes.size > 0 ||
-          selectedTipos.size > 0 ||
-          selectedNaturezas.size > 0 ||
-          selectedStatus.size > 0
-        );
-        if (hasAnyActive) {
-          btnClearAll.classList.remove('hidden');
-          btnClearAll.classList.add('flex');
-        } else {
-          btnClearAll.classList.add('hidden');
-          btnClearAll.classList.remove('flex');
+        // 5. Status da Conferência (Hierarquia 5 - Fluxo operacional)
+        const pillStat = document.getElementById(`${p}pillStatus`);
+        const lblStat = document.getElementById(`${p}labelPillStatus`);
+        const chevStat = document.getElementById(`${p}chevronPillStatus`);
+        const clrStat = document.getElementById(`${p}clearPillStatus`);
+        if (pillStat && lblStat) {
+          if (selectedStatus.size > 0) {
+            pillStat.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm";
+            if (selectedStatus.size === 1) {
+              const stVal = Array.from(selectedStatus)[0];
+              lblStat.innerText = stVal === 'nao_processado' ? 'Não Lido' : (stVal === 'pendente' ? 'Pendentes' : 'Aprovados');
+            } else {
+              lblStat.innerText = `Status (${selectedStatus.size})`;
+            }
+            if (chevStat) chevStat.classList.add('hidden');
+            if (clrStat) clrStat.classList.remove('hidden');
+          } else {
+            pillStat.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
+            lblStat.innerText = "Status";
+            lblStat.title = "Filtrar por status de conferência";
+            if (chevStat) chevStat.classList.remove('hidden');
+            if (clrStat) clrStat.classList.add('hidden');
+          }
         }
-      }
+
+        // 6. Botão Limpar Tudo (aparece se houver algum filtro ativo)
+        const btnClearAll = document.getElementById(`${p}btnClearAllFilters`);
+        if (btnClearAll) {
+          const hasAnyActive = (
+            selectedDominios.size > 0 ||
+            selectedInstituicoes.size > 0 ||
+            selectedTipos.size > 0 ||
+            selectedNaturezas.size > 0 ||
+            selectedStatus.size > 0
+          );
+          if (hasAnyActive) {
+            btnClearAll.classList.remove('hidden');
+            btnClearAll.classList.add('flex');
+          } else {
+            btnClearAll.classList.add('hidden');
+            btnClearAll.classList.remove('flex');
+          }
+        }
+      });
     }
 
     function updateAccordionBadges() {
@@ -3411,13 +3602,20 @@
         select.value = selectedInstituicoes.size === 1 ? Array.from(selectedInstituicoes)[0] : '';
       }
 
+      const inpInst1 = document.getElementById('inputSearchInst');
+      const inpInst2 = document.getElementById('g-inputSearchInst');
+      const instSearch1 = inpInst1 ? inpInst1.value.trim().toLowerCase() : '';
+      const instSearch2 = inpInst2 ? inpInst2.value.trim().toLowerCase() : '';
+
       // Nuvem de tags/chips no Popover
-      const chipsContainer = document.getElementById('instituicaoChips');
-      if (chipsContainer) {
+      ['instituicaoChips', 'g-instituicaoChips'].forEach(cid => {
+        const chipsContainer = document.getElementById(cid);
+        if (!chipsContainer) return;
         chipsContainer.innerHTML = '';
+        const localSearch = cid === 'g-instituicaoChips' ? (instSearch2 || instSearch1) : (instSearch1 || instSearch2);
         let filteredFacs = sorted;
-        if (instSearch) {
-          filteredFacs = sorted.filter(fac => fac.toLowerCase().includes(instSearch));
+        if (localSearch) {
+          filteredFacs = sorted.filter(fac => fac.toLowerCase().includes(localSearch));
         }
 
         if (filteredFacs.length === 0) {
@@ -3446,13 +3644,15 @@
             chipsContainer.appendChild(chip);
           });
         }
-      }
+      });
 
-      const btnClear = document.getElementById('btnClearInstituicao');
-      if (btnClear) {
-        if (selectedInstituicoes.size > 0) btnClear.classList.remove('hidden');
-        else btnClear.classList.add('hidden');
-      }
+      ['btnClearInstituicao', 'g-btnClearInstituicao'].forEach(bid => {
+        const btnClear = document.getElementById(bid);
+        if (btnClear) {
+          if (selectedInstituicoes.size > 0) btnClear.classList.remove('hidden');
+          else btnClear.classList.add('hidden');
+        }
+      });
     }
 
     function toggleInstituicaoFilter(fac) {
@@ -3475,8 +3675,10 @@
     function resetInstituicaoFilter() {
       selectedInstituicoes.clear();
       syncActiveFilterVars();
-      const input = document.getElementById('inputSearchInst');
-      if (input) input.value = '';
+      ['inputSearchInst', 'g-inputSearchInst'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = '';
+      });
       applyFilter(false);
     }
 
@@ -4043,45 +4245,49 @@
         if (hasOutros || (dom !== 'academico' && dom !== 'financeiro' && dom !== 'identificacao')) counts.outros++;
       });
 
-      const chipsContainer = document.getElementById('dominioChips');
-      if (chipsContainer) {
-        chipsContainer.innerHTML = '';
-        const domainItems = [
-          { key: 'academico', label: 'Acadêmico', icon: 'fa-solid fa-graduation-cap' },
-          { key: 'financeiro', label: 'PIX / Financeiro', icon: 'fa-solid fa-money-bill-wave' },
-          { key: 'identificacao', label: 'Identificação', icon: 'fa-regular fa-id-card' },
-          { key: 'outros', label: 'Outros', icon: 'fa-solid fa-box-archive' }
-        ];
+      ['dominioChips', 'g-dominioChips'].forEach(cid => {
+        const chipsContainer = document.getElementById(cid);
+        if (chipsContainer) {
+          chipsContainer.innerHTML = '';
+          const domainItems = [
+            { key: 'academico', label: 'Acadêmico', icon: 'fa-solid fa-graduation-cap' },
+            { key: 'financeiro', label: 'PIX / Financeiro', icon: 'fa-solid fa-money-bill-wave' },
+            { key: 'identificacao', label: 'Identificação', icon: 'fa-regular fa-id-card' },
+            { key: 'outros', label: 'Outros', icon: 'fa-solid fa-box-archive' }
+          ];
 
-        domainItems.forEach(item => {
-          const isSelected = selectedDominios.has(item.key);
-          const count = counts[item.key] || 0;
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = `px-2.5 py-1 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 ${
-            isSelected
-              ? 'bg-cyan-600 text-white border-cyan-500 shadow-sm font-semibold ring-1 ring-cyan-400/50'
-              : (count === 0 
-                  ? 'bg-slate-950/40 text-slate-500 border-slate-900/60 opacity-60 hover:opacity-90 hover:text-slate-300' 
-                  : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:bg-slate-800/80 hover:text-cyan-300')
-          }`;
-          btn.innerHTML = `
-            <i class="${item.icon} text-[10px] ${isSelected ? 'text-white' : 'text-cyan-400'}"></i>
-            <span>${item.label}</span>
-            <span class="text-[10px] px-1.5 py-0.2 rounded-full font-mono ml-0.5 ${isSelected ? 'bg-cyan-950/70 text-cyan-200' : 'bg-slate-800 text-slate-400'}">${count}</span>
-          `;
-          btn.onclick = () => {
-            toggleDomainFilter(item.key);
-          };
-          chipsContainer.appendChild(btn);
-        });
-      }
+          domainItems.forEach(item => {
+            const isSelected = selectedDominios.has(item.key);
+            const count = counts[item.key] || 0;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `px-2.5 py-1 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 ${
+              isSelected
+                ? 'bg-cyan-600 text-white border-cyan-500 shadow-sm font-semibold ring-1 ring-cyan-400/50'
+                : (count === 0 
+                    ? 'bg-slate-950/40 text-slate-500 border-slate-900/60 opacity-60 hover:opacity-90 hover:text-slate-300' 
+                    : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:bg-slate-800/80 hover:text-cyan-300')
+            }`;
+            btn.innerHTML = `
+              <i class="${item.icon} text-[10px] ${isSelected ? 'text-white' : 'text-cyan-400'}"></i>
+              <span>${item.label}</span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded-full font-mono ml-0.5 ${isSelected ? 'bg-cyan-950/70 text-cyan-200' : 'bg-slate-800 text-slate-400'}">${count}</span>
+            `;
+            btn.onclick = () => {
+              toggleDomainFilter(item.key);
+            };
+            chipsContainer.appendChild(btn);
+          });
+        }
+      });
 
-      const btnClearDom = document.getElementById('btnClearDomain');
-      if (btnClearDom) {
-        if (selectedDominios.size > 0) btnClearDom.classList.remove('hidden');
-        else btnClearDom.classList.add('hidden');
-      }
+      ['btnClearDomain', 'g-btnClearDomain'].forEach(bid => {
+        const btnClearDom = document.getElementById(bid);
+        if (btnClearDom) {
+          if (selectedDominios.size > 0) btnClearDom.classList.remove('hidden');
+          else btnClearDom.classList.add('hidden');
+        }
+      });
     }
 
     function toggleDomainFilter(domKey) {
@@ -4091,16 +4297,18 @@
         selectedDominios.add(domKey);
       }
       syncActiveFilterVars();
-      const contNat = document.getElementById('containerFilterNatureza');
-      if (contNat) {
-        if (selectedDominios.size > 0 && !selectedDominios.has('academico')) {
-          contNat.classList.add('hidden');
-          selectedNaturezas.clear();
-          activeNaturezaFilter = '';
-        } else {
-          contNat.classList.remove('hidden');
+      ['containerFilterNatureza', 'g-containerFilterNatureza'].forEach(id => {
+        const contNat = document.getElementById(id);
+        if (contNat) {
+          if (selectedDominios.size > 0 && !selectedDominios.has('academico')) {
+            contNat.classList.add('hidden');
+            selectedNaturezas.clear();
+            activeNaturezaFilter = '';
+          } else {
+            contNat.classList.remove('hidden');
+          }
         }
-      }
+      });
       applyFilter(false);
     }
 
@@ -4110,24 +4318,28 @@
         selectedDominios.add(dom);
       }
       syncActiveFilterVars();
-      const contNat = document.getElementById('containerFilterNatureza');
-      if (contNat) {
-        if (selectedDominios.size > 0 && !selectedDominios.has('academico')) {
-          contNat.classList.add('hidden');
-          selectedNaturezas.clear();
-          activeNaturezaFilter = '';
-        } else {
-          contNat.classList.remove('hidden');
+      ['containerFilterNatureza', 'g-containerFilterNatureza'].forEach(id => {
+        const contNat = document.getElementById(id);
+        if (contNat) {
+          if (selectedDominios.size > 0 && !selectedDominios.has('academico')) {
+            contNat.classList.add('hidden');
+            selectedNaturezas.clear();
+            activeNaturezaFilter = '';
+          } else {
+            contNat.classList.remove('hidden');
+          }
         }
-      }
+      });
       applyFilter(false);
     }
 
     function resetDomainFilter() {
       selectedDominios.clear();
       syncActiveFilterVars();
-      const contNat = document.getElementById('containerFilterNatureza');
-      if (contNat) contNat.classList.remove('hidden');
+      ['containerFilterNatureza', 'g-containerFilterNatureza'].forEach(id => {
+        const contNat = document.getElementById(id);
+        if (contNat) contNat.classList.remove('hidden');
+      });
       applyFilter(false);
     }
 
@@ -4341,6 +4553,8 @@
       loadAccordionsState();
       applyAccordionsState();
       updateThumbnailToggleUI();
+      const savedTab = localStorage.getItem('joakindex_active_tab') || 'galeria';
+      switchMainTab(savedTab);
       loadDocuments();
       setupKeyboardShortcuts();
       checkBatchStatusOnLoad();
@@ -4547,8 +4761,9 @@
       }
 
       // Nuvem de tags/chips no Popover de Natureza
-      const chipsContainer = document.getElementById('naturezaChips');
-      if (chipsContainer) {
+      ['naturezaChips', 'g-naturezaChips'].forEach(cid => {
+        const chipsContainer = document.getElementById(cid);
+        if (!chipsContainer) return;
         chipsContainer.innerHTML = '';
         const sortedNats = [...allUniqueNaturezas].sort((a, b) => {
           const diff = (counts[b] || 0) - (counts[a] || 0);
@@ -4582,13 +4797,15 @@
           };
           chipsContainer.appendChild(chip);
         });
-      }
+      });
 
-      const btnClear = document.getElementById('btnClearNatureza');
-      if (btnClear) {
-        if (selectedNaturezas.size > 0) btnClear.classList.remove('hidden');
-        else btnClear.classList.add('hidden');
-      }
+      ['btnClearNatureza', 'g-btnClearNatureza'].forEach(bid => {
+        const btnClear = document.getElementById(bid);
+        if (btnClear) {
+          if (selectedNaturezas.size > 0) btnClear.classList.remove('hidden');
+          else btnClear.classList.add('hidden');
+        }
+      });
     }
 
     function toggleNaturezaFilter(nat) {
@@ -4745,9 +4962,15 @@
         select.value = selectedTipos.size === 1 ? Array.from(selectedTipos)[0] : '';
       }
 
+      const inpTipo1 = document.getElementById('inputSearchTipo');
+      const inpTipo2 = document.getElementById('g-inputSearchTipo');
+      const tipoSearch1 = inpTipo1 ? inpTipo1.value.trim().toLowerCase() : '';
+      const tipoSearch2 = inpTipo2 ? inpTipo2.value.trim().toLowerCase() : '';
+
       // Nuvem de tags/chips no Popover de Tipo
-      const chipsContainer = document.getElementById('tipoChips');
-      if (chipsContainer) {
+      ['tipoChips', 'g-tipoChips'].forEach(cid => {
+        const chipsContainer = document.getElementById(cid);
+        if (!chipsContainer) return;
         chipsContainer.innerHTML = '';
         const sortedTipos = [...allUniqueTipos].sort((a, b) => {
           const diff = (counts[b] || 0) - (counts[a] || 0);
@@ -4759,9 +4982,10 @@
           if (!sortedTipos.includes(selTipo)) sortedTipos.push(selTipo);
         });
 
+        const localSearch = cid === 'g-tipoChips' ? (tipoSearch2 || tipoSearch1) : (tipoSearch1 || tipoSearch2);
         let filteredTipos = sortedTipos;
-        if (tipoSearch) {
-          filteredTipos = sortedTipos.filter(t => t.toLowerCase().includes(tipoSearch));
+        if (localSearch) {
+          filteredTipos = sortedTipos.filter(t => t.toLowerCase().includes(localSearch));
         }
 
         if (filteredTipos.length === 0) {
@@ -4790,13 +5014,15 @@
             chipsContainer.appendChild(chip);
           });
         }
-      }
+      });
 
-      const btnClear = document.getElementById('btnClearTipo');
-      if (btnClear) {
-        if (selectedTipos.size > 0) btnClear.classList.remove('hidden');
-        else btnClear.classList.add('hidden');
-      }
+      ['btnClearTipo', 'g-btnClearTipo'].forEach(bid => {
+        const btnClear = document.getElementById(bid);
+        if (btnClear) {
+          if (selectedTipos.size > 0) btnClear.classList.remove('hidden');
+          else btnClear.classList.add('hidden');
+        }
+      });
     }
 
     function toggleTipoFilter(tipo) {
@@ -4819,8 +5045,10 @@
     function resetTipoFilter() {
       selectedTipos.clear();
       syncActiveFilterVars();
-      const inp = document.getElementById('inputSearchTipo');
-      if (inp) inp.value = '';
+      ['inputSearchTipo', 'g-inputSearchTipo'].forEach(id => {
+        const inp = document.getElementById(id);
+        if (inp) inp.value = '';
+      });
       applyFilter(false);
     }
 
@@ -5140,8 +5368,9 @@
         }
       });
 
-      const chipsContainer = document.getElementById('statusChips');
-      if (chipsContainer) {
+      ['statusChips', 'g-statusChips'].forEach(cid => {
+        const chipsContainer = document.getElementById(cid);
+        if (!chipsContainer) return;
         chipsContainer.innerHTML = '';
         const statusItems = [
           { key: 'pendente', label: 'Pendentes', count: countPend, icon: 'fa-regular fa-clock' },
@@ -5155,7 +5384,7 @@
           chip.type = 'button';
           chip.className = `px-2.5 py-1 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 ${
             isSelected
-              ? 'bg-emerald-600 text-white border-emerald-500 font-semibold ring-1 ring-emerald-400/50 shadow-sm'
+              ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm font-semibold ring-1 ring-emerald-400/50'
               : (item.count === 0 
                   ? 'bg-slate-950/40 text-slate-500 border-slate-900/60 opacity-60 hover:opacity-90 hover:text-slate-300' 
                   : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:bg-slate-800/80 hover:text-emerald-300')
@@ -5170,13 +5399,15 @@
           };
           chipsContainer.appendChild(chip);
         });
-      }
+      });
 
-      const btnClear = document.getElementById('btnClearStatus');
-      if (btnClear) {
-        if (selectedStatus.size > 0) btnClear.classList.remove('hidden');
-        else btnClear.classList.add('hidden');
-      }
+      ['btnClearStatus', 'g-btnClearStatus'].forEach(bid => {
+        const btnClear = document.getElementById(bid);
+        if (btnClear) {
+          if (selectedStatus.size > 0) btnClear.classList.remove('hidden');
+          else btnClear.classList.add('hidden');
+        }
+      });
     }
 
     function toggleStatusFilter(st) {
@@ -5629,26 +5860,44 @@
       selectedStatus.clear();
       syncActiveFilterVars();
 
-      const inputInst = document.getElementById('inputSearchInst');
-      if (inputInst) inputInst.value = '';
-      const inputTipo = document.getElementById('inputSearchTipo');
-      if (inputTipo) inputTipo.value = '';
+      ['inputSearchInst', 'g-inputSearchInst'].forEach(id => {
+        const inp = document.getElementById(id);
+        if (inp) inp.value = '';
+      });
+      ['inputSearchTipo', 'g-inputSearchTipo'].forEach(id => {
+        const inp = document.getElementById(id);
+        if (inp) inp.value = '';
+      });
       const selInst = document.getElementById('selectInstituicaoFilter');
       if (selInst) selInst.value = '';
-      const btnClearInst = document.getElementById('btnClearInstituicao');
-      if (btnClearInst) btnClearInst.classList.add('hidden');
+      ['btnClearInstituicao', 'g-btnClearInstituicao'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.add('hidden');
+      });
       const selNat = document.getElementById('selectNaturezaFilter');
       if (selNat) selNat.value = '';
-      const btnClearNat = document.getElementById('btnClearNatureza');
-      if (btnClearNat) btnClearNat.classList.add('hidden');
+      ['btnClearNatureza', 'g-btnClearNatureza'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.add('hidden');
+      });
       const selTipo = document.getElementById('selectTipoFilter');
       if (selTipo) selTipo.value = '';
-      const btnClearTipo = document.getElementById('btnClearTipo');
-      if (btnClearTipo) btnClearTipo.classList.add('hidden');
-      const btnClearDom = document.getElementById('btnClearDomain');
-      if (btnClearDom) btnClearDom.classList.add('hidden');
-      const contNat = document.getElementById('containerFilterNatureza');
-      if (contNat) contNat.classList.remove('hidden');
+      ['btnClearTipo', 'g-btnClearTipo'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.add('hidden');
+      });
+      ['btnClearDomain', 'g-btnClearDomain'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.add('hidden');
+      });
+      ['btnClearStatus', 'g-btnClearStatus'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.add('hidden');
+      });
+      ['containerFilterNatureza', 'g-containerFilterNatureza'].forEach(id => {
+        const cont = document.getElementById(id);
+        if (cont) cont.classList.remove('hidden');
+      });
 
       closeAllFilterPopovers();
       applyFilter(true);
@@ -8938,7 +9187,7 @@
     // =========================================================================
     // MÓDULO DE BUSINESS INTELLIGENCE (BI) & ESTATÍSTICAS INTERATIVAS
     // =========================================================================
-    let currentMainTab = 'conferencia'; // 'conferencia' | 'galeria' | 'bi'
+    let currentMainTab = 'galeria'; // 'galeria' | 'conferencia' | 'bi'
     let biState = {
       scope: 'classificados', // 'classificados' | 'todos' | 'aprovados'
       unitMode: 'ambos'       // 'ambos' | 'absoluto' | 'relativo'
@@ -8947,6 +9196,9 @@
 
     function switchMainTab(tabName) {
       currentMainTab = tabName;
+      try {
+        localStorage.setItem('joakindex_active_tab', tabName);
+      } catch (e) {}
       const btnConf = document.getElementById('tabMainConferencia');
       const btnGal = document.getElementById('tabMainGaleria');
       const btnBI = document.getElementById('tabMainBI');
