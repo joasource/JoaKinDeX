@@ -131,8 +131,6 @@ Ao executar o comando sem argumentos, o **menu interativo** é aberto no termina
 
 ```bash
 ./joakindex
-# ou:
-./executar.sh
 ```
 
 O menu permite configurar facilmente:
