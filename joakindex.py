@@ -23,6 +23,9 @@ import io
 import subprocess
 import shutil
 import tempfile
+import zipfile
+import threading
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Callable, Set, Tuple
@@ -59,7 +62,11 @@ except ImportError:
     Image = None
 
 IMAGE_EXTENSIONS: Set[str] = {".png", ".jpg", ".jpeg", ".webp"}
-SUPPORTED_EXTENSIONS: Set[str] = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
+WORD_EXTENSIONS: Set[str] = {".docx", ".doc", ".odt", ".rtf"}
+TEXT_EXTENSIONS: Set[str] = {".txt"}
+DOCUMENT_EXTENSIONS: Set[str] = {".pdf"} | WORD_EXTENSIONS | TEXT_EXTENSIONS
+SUPPORTED_EXTENSIONS: Set[str] = DOCUMENT_EXTENSIONS | IMAGE_EXTENSIONS
+_OFFICE_CONVERT_LOCK = threading.Lock()
 
 try:
     from openai import OpenAI
@@ -272,6 +279,190 @@ def extract_rg_fallback(text: str) -> Optional[str]:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Formatação, Validação e Extração de CNPJ e Dados Cadastrais (Receita Federal)
+# ---------------------------------------------------------------------------
+def format_cnpj(raw_cnpj: Optional[str]) -> Optional[str]:
+    """Formata sequência de 14 dígitos para o padrão 00.000.000/0000-00."""
+    if not raw_cnpj:
+        return None
+    digits = re.sub(r"\D", "", str(raw_cnpj))
+    if len(digits) == 14:
+        return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
+    return str(raw_cnpj).strip() if raw_cnpj else None
+
+
+def validate_cnpj_checksum(cnpj: str) -> bool:
+    """Valida os dois dígitos verificadores do CNPJ pelo algoritmo oficial da Receita Federal."""
+    digits = [int(d) for d in re.sub(r"\D", "", str(cnpj))]
+    if len(digits) != 14:
+        return False
+    if len(set(digits)) == 1:
+        return False
+
+    # Primeiro dígito verificador
+    weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    s1 = sum(d * w for d, w in zip(digits[:12], weights1))
+    r1 = s1 % 11
+    d1 = 0 if r1 < 2 else 11 - r1
+    if d1 != digits[12]:
+        return False
+
+    # Segundo dígito verificador
+    weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    s2 = sum(d * w for d, w in zip(digits[:13], weights2))
+    r2 = s2 % 11
+    d2 = 0 if r2 < 2 else 11 - r2
+    return d2 == digits[13]
+
+
+def is_valid_cnpj_syntax(cnpj: Optional[str], check_checksum: bool = True) -> bool:
+    """Retorna True se o CNPJ possuir sintaxe válida (14 dígitos) e checksum aprovado."""
+    if not cnpj:
+        return False
+    digits = re.sub(r"\D", "", str(cnpj))
+    if len(digits) != 14:
+        return False
+    if not re.match(r"^\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}$", str(cnpj)):
+        return False
+    if check_checksum and not validate_cnpj_checksum(cnpj):
+        return False
+    return True
+
+
+def extract_cnpj_fallback(text: str) -> Optional[str]:
+    """Busca padrão de CNPJ diretamente no texto do documento com contingência e validação de checksum."""
+    if not text:
+        return None
+    # 1. Padrão associado explicitamente a CNPJ / C.N.P.J / CGC
+    match = re.search(r"(?:CNPJ|C\.N\.P\.J|CGC|C\.G\.C)[\s:\.ºn°A-Za-z0-9]*?(\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2})\b", text, re.IGNORECASE)
+    if match:
+        fmt = format_cnpj(match.group(1))
+        if fmt and validate_cnpj_checksum(fmt):
+            return fmt
+    # 2. Busca qualquer padrão formatado XX.XXX.XXX/XXXX-XX com dígitos verificadores válidos
+    for m in re.finditer(r"\b(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})\b", text):
+        fmt = format_cnpj(m.group(1))
+        if fmt and validate_cnpj_checksum(fmt):
+            return fmt
+    # 3. Busca sequência de 14 dígitos contínuos com prefixo CNPJ
+    match3 = re.search(r"(?:CNPJ|C\.N\.P\.J)[\s:\.ºn°]*(\d{14})\b", text, re.IGNORECASE)
+    if match3:
+        fmt = format_cnpj(match3.group(1))
+        if fmt and validate_cnpj_checksum(fmt):
+            return fmt
+    return None
+
+
+def extract_cnpj_cadastral_fallback(text: str) -> Dict[str, Any]:
+    """
+    Extrai informações estruturadas do Comprovante de Inscrição e de Situação Cadastral
+    da Receita Federal (CNPJ, Razão Social, Nome Fantasia, Situação, CNAE, Endereço, etc.).
+    """
+    if not text:
+        return {}
+
+    dados = {}
+    cnpj = extract_cnpj_fallback(text)
+    if cnpj:
+        dados["cnpj"] = cnpj
+
+    # 1. Situação Cadastral
+    m_sit = re.search(r"SITUA[CÇ][AÃ]O\s+CADASTRAL\s*[\:\-]?\s*(ATIVA|BAIXADA|SUSPENSA|INAPTA|NULA)", text, re.IGNORECASE)
+    if m_sit:
+        dados["situacao_cadastral"] = m_sit.group(1).upper()
+
+    # 2. Data da Situação Cadastral
+    m_dt_sit = re.search(r"DATA\s+DA\s+SITUA[CÇ][AÃ]O\s+CADASTRAL\s*[\:\-]?\s*(\d{2}/\d{2}/\d{4})", text, re.IGNORECASE)
+    if m_dt_sit:
+        dados["data_situacao"] = m_dt_sit.group(1)
+
+    # 3. Data de Abertura
+    m_abertura = re.search(r"DATA\s+DE\s+ABERTURA\s*[\:\-]?\s*(\d{2}/\d{2}/\d{4})", text, re.IGNORECASE)
+    if m_abertura:
+        dados["data_abertura"] = m_abertura.group(1)
+
+    # 4. Razão Social / Nome Empresarial
+    m_razao = re.search(r"NOME\s+EMPRESARIAL\s*[\:\-]?\s*([^\n\r]+)", text, re.IGNORECASE)
+    if m_razao:
+        razao = m_razao.group(1).strip()
+        razao = re.split(r"\s*(?:T[IÍ]TULO|ESTABELECIMENTO|FANTASIA|PORTE|C[OÓ]DIGO)\b", razao, flags=re.IGNORECASE)[0].strip()
+        if len(razao) >= 3:
+            dados["razao_social"] = razao
+
+    # 5. Título do Estabelecimento / Nome Fantasia
+    m_fantasia = re.search(r"(?:T[IÍ]TULO\s+DO\s+ESTABELECIMENTO(?:\s*\([^\)]*\))?|NOME\s+(?:DE\s+)?FANTASIA|\(NOME\s+DE\s+FANTASIA\))\s*[\:\-]?\s*([^\n\r]+)", text, re.IGNORECASE)
+    if m_fantasia:
+        fantasia = m_fantasia.group(1).strip()
+        fantasia = re.sub(r"^\s*\([^\)]*\)\s*[\:\-]?", "", fantasia).strip()
+        fantasia = re.split(r"\s*(?:C[OÓ]DIGO|ATIVIDADE|PORTE)\b", fantasia, flags=re.IGNORECASE)[0].strip()
+        if fantasia and fantasia.upper() not in ["*****", "NÃO INFORMADO", "NAO INFORMADO", "********"]:
+            dados["nome_fantasia"] = fantasia
+
+    # 6. CNAE Principal
+    m_cnae = re.search(r"C[OÓ]DIGO\s+E\s+DESCRI[CÇ][AÃ]O\s+DA\s+ATIVIDADE\s+ECON[OÔ]MICA\s+PRINCIPAL\s*[\:\-]?\s*([^\n\r]+)", text, re.IGNORECASE)
+    if m_cnae:
+        cnae = m_cnae.group(1).strip()
+        cnae = re.split(r"\s*(?:C[OÓ]DIGO|ATIVIDADE|SECUND[AÁ]RIA)\b", cnae, flags=re.IGNORECASE)[0].strip()
+        if len(cnae) >= 4:
+            dados["cnae_principal"] = cnae
+
+    # 7. Natureza Jurídica
+    m_nat = re.search(r"C[OÓ]DIGO\s+E\s+DESCRI[CÇ][AÃ]O\s+DA\s+NATUREZA\s+JUR[IÍ]DICA\s*[\:\-]?\s*([^\n\r]+)", text, re.IGNORECASE)
+    if m_nat:
+        nat = m_nat.group(1).strip()
+        nat = re.split(r"\s*(?:LOGRADOURO|ENDERE[CÇ]O|N[UÚ]MERO)\b", nat, flags=re.IGNORECASE)[0].strip()
+        if len(nat) >= 4:
+            dados["natureza_juridica"] = nat
+
+    # 8. Endereço Eletrônico / E-mail
+    m_email = re.search(r"(?:ENDERE[CÇ]O\s+ELETR[OÔ]NICO|E-MAIL|EMAIL)\s*[\:\-]?\s*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})", text, re.IGNORECASE)
+    if m_email:
+        dados["email"] = m_email.group(1).lower()
+
+    # 9. Telefone
+    m_tel = re.search(r"TELEFONE\s*[\:\-]?\s*([0-9\(\)\s\-\/]{8,25})", text, re.IGNORECASE)
+    if m_tel:
+        t = m_tel.group(1).strip().rstrip(".,;- ")
+        if len(re.sub(r"\D", "", t)) >= 8:
+            dados["telefone"] = t
+
+    # 10. Endereço Completo
+    m_logr = re.search(r"LOGRADOURO\s*[\:\-]?\s*([^\n\r]+)", text, re.IGNORECASE)
+    m_num = re.search(r"\bN[UÚ]MERO\b(?!\s+DE\s+INSCRI[CÇ][AÃ]O)\s*[\:\-]?\s*([^\n\r]+)", text, re.IGNORECASE)
+    m_bairro = re.search(r"BAIRRO/DISTRITO\s*[\:\-]?\s*([^\n\r]+)", text, re.IGNORECASE)
+    m_mun = re.search(r"MUNIC[IÍ]PIO\s*[\:\-]?\s*([^\n\r]+)", text, re.IGNORECASE)
+    m_uf = re.search(r"\bUF\s*[\:\-]?\s*([A-Z]{2})\b", text, re.IGNORECASE)
+    m_cep = re.search(r"CEP\s*[\:\-]?\s*(\d{2}\.?\d{3}-?\d{3})", text, re.IGNORECASE)
+
+    partes_end = []
+    if m_logr:
+        logr = re.split(r"\s*(?:N[UÚ]MERO|COMPLEMENTO)\b", m_logr.group(1).strip(), flags=re.IGNORECASE)[0].strip()
+        if m_num:
+            num = re.split(r"\s*(?:COMPLEMENTO|BAIRRO|DE\s+INSCRI[CÇ][AÃ]O)\b", m_num.group(1).strip(), flags=re.IGNORECASE)[0].strip()
+            partes_end.append(f"{logr}, {num}")
+        else:
+            partes_end.append(logr)
+    if m_bairro:
+        bairro = re.split(r"\s*(?:MUNIC[IÍ]PIO|CEP)\b", m_bairro.group(1).strip(), flags=re.IGNORECASE)[0].strip()
+        partes_end.append(bairro)
+    if m_mun:
+        mun = re.split(r"\s*(?:UF|PA[IÍ]S)\b", m_mun.group(1).strip(), flags=re.IGNORECASE)[0].strip()
+        uf_val = m_uf.group(1).upper() if m_uf else ""
+        mun_str = f"{mun}/{uf_val}" if uf_val else mun
+        partes_end.append(mun_str)
+        dados["municipio_uf"] = mun_str
+    elif m_uf:
+        dados["uf"] = m_uf.group(1).upper()
+    if m_cep:
+        partes_end.append(f"CEP {m_cep.group(1)}")
+
+    if partes_end:
+        dados["endereco_completo"] = " - ".join(partes_end)
+
+    return dados
+
+
 def extract_course_fallback(text: str) -> Optional[str]:
     """Busca nome do curso em frases formais de diploma ou certificado como contingência."""
     if not text:
@@ -414,7 +605,213 @@ def get_document_images_for_vision(
         return load_image_to_base64(p, quality=quality)
     elif ext == ".pdf":
         return render_pdf_pages_to_base64(str(p), max_pages=max_pages, scale=scale, quality=quality)
+    elif ext in WORD_EXTENSIONS:
+        pdf_cached = convert_office_to_pdf(p)
+        if pdf_cached and pdf_cached.exists():
+            return render_pdf_pages_to_base64(str(pdf_cached), max_pages=max_pages, scale=scale, quality=quality)
     return []
+
+
+# ---------------------------------------------------------------------------
+# Conversão e Extração de Documentos Word e Suíte Office (.docx, .doc, .odt, .rtf, .txt)
+# ---------------------------------------------------------------------------
+def convert_office_to_pdf(
+    office_path: Union[str, Path],
+    cache_dir: Optional[Union[str, Path]] = None,
+    timeout: int = 45
+) -> Optional[Path]:
+    """
+    Converte documento do Microsoft Word ou OpenOffice (.docx, .doc, .odt, .rtf) para PDF
+    utilizando LibreOffice Headless com cache persistente baseado no hash MD5.
+    Garante fidelidade 100% de layout, tabelas e tipografia sem conflitos com LibreOffice desktop.
+    """
+    p = Path(office_path).resolve()
+    if not p.exists() or not p.is_file():
+        return None
+
+    ext = p.suffix.lower()
+    if ext == ".pdf":
+        return p
+
+    # Determina pasta de cache
+    if cache_dir:
+        c_dir = Path(cache_dir).resolve()
+    else:
+        env_cache = os.environ.get("JOAKINDEX_PDF_CACHE")
+        if env_cache:
+            c_dir = Path(env_cache).resolve()
+        else:
+            c_dir = p.parent / ".cache_pdf"
+
+    try:
+        c_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        c_dir = Path(tempfile.gettempdir()) / "joakindex_pdf_cache"
+        c_dir.mkdir(parents=True, exist_ok=True)
+
+    # Nome do arquivo de cache pelo MD5
+    try:
+        md5_val = calculate_md5(p).strip().lower()
+    except Exception:
+        md5_val = hashlib.md5(p.name.encode("utf-8")).hexdigest()
+
+    target_pdf = c_dir / f"{md5_val}.pdf"
+
+    # Se já existir e for válido, reaproveita instantaneamente
+    if target_pdf.exists() and target_pdf.stat().st_size > 500:
+        return target_pdf
+
+    # Detecta executável do LibreOffice
+    lo_bin = shutil.which("libreoffice") or shutil.which("soffice")
+    if not lo_bin:
+        print(f"[Aviso Office] LibreOffice não encontrado no sistema para converter {p.name}")
+        return None
+
+    with _OFFICE_CONVERT_LOCK:
+        # Re-checa após adquirir o lock (evita trabalho redundante)
+        if target_pdf.exists() and target_pdf.stat().st_size > 500:
+            return target_pdf
+
+        try:
+            # Perfil isolado para nunca travar com LibreOffice do usuário
+            user_inst = f"file://{tempfile.gettempdir()}/libreoffice_headless_joakindex"
+            cmd = [
+                lo_bin,
+                f"-env:UserInstallation={user_inst}",
+                "--headless",
+                "--convert-to", "pdf",
+                "--outdir", str(c_dir),
+                str(p)
+            ]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+
+            # O LibreOffice gera o PDF com o mesmo stem do arquivo de origem na pasta outdir
+            lo_output = c_dir / f"{p.stem}.pdf"
+            if lo_output.exists() and lo_output.stat().st_size > 500:
+                if lo_output != target_pdf:
+                    shutil.copy2(lo_output, target_pdf)
+                return target_pdf
+        except Exception as e:
+            print(f"[Aviso Office] Falha ao converter {p.name} para PDF via LibreOffice: {e}")
+
+    return None
+
+
+def extract_docx_text(docx_path: Union[str, Path]) -> str:
+    """
+    Extrai texto estruturado de arquivo .docx diretamente do XML interno (word/document.xml)
+    em Python puro com zero dependências externas.
+    """
+    p = Path(docx_path)
+    if not p.exists() or not p.is_file():
+        return ""
+    try:
+        with zipfile.ZipFile(p, "r") as zf:
+            if "word/document.xml" not in zf.namelist():
+                return ""
+            xml_content = zf.read("word/document.xml")
+            tree = ET.fromstring(xml_content)
+            paragraphs = []
+            for p_node in tree.iter():
+                if p_node.tag.endswith("}p"):
+                    texts = [node.text for node in p_node.iter() if node.tag.endswith("}t") and node.text]
+                    if texts:
+                        paragraphs.append("".join(texts).strip())
+
+            # Coleta também cabeçalhos e rodapés se existirem
+            for name in zf.namelist():
+                if (name.startswith("word/header") or name.startswith("word/footer")) and name.endswith(".xml"):
+                    try:
+                        h_tree = ET.fromstring(zf.read(name))
+                        for p_node in h_tree.iter():
+                            if p_node.tag.endswith("}p"):
+                                texts = [node.text for node in p_node.iter() if node.tag.endswith("}t") and node.text]
+                                if texts:
+                                    paragraphs.append("".join(texts).strip())
+                    except Exception:
+                        pass
+
+            return "\n\n".join(paragraphs).strip()
+    except Exception as e:
+        print(f"[Aviso DOCX] Falha ao ler XML de {p.name}: {e}")
+        return ""
+
+
+def extract_odt_text(odt_path: Union[str, Path]) -> str:
+    """Extrai texto estruturado de arquivo .odt diretamente do content.xml interno."""
+    p = Path(odt_path)
+    if not p.exists() or not p.is_file():
+        return ""
+    try:
+        with zipfile.ZipFile(p, "r") as zf:
+            if "content.xml" not in zf.namelist():
+                return ""
+            xml_content = zf.read("content.xml")
+            tree = ET.fromstring(xml_content)
+            paragraphs = []
+            for node in tree.iter():
+                if node.tag.endswith("}p") or node.tag.endswith("}h"):
+                    t = "".join(node.itertext()).strip()
+                    if t:
+                        paragraphs.append(t)
+            return "\n\n".join(paragraphs).strip()
+    except Exception as e:
+        print(f"[Aviso ODT] Falha ao ler content.xml de {p.name}: {e}")
+        return ""
+
+
+def extract_txt_text(txt_path: Union[str, Path]) -> str:
+    """Extrai texto de arquivo .txt com detecção inteligente de encodings (UTF-8, CP1252, Latin-1)."""
+    p = Path(txt_path)
+    if not p.exists() or not p.is_file():
+        return ""
+    for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
+        try:
+            return p.read_text(encoding=enc).strip()
+        except Exception:
+            continue
+    return ""
+
+
+def extract_document_text(file_path: Union[str, Path], max_pages: int = 4) -> str:
+    """
+    Roteia a extração de texto para o leitor especializado de acordo com a extensão do documento:
+    PDF, DOCX, DOC, ODT, RTF ou TXT.
+    """
+    p = Path(file_path)
+    ext = p.suffix.lower()
+
+    if ext == ".pdf":
+        return extract_pdf_text(str(p), max_pages=max_pages)
+
+    if ext == ".docx":
+        t = extract_docx_text(p)
+        if len(t) >= 20:
+            return t
+        pdf_c = convert_office_to_pdf(p)
+        if pdf_c and pdf_c.exists():
+            return extract_pdf_text(str(pdf_c), max_pages=max_pages)
+        return t
+
+    if ext == ".odt":
+        t = extract_odt_text(p)
+        if len(t) >= 20:
+            return t
+        pdf_c = convert_office_to_pdf(p)
+        if pdf_c and pdf_c.exists():
+            return extract_pdf_text(str(pdf_c), max_pages=max_pages)
+        return t
+
+    if ext == ".txt":
+        return extract_txt_text(p)
+
+    if ext in [".doc", ".rtf"]:
+        pdf_c = convert_office_to_pdf(p)
+        if pdf_c and pdf_c.exists():
+            return extract_pdf_text(str(pdf_c), max_pages=max_pages)
+        return ""
+
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -562,8 +959,8 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
         scores["Livro/Publicação"] = ("academico", 8)
 
     # 3. Domínio: Profissional / Carreira / Cadastral
-    if any(k in t for k in ["comprovante de inscrição e de situação cadastral", "comprovante de inscricao e de situacao cadastral", "cadastro nacional da pessoa jurídica", "cadastro nacional da pessoa juridica", "cartão cnpj", "cartao cnpj"]):
-        scores["Comprovante de Inscrição e de Situação Cadastral"] = ("profissional", 10)
+    if any(k in t for k in ["comprovante de inscrição e de situação cadastral", "comprovante de inscricao e de situacao cadastral", "cadastro nacional da pessoa jurídica", "cadastro nacional da pessoa juridica", "cartão cnpj", "cartao cnpj"]) or ("receita federal" in t and "cnpj" in t) or ("situação cadastral" in t and "cnpj" in t) or ("situacao cadastral" in t and "cnpj" in t) or ("inscrição" in t and "cnpj" in t and "ministério da fazenda" in t):
+        scores["Cartão CNPJ / Situação Cadastral"] = ("profissional", 10)
     elif any(k in t for k in ["curriculum vitae", "currículo vitae", "curriculo lattes", "currículo lattes", "experiência profissional", "experiencia profissional", "resumo profissional", "histórico profissional", "historico profissional", "trajetória profissional", "trajetoria profissional", "dados profissionais", "formação acadêmica e profissional"]):
         scores["Currículo"] = ("profissional", 9)
     elif any(k in t for k in ["declaração de experiência", "declaracao de experiencia", "atestado de capacidade técnica", "atestado de capacidade tecnica"]):
@@ -731,6 +1128,11 @@ def analyze_pdf_dossier(
     Aplica regras de hierarquia e anti-contaminação para consolidar dados do titular.
     """
     p = Path(pdf_path)
+    if p.suffix.lower() in WORD_EXTENSIONS:
+        cached_pdf = convert_office_to_pdf(p)
+        if cached_pdf and cached_pdf.exists():
+            p = cached_pdf
+
     result = {
         "paginas": [],
         "todos_tipos": [],
@@ -800,6 +1202,7 @@ def analyze_pdf_dossier(
         tipo, dom = classify_text_signatures(combined_page_text)
         p_cpf = extract_cpf_fallback(combined_page_text)
         p_rg = extract_rg_fallback(combined_page_text)
+        p_cnpj = extract_cnpj_fallback(combined_page_text)
         p_curso = extract_course_fallback(combined_page_text)
 
         p_entry = {
@@ -808,6 +1211,7 @@ def analyze_pdf_dossier(
             "tipo": tipo or "Documento Diverso",
             "cpf": p_cpf,
             "rg": p_rg,
+            "cnpj": p_cnpj,
             "curso": p_curso
         }
         pages_info.append(p_entry)
@@ -838,6 +1242,16 @@ def analyze_pdf_dossier(
         if rg_titular:
             break
 
+    # CNPJ: Prioridade 1 = Profissional / Cadastral, 2 = Outros
+    cnpj_titular = None
+    for target_dom in ["profissional", "identificacao", "financeiro", "outros"]:
+        for p_info in pages_info:
+            if p_info["dominio"] == target_dom and p_info.get("cnpj"):
+                cnpj_titular = p_info["cnpj"]
+                break
+        if cnpj_titular:
+            break
+
     # Curso: Estritamente de páginas acadêmicas
     curso_titular = None
     for p_info in pages_info:
@@ -851,7 +1265,7 @@ def analyze_pdf_dossier(
     tipo_principal = None
     priority_order = [
         "Diploma", "Certificado", "Histórico Escolar", "Declaração", "Ementa", "Dissertação", "Livro/Publicação",
-        "Currículo", "Declaração de Experiência Profissional", "Comprovante de Inscrição e de Situação Cadastral",
+        "Cartão CNPJ / Situação Cadastral", "Comprovante de Inscrição e de Situação Cadastral", "Currículo", "Declaração de Experiência Profissional",
         "CNH", "RG", "CPF", "Certidão de Nascimento", "Certidão de Casamento", "Passaporte",
         "Comprovante PIX", "Comprovante de Pagamento", "Boleto", "Recibo"
     ]
@@ -868,6 +1282,7 @@ def analyze_pdf_dossier(
     result["dossie_paginas"] = [{"pagina": p["pagina"], "tipo": p["tipo"], "dominio": p["dominio"]} for p in pages_info]
     result["cpf_titular"] = cpf_titular
     result["rg_titular"] = rg_titular
+    result["cnpj_titular"] = cnpj_titular
     result["curso_titular"] = curso_titular
     result["tipo_documento_principal"] = tipo_principal
     result["dominio_principal"] = dominio_principal
@@ -1366,22 +1781,24 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
     * "academico" (para diplomas, certificados de cursos, históricos escolares, declarações de matrícula/conclusão, carteiras de estudante)
     * "financeiro" (para comprovantes PIX, recibos de pagamento, transferências bancárias, boletos, extratos, notas fiscais)
     * "identificacao" (para RG, CNH, CPF, Título de Eleitor, Certidão de Nascimento/Casamento, Passaporte, Registro Profissional)
+    * "profissional" (para Cartão CNPJ, Comprovante de Inscrição e Situação Cadastral, currículos, carteira de trabalho, atestados de capacidade)
     * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
     * "outro" (para quaisquer outros documentos não contemplados acima)
-- "tipo_documento": Nome específico do documento (ex: "Comprovante PIX", "Recibo de Pagamento", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro"). Se não puder identificar, retorne "Não identificado".
+- "tipo_documento": Nome específico do documento (ex: "Cartão CNPJ / Situação Cadastral", "Comprovante PIX", "Recibo de Pagamento", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro"). Se não puder identificar, retorne "Não identificado".
 
 2. CAMPOS UNIVERSAIS:
 - "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
-- "beneficiario": Nome do titular, aluno ou recebedor/favorecido do pagamento. Se não encontrar, retorne null.
+- "beneficiario": Nome do titular, aluno, favorecido do pagamento ou Razão Social da empresa. Se não encontrar, retorne null.
 - "cpf": CPF do titular ou recebedor identificado (ex: "000.000.000-00" ou apenas números). Se não houver menção, retorne null.
 - "rg": Número da Cédula de Identidade / RG do titular incluindo órgão emissor/UF (ex: "12.345.678-9 SSP/SP"). Se não houver, retorne null.
+- "cnpj": CNPJ da empresa, órgão ou pagador/recebedor formatado (ex: "00.000.000/0000-00") ou apenas números. Se não houver, retorne null.
 - "valor_monetario": Se for comprovante financeiro ou PIX, informe o valor monetário com 'R$' (ex: "R$ 150,00" ou "R$ 1.250,50"). Para outros documentos, retorne null.
 
 3. CAMPOS ACADÊMICOS (se aplicável):
 - "curso": Nome oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Bacharelado em Administração"). Se não for curso, retorne null.
 - "natureza_curso": Nível acadêmico: "Graduação / Curso Superior", "Pós-Graduação Lato Sensu (Especialização/MBA)", "Pós-Graduação Stricto Sensu (Mestrado/Doutorado)", "Curso Técnico / Profissionalizante", "Curso de Extensão / Aperfeiçoamento", "Educação Básica" ou null.
 - "carga_horaria": Carga horária total (ex: "750 h/aulas", "360 horas", "750h"). Se não houver, retorne null.
-- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se não houver, retorne null.
+- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se for Cartão CNPJ, informe "Receita Federal do Brasil (RFB)". Se não houver, retorne null.
 
 4. CAMPOS ESPECÍFICOS DE PIX / FINANCEIRO (preencha se for documento financeiro/PIX, senão retorne null):
 - "pix_pagador_nome": Nome completo do pagador da transferência.
@@ -1392,6 +1809,18 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "pix_e2e_id": Identificador fim-a-fim da transação (ID E2E com 32 a 40 caracteres iniciado por 'E', ex: "E00416968202609081430s0123456789").
 - "pix_autenticacao": Código de autenticação bancária ou hash de controle de segurança.
 
+5. CAMPOS CADASTRAIS / PESSOA JURÍDICA (preencha se for Cartão CNPJ / Comprovante de Situação Cadastral ou documento de empresa, senão retorne null):
+- "razao_social": Nome empresarial oficial da entidade/empresa.
+- "nome_fantasia": Título do estabelecimento / nome fantasia.
+- "situacao_cadastral": Situação cadastral oficial (ex: "ATIVA", "BAIXADA", "SUSPENSA", "INAPTA", "NULA").
+- "data_situacao": Data da situação cadastral (ex: "10/05/2021").
+- "data_abertura": Data de fundação / início de atividade da empresa.
+- "cnae_principal": Código e descrição da atividade econômica principal (CNAE).
+- "natureza_juridica": Código e descrição da natureza jurídica.
+- "endereco_completo": Endereço cadastral completo (logradouro, número, complemento, bairro, município, UF e CEP).
+- "telefone": Telefone oficial informado no cadastro.
+- "email": Endereço eletrônico / e-mail informado na Receita.
+
 REGRAS:
 1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
 2. Não invente nenhuma informação. Se não estiver visível na imagem, preencha o valor como null.
@@ -1400,7 +1829,7 @@ REGRAS:
 
 def build_universal_prompt(document_text: str) -> str:
     return f"""Você é um especialista em classificação de documentos oficiais brasileiros e extração estruturada de dados.
-Analise o texto extraído deste documento (que pode ser acadêmico, comprovante financeiro/PIX, identificação, jurídico ou outro) e extraia todas as entidades estruturadas.
+Analise o texto extraído deste documento (que pode ser acadêmico, comprovante financeiro/PIX, identificação, profissional/CNPJ, jurídico ou outro) e extraia todas as entidades estruturadas.
 
 Texto extraído do documento:
 \"\"\"
@@ -1414,22 +1843,24 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
     * "academico" (para diplomas, certificados de cursos, históricos escolares, declarações de matrícula/conclusão, carteiras de estudante)
     * "financeiro" (para comprovantes PIX, recibos de pagamento, transferências bancárias, boletos, extratos, notas fiscais)
     * "identificacao" (para RG, CNH, CPF, Título de Eleitor, Certidão de Nascimento/Casamento, Passaporte, Registro Profissional)
+    * "profissional" (para Cartão CNPJ, Comprovante de Inscrição e Situação Cadastral, currículos, carteira de trabalho, atestados de capacidade)
     * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
     * "outro" (para quaisquer outros documentos não contemplados acima)
-- "tipo_documento": Nome específico do documento (ex: "Comprovante PIX", "Recibo de Pagamento", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro"). Se não puder identificar, retorne "Não identificado".
+- "tipo_documento": Nome específico do documento (ex: "Cartão CNPJ / Situação Cadastral", "Comprovante PIX", "Recibo de Pagamento", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro"). Se não puder identificar, retorne "Não identificado".
 
 2. CAMPOS UNIVERSAIS:
 - "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
-- "beneficiario": Nome do titular, aluno ou recebedor/favorecido do pagamento. Se não encontrar, retorne null.
+- "beneficiario": Nome do titular, aluno, favorecido do pagamento ou Razão Social da empresa. Se não encontrar, retorne null.
 - "cpf": CPF do titular ou recebedor identificado (ex: "000.000.000-00" ou apenas números). Se não houver menção, retorne null.
 - "rg": Número da Cédula de Identidade / RG do titular incluindo órgão emissor/UF (ex: "12.345.678-9 SSP/SP"). Se não houver, retorne null.
+- "cnpj": CNPJ da empresa, órgão ou pagador/recebedor formatado (ex: "00.000.000/0000-00") ou apenas números. Se não houver, retorne null.
 - "valor_monetario": Se for comprovante financeiro ou PIX, informe o valor monetário com 'R$' (ex: "R$ 150,00" ou "R$ 1.250,50"). Para outros documentos, retorne null.
 
 3. CAMPOS ACADÊMICOS (se aplicável):
 - "curso": Nome oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Bacharelado em Administração"). Se não for curso, retorne null.
 - "natureza_curso": Nível acadêmico: "Graduação / Curso Superior", "Pós-Graduação Lato Sensu (Especialização/MBA)", "Pós-Graduação Stricto Sensu (Mestrado/Doutorado)", "Curso Técnico / Profissionalizante", "Curso de Extensão / Aperfeiçoamento", "Educação Básica" ou null.
 - "carga_horaria": Carga horária total (ex: "750 h/aulas", "360 horas", "750h"). Se não houver, retorne null.
-- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se não houver, retorne null.
+- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se for Cartão CNPJ, informe "Receita Federal do Brasil (RFB)". Se não houver, retorne null.
 
 4. CAMPOS ESPECÍFICOS DE PIX / FINANCEIRO (preencha se for documento financeiro/PIX, senão retorne null):
 - "pix_pagador_nome": Nome completo do pagador da transferência.
@@ -1439,6 +1870,18 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "pix_chave": Chave PIX utilizada (e-mail, CPF/CNPJ, telefone ou chave EVP aleatória).
 - "pix_e2e_id": Identificador fim-a-fim da transação (ID E2E com 32 a 40 caracteres iniciado por 'E', ex: "E00416968202609081430s0123456789").
 - "pix_autenticacao": Código de autenticação bancária ou hash de controle de segurança.
+
+5. CAMPOS CADASTRAIS / PESSOA JURÍDICA (preencha se for Cartão CNPJ / Comprovante de Situação Cadastral ou documento de empresa, senão retorne null):
+- "razao_social": Nome empresarial oficial da entidade/empresa.
+- "nome_fantasia": Título do estabelecimento / nome fantasia.
+- "situacao_cadastral": Situação cadastral oficial (ex: "ATIVA", "BAIXADA", "SUSPENSA", "INAPTA", "NULA").
+- "data_situacao": Data da situação cadastral (ex: "10/05/2021").
+- "data_abertura": Data de fundação / início de atividade da empresa.
+- "cnae_principal": Código e descrição da atividade econômica principal (CNAE).
+- "natureza_juridica": Código e descrição da natureza jurídica.
+- "endereco_completo": Endereço cadastral completo (logradouro, número, complemento, bairro, município, UF e CEP).
+- "telefone": Telefone oficial informado no cadastro.
+- "email": Endereço eletrônico / e-mail informado na Receita.
 
 REGRAS:
 1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
@@ -1478,6 +1921,7 @@ def process_single_pdf(
         "beneficiario": None,
         "cpf": None,
         "rg": None,
+        "cnpj": None,
         "curso": None,
         "natureza_curso": None,
         "carga_horaria": None,
@@ -1555,10 +1999,12 @@ def process_single_pdf(
                     return res_dict
 
         # ---------------------------------------------------------------------
-        # RAMO B: DOCUMENTO PDF (Camada de Texto Digital com Fallback para OCR)
+        # RAMO B: DOCUMENTOS (PDF, Word DOCX/DOC, ODT, RTF, TXT)
         # ---------------------------------------------------------------------
         else:
-            text = extract_pdf_text(str(pdf_path), max_pages=max_pages)
+            is_word = ext in WORD_EXTENSIONS
+            is_txt = ext in TEXT_EXTENSIONS
+            text = extract_document_text(pdf_path, max_pages=max_pages)
             has_text = bool(text and len(text.strip()) >= 15)
             tess_text = ""
 
@@ -1569,10 +2015,17 @@ def process_single_pdf(
                     return res_dict
 
                 # 1. OCR complementar rápido (Tesseract em imagens embutidas e páginas)
-                tess_text = extract_tesseract_text_from_pdf(pdf_path, max_pages=max_pages)
+                # Para Word, converte para PDF espelho primeiro
+                target_pdf_path = convert_office_to_pdf(pdf_path) if is_word else pdf_path
+
+                if target_pdf_path and target_pdf_path.exists():
+                    tess_text = extract_tesseract_text_from_pdf(target_pdf_path, max_pages=max_pages)
+                    images = render_pdf_pages_to_base64(str(target_pdf_path), max_pages=min(max_pages, 4))
+                else:
+                    images = []
+
                 combined_text = f"{text}\n\n{tess_text}".strip() if (text and tess_text) else (tess_text or text)
 
-                images = render_pdf_pages_to_base64(str(pdf_path), max_pages=min(max_pages, 4))
                 if not images and not combined_text:
                     res_dict["status"] = "erro"
                     res_dict["erro"] = "Documento sem texto legível digitalmente e falha ao renderizar páginas para OCR."
@@ -1586,7 +2039,7 @@ def process_single_pdf(
                     else:
                         prompt = build_universal_prompt(combined_text)
                         extracted_data = client.generate_json(prompt)
-                    res_dict["metodo_leitura"] = "ocr_llm" if not has_text else "hibrido_texto_e_ocr_llm"
+                    res_dict["metodo_leitura"] = "ocr_llm" if not has_text else ("office_ocr_llm" if is_word else "hibrido_texto_e_ocr_llm")
                     res_dict["tentativa_ocr_llm"] = True
                 except Exception as e:
                     if combined_text:
@@ -1609,8 +2062,12 @@ def process_single_pdf(
             else:
                 # Leitura normal da camada de texto digital via LLM
                 prompt = build_universal_prompt(text)
-                extracted_data = client.generate_json(prompt)
-                res_dict["metodo_leitura"] = "texto_digital"
+                try:
+                    extracted_data = client.generate_json(prompt)
+                except Exception as e_llm:
+                    print(f"[*] Chamada LLM falhou ({e_llm}). Prosseguindo com extração por regras e heurísticas...")
+                    extracted_data = {}
+                res_dict["metodo_leitura"] = "texto_office" if is_word else ("texto_puro" if is_txt else "texto_digital")
 
         # Preenchimento e sanitização dos campos gerais
         res_dict["data"] = _clean_str(extracted_data.get("data"))
@@ -1646,6 +2103,73 @@ def process_single_pdf(
                 if tess_text:
                     rg_val = extract_rg_fallback(tess_text)
         res_dict["rg"] = rg_val
+
+        # Tratamento e fallback para CNPJ
+        cnpj_val = extracted_data.get("cnpj") or (extracted_data.get("pix_pagador_cpf_cnpj") if (extracted_data.get("pix_pagador_cpf_cnpj") and "/" in str(extracted_data.get("pix_pagador_cpf_cnpj"))) else None)
+        formatted_cnpj = format_cnpj(cnpj_val)
+        if not formatted_cnpj or not is_valid_cnpj_syntax(formatted_cnpj):
+            if has_text:
+                formatted_cnpj = extract_cnpj_fallback(text)
+            if not formatted_cnpj or not is_valid_cnpj_syntax(formatted_cnpj):
+                if not tess_text and not is_image:
+                    try:
+                        tess_text = extract_tesseract_text_from_pdf(pdf_path, max_pages=max_pages)
+                    except Exception:
+                        pass
+                if tess_text:
+                    formatted_cnpj = extract_cnpj_fallback(tess_text)
+        res_dict["cnpj"] = formatted_cnpj
+        if formatted_cnpj and not res_dict.get("cpf"):
+            res_dict["cpf"] = formatted_cnpj
+
+        # Extração de campos cadastrais (Cartão CNPJ / Receita Federal)
+        cadastral_fallback = {}
+        if has_text:
+            cadastral_fallback = extract_cnpj_cadastral_fallback(text)
+        elif tess_text:
+            cadastral_fallback = extract_cnpj_cadastral_fallback(tess_text)
+
+        cnpj_fields = {
+            "razao_social": _clean_str(extracted_data.get("razao_social")) or cadastral_fallback.get("razao_social"),
+            "nome_fantasia": _clean_str(extracted_data.get("nome_fantasia")) or cadastral_fallback.get("nome_fantasia"),
+            "situacao_cadastral": _clean_str(extracted_data.get("situacao_cadastral")) or cadastral_fallback.get("situacao_cadastral"),
+            "data_situacao": _clean_str(extracted_data.get("data_situacao")) or cadastral_fallback.get("data_situacao"),
+            "data_abertura": _clean_str(extracted_data.get("data_abertura")) or cadastral_fallback.get("data_abertura"),
+            "cnae_principal": _clean_str(extracted_data.get("cnae_principal")) or cadastral_fallback.get("cnae_principal"),
+            "natureza_juridica": _clean_str(extracted_data.get("natureza_juridica")) or cadastral_fallback.get("natureza_juridica"),
+            "endereco_completo": _clean_str(extracted_data.get("endereco_completo")) or cadastral_fallback.get("endereco_completo"),
+            "telefone": _clean_str(extracted_data.get("telefone")) or cadastral_fallback.get("telefone"),
+            "email": _clean_str(extracted_data.get("email")) or cadastral_fallback.get("email"),
+        }
+
+        # Se houver dados de CNPJ ou dados cadastrais, consolida em dados_extras
+        if formatted_cnpj or any(cnpj_fields.values()):
+            if "dados_extras" not in res_dict or not isinstance(res_dict["dados_extras"], dict):
+                res_dict["dados_extras"] = {}
+            if formatted_cnpj:
+                res_dict["dados_extras"]["cnpj"] = formatted_cnpj
+            for k_field, v_field in cnpj_fields.items():
+                if v_field:
+                    res_dict["dados_extras"][k_field] = v_field
+                    res_dict[k_field] = v_field
+
+            # Preenchimento inteligente de beneficiário com razão social se vazio
+            if not res_dict.get("beneficiario"):
+                if cnpj_fields.get("razao_social"):
+                    res_dict["beneficiario"] = cnpj_fields["razao_social"]
+                elif cnpj_fields.get("nome_fantasia"):
+                    res_dict["beneficiario"] = cnpj_fields["nome_fantasia"]
+
+            # Emissor Receita Federal se não informado
+            if not res_dict.get("faculdade") and (formatted_cnpj or "cnpj" in str(tipo_doc_raw or "").lower() or "cadastral" in str(tipo_doc_raw or "").lower()):
+                res_dict["faculdade"] = "Receita Federal do Brasil (RFB)"
+
+            # Data da situação cadastral ou abertura se data vazia
+            if not res_dict.get("data"):
+                if cnpj_fields.get("data_situacao"):
+                    res_dict["data"] = cnpj_fields["data_situacao"]
+                elif cnpj_fields.get("data_abertura"):
+                    res_dict["data"] = cnpj_fields["data_abertura"]
 
         # Campos acadêmicos
         raw_curso = _clean_str(extracted_data.get("curso"))
@@ -1721,8 +2245,10 @@ def process_single_pdf(
                 tipo_doc_raw = "Comprovante PIX" if ("pix" in tipo_lower or pix_e2e_id or pix_chave) else "Recibo de Pagamento"
             if not res_dict.get("faculdade") and pix_pagador_banco:
                 res_dict["faculdade"] = pix_pagador_banco
-        elif any(k in tipo_lower for k in ["situação cadastral", "situacao cadastral", "cnpj", "currículo", "curriculo", "experiência profissional", "experiencia profissional", "lattes", "ctps", "carteira de trabalho"]):
+        elif any(k in tipo_lower for k in ["situação cadastral", "situacao cadastral", "cnpj", "currículo", "curriculo", "experiência profissional", "experiencia profissional", "lattes", "ctps", "carteira de trabalho"]) or formatted_cnpj:
             dominio = "profissional"
+            if formatted_cnpj and (not tipo_doc_raw or tipo_lower in ["não identificado", "nao identificado", "outro", "não informado", "nao informado"]):
+                tipo_doc_raw = "Cartão CNPJ / Situação Cadastral"
         elif any(k in tipo_lower for k in ["rg", "cnh", "identidade", "cpf", "certidão", "certidao", "eleitor", "passaporte"]):
             dominio = "identificacao"
         elif any(k in tipo_lower for k in ["contrato", "procuração", "procuracao", "posse", "juridico", "petição", "peticao"]):
@@ -1863,6 +2389,10 @@ def process_single_pdf(
                 if not res_dict.get("rg") and dossier.get("rg_titular"):
                     res_dict["rg"] = dossier["rg_titular"]
 
+                # Resgate de CNPJ do titular
+                if not res_dict.get("cnpj") and dossier.get("cnpj_titular"):
+                    res_dict["cnpj"] = dossier["cnpj_titular"]
+
                 # Resgate do curso (estritamente de páginas acadêmicas)
                 if (not res_dict.get("curso") or any(k in str(res_dict.get("curso")).lower() for k in ["faculdade", "universidade", "instituto", "colegio"])) and dossier.get("curso_titular"):
                     res_dict["curso"] = dossier["curso_titular"]
@@ -1889,6 +2419,7 @@ def process_single_pdf(
             res_dict.get("curso"),
             res_dict.get("cpf"),
             res_dict.get("rg"),
+            res_dict.get("cnpj"),
             res_dict.get("faculdade"),
             res_dict.get("tipo_documento"),
             res_dict.get("valor_monetario"),
@@ -1925,6 +2456,7 @@ def format_single_txt(item: Dict[str, Any]) -> str:
     ext = item.get("extensao") or ""
     todos_tipos = item.get("todos_tipos") or []
     dossie_line = f"\nDocumentos no Arquivo  : {', '.join(str(t) for t in todos_tipos)}" if (isinstance(todos_tipos, list) and len(todos_tipos) > 1) else ""
+    de = item.get("dados_extras") if isinstance(item.get("dados_extras"), dict) else {}
 
     txt = f"""--------------------------------------------------------------------------------
 MD5                     : {item.get('md5')}
@@ -1937,6 +2469,7 @@ Data da Última Alteração: {item.get('data_modificacao')}
 Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}
 CPF                     : {item.get('cpf') or 'Não informado'}
 RG / Identidade         : {item.get('rg') or 'Não informado'}
+CNPJ                    : {item.get('cnpj') or 'Não informado'}
 """
     if dom == "financeiro" or item.get("valor_monetario") or item.get("pix_pagador_nome"):
         txt += f"""Valor Monetário         : {item.get('valor_monetario') or 'Não informado'}
@@ -1949,6 +2482,21 @@ Banco Destino (Receb.)  : {item.get('pix_recebedor_banco') or 'Não informado'}
 Chave PIX               : {item.get('pix_chave') or 'Não informada'}
 ID Fim-a-Fim (E2E)      : {item.get('pix_e2e_id') or 'Não informado'}
 Autenticação Bancária   : {item.get('pix_autenticacao') or 'Não informada'}
+"""
+    elif dom == "profissional" or item.get("cnpj") or de.get("situacao_cadastral"):
+        txt += f"""Razão Social            : {item.get('beneficiario') or de.get('razao_social') or 'Não informada'}
+Nome Fantasia           : {de.get('nome_fantasia') or 'Não informado'}
+CNPJ                    : {item.get('cnpj') or 'Não informado'}
+Situação Cadastral      : {de.get('situacao_cadastral') or 'Não informada'}
+Data da Situação        : {de.get('data_situacao') or 'Não informada'}
+Data de Abertura        : {de.get('data_abertura') or 'Não informada'}
+CNAE Principal          : {de.get('cnae_principal') or 'Não informado'}
+Natureza Jurídica       : {de.get('natureza_juridica') or 'Não informada'}
+Endereço Completo       : {de.get('endereco_completo') or 'Não informado'}
+Telefone                : {de.get('telefone') or 'Não informado'}
+E-mail                  : {de.get('email') or 'Não informado'}
+Instituição Emissora    : {item.get('faculdade') or 'Receita Federal do Brasil (RFB)'}
+Data do Documento       : {item.get('data') or 'Não informada'}
 """
     else:
         txt += f"""Curso                   : {item.get('curso') or 'Não informado'}

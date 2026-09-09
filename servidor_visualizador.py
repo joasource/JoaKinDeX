@@ -53,7 +53,12 @@ try:
         OpenAIClient,
         run_batch_classification,
         detect_ollama_environments,
-        get_available_ollama_models
+        get_available_ollama_models,
+        convert_office_to_pdf,
+        WORD_EXTENSIONS,
+        TEXT_EXTENSIONS,
+        IMAGE_EXTENSIONS,
+        SUPPORTED_EXTENSIONS
     )
 except Exception:
     import importlib.util
@@ -67,6 +72,11 @@ except Exception:
     run_batch_classification = getattr(joakindex, "run_batch_classification", None)
     detect_ollama_environments = getattr(joakindex, "detect_ollama_environments", None)
     get_available_ollama_models = getattr(joakindex, "get_available_ollama_models", None)
+    convert_office_to_pdf = getattr(joakindex, "convert_office_to_pdf", None)
+    WORD_EXTENSIONS = getattr(joakindex, "WORD_EXTENSIONS", {".docx", ".doc", ".odt", ".rtf"})
+    TEXT_EXTENSIONS = getattr(joakindex, "TEXT_EXTENSIONS", {".txt"})
+    IMAGE_EXTENSIONS = getattr(joakindex, "IMAGE_EXTENSIONS", {".png", ".jpg", ".jpeg", ".webp"})
+    SUPPORTED_EXTENSIONS = getattr(joakindex, "SUPPORTED_EXTENSIONS", {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".docx", ".doc", ".odt", ".rtf", ".txt"})
 
 try:
     from config_manager import (
@@ -671,10 +681,10 @@ class ConferenciaServer:
             return
 
         found_set = set()
-        for ext in [".pdf", ".png", ".jpg", ".jpeg", ".webp"]:
+        for ext in sorted(SUPPORTED_EXTENSIONS):
             found_set |= set(self.pdf_dir.rglob(f"*{ext}")) | set(self.pdf_dir.rglob(f"*{ext.upper()}"))
         pdf_files = sorted(found_set)
-        print(f"[*] Indexando {len(pdf_files)} documentos (PDFs e Imagens) na pasta {self.pdf_dir}...")
+        print(f"[*] Indexando {len(pdf_files)} documentos (PDFs, Word e Imagens) na pasta {self.pdf_dir}...")
         for p in pdf_files:
             try:
                 h = calculate_md5(p).strip().lower()
@@ -891,6 +901,67 @@ class ConferenciaServer:
             pass
 
 
+def render_pdf_file_thumbnail(pdf_path: Path, page_num: int = 1, target_width: int = 720) -> Optional[bytes]:
+    """Renderiza uma página específica de um arquivo PDF como JPEG comprimido em memória."""
+    page_idx = max(0, page_num - 1)
+    target_width = max(120, min(1600, int(target_width)))
+    img_data = None
+
+    # Método Principal: pypdfium2 (ultra-rápido em memória)
+    if pdfium is not None:
+        try:
+            pil_image = None
+            with _PDFIUM_LOCK:
+                pdf = pdfium.PdfDocument(str(pdf_path))
+                try:
+                    if 0 <= page_idx < len(pdf):
+                        page = pdf.get_page(page_idx)
+                        try:
+                            w, h = page.get_size()
+                            scale = float(target_width) / max(1.0, float(w))
+                            bitmap = page.render(scale=scale)
+                            try:
+                                pil_image = bitmap.to_pil().convert("RGB").copy()
+                            finally:
+                                bitmap.close()
+                        finally:
+                            page.close()
+                finally:
+                    pdf.close()
+
+            if pil_image:
+                buf = io.BytesIO()
+                pil_image.save(buf, format="JPEG", quality=86, optimize=True)
+                img_data = buf.getvalue()
+        except Exception as e:
+            print(f"[Aviso Thumbnail] Falha pypdfium2 em {pdf_path.name}: {e}")
+
+    # Fallback Poppler (pdftoppm): robustez absoluta para qualquer PDF no Linux
+    if not img_data and shutil.which("pdftoppm"):
+        try:
+            cmd = [
+                "pdftoppm",
+                "-jpeg",
+                "-jpegopt", "quality=86,optimize=y",
+                "-f", str(page_num),
+                "-l", str(page_num),
+                "-scale-to-x", str(target_width),
+                "-scale-to-y", "-1",
+                str(pdf_path)
+            ]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=12)
+            if res.returncode == 0 and len(res.stdout) > 500:
+                img_data = res.stdout
+        except Exception as e:
+            print(f"[Aviso Thumbnail] Falha pdftoppm em {pdf_path.name}: {e}")
+
+    return img_data
+
+
+# Alias para compatibilidade
+get_pdf_thumbnail = render_pdf_file_thumbnail
+
+
 def get_or_create_thumbnail(server_ctx: "ConferenciaServer", md5_str: str, page_num: int = 1, target_width: int = 720) -> Optional[bytes]:
     """Gera ou recupera miniatura de alta definição em cache JPEG comprimido (720px padrão)."""
     thumb_dir = server_ctx.json_path.parent / ".thumbnails"
@@ -964,55 +1035,16 @@ def get_or_create_thumbnail(server_ctx: "ConferenciaServer", md5_str: str, page_
             except Exception:
                 pass
 
-    # 2. Tratamento de arquivos PDF
+    # 2. Tratamento de arquivos Word / OpenOffice (.docx, .doc, .odt, .rtf)
+    elif ext in WORD_EXTENSIONS:
+        if convert_office_to_pdf:
+            pdf_cached = convert_office_to_pdf(pdf_file)
+            if pdf_cached and pdf_cached.exists():
+                img_data = render_pdf_file_thumbnail(pdf_cached, page_num=page_num, target_width=target_width)
+
+    # 3. Tratamento de arquivos PDF
     elif ext == ".pdf":
-        # Método Principal: pypdfium2 (ultra-rápido em memória)
-        if pdfium is not None:
-            try:
-                pil_image = None
-                with _PDFIUM_LOCK:
-                    pdf = pdfium.PdfDocument(str(pdf_file))
-                    try:
-                        if 0 <= page_idx < len(pdf):
-                            page = pdf.get_page(page_idx)
-                            try:
-                                w, h = page.get_size()
-                                scale = float(target_width) / max(1.0, float(w))
-                                bitmap = page.render(scale=scale)
-                                try:
-                                    pil_image = bitmap.to_pil().convert("RGB").copy()
-                                finally:
-                                    bitmap.close()
-                            finally:
-                                page.close()
-                    finally:
-                        pdf.close()
-
-                if pil_image:
-                    buf = io.BytesIO()
-                    pil_image.save(buf, format="JPEG", quality=86, optimize=True)
-                    img_data = buf.getvalue()
-            except Exception as e:
-                print(f"[Aviso Thumbnail] Falha pypdfium2 em {pdf_file.name}: {e}")
-
-        # Fallback Poppler (pdftoppm): robustez absoluta para qualquer PDF no Linux
-        if not img_data and shutil.which("pdftoppm"):
-            try:
-                cmd = [
-                    "pdftoppm",
-                    "-jpeg",
-                    "-jpegopt", "quality=86,optimize=y",
-                    "-f", str(page_num),
-                    "-l", str(page_num),
-                    "-scale-to-x", str(target_width),
-                    "-scale-to-y", "-1",
-                    str(pdf_file)
-                ]
-                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=12)
-                if res.returncode == 0 and len(res.stdout) > 500:
-                    img_data = res.stdout
-            except Exception as e:
-                print(f"[Aviso Thumbnail] Falha pdftoppm em {pdf_file.name}: {e}")
+        img_data = render_pdf_file_thumbnail(pdf_file, page_num=page_num, target_width=target_width)
 
     if img_data:
         try:
@@ -1188,12 +1220,24 @@ def create_handler(server_ctx: ConferenciaServer):
                         ".png": "image/png",
                         ".jpg": "image/jpeg",
                         ".jpeg": "image/jpeg",
-                        ".webp": "image/webp"
+                        ".webp": "image/webp",
+                        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        ".doc": "application/msword",
+                        ".odt": "application/vnd.oasis.opendocument.text",
+                        ".rtf": "application/rtf",
+                        ".txt": "text/plain; charset=utf-8"
                     }
                     content_type = mime_types.get(ext, "application/octet-stream")
+                    file_size = pdf_file.stat().st_size
+                    if prefix == "/api/pdf/" and ext in WORD_EXTENSIONS and convert_office_to_pdf:
+                        pdf_cached = convert_office_to_pdf(pdf_file)
+                        if pdf_cached and pdf_cached.exists():
+                            content_type = "application/pdf"
+                            file_size = pdf_cached.stat().st_size
+
                     self.send_response(200)
                     self.send_header("Content-Type", content_type)
-                    self.send_header("Content-Length", str(pdf_file.stat().st_size))
+                    self.send_header("Content-Length", str(file_size))
                     self.end_headers()
             elif path == "/favicon.ico":
                 self.send_response(204)
@@ -1319,22 +1363,41 @@ def create_handler(server_ctx: ConferenciaServer):
                     pdf_file = server_ctx.md5_to_file.get(md5_req)
 
                 if pdf_file and pdf_file.exists():
-                    size = pdf_file.stat().st_size
                     ext = pdf_file.suffix.lower()
                     mime_types = {
                         ".pdf": "application/pdf",
                         ".png": "image/png",
                         ".jpg": "image/jpeg",
                         ".jpeg": "image/jpeg",
-                        ".webp": "image/webp"
+                        ".webp": "image/webp",
+                        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        ".doc": "application/msword",
+                        ".odt": "application/vnd.oasis.opendocument.text",
+                        ".rtf": "application/rtf",
+                        ".txt": "text/plain; charset=utf-8"
                     }
                     content_type = mime_types.get(ext, "application/octet-stream")
+                    file_to_send = pdf_file
+                    disp_name = f"{md5_req}{ext}"
+                    disp_mode = "inline"
+
+                    # Se a requisição for para /api/pdf/ e o arquivo for Word (.docx, .doc, etc.),
+                    # entrega o PDF espelho de alta fidelidade gerado em cache pelo LibreOffice!
+                    if prefix == "/api/pdf/" and ext in WORD_EXTENSIONS and convert_office_to_pdf:
+                        pdf_cached = convert_office_to_pdf(pdf_file)
+                        if pdf_cached and pdf_cached.exists():
+                            file_to_send = pdf_cached
+                            content_type = "application/pdf"
+                            disp_name = f"{pdf_file.stem}.pdf"
+                            disp_mode = "inline"
+
+                    size = file_to_send.stat().st_size
                     self.send_response(200)
                     self.send_header("Content-Type", content_type)
-                    self.send_header("Content-Disposition", f'inline; filename="{md5_req}{ext}"')
+                    self.send_header("Content-Disposition", f'{disp_mode}; filename="{disp_name}"')
                     self.send_header("Content-Length", str(size))
                     self.end_headers()
-                    with open(pdf_file, "rb") as f:
+                    with open(file_to_send, "rb") as f:
                         self.wfile.write(f.read())
                     return
                 else:
@@ -1496,7 +1559,7 @@ def create_handler(server_ctx: ConferenciaServer):
                                     sub_pdf_count = 0
                                     if mode == "pdf":
                                         try:
-                                            sub_pdf_count = sum(1 for f in entry.glob("*.pdf"))
+                                            sub_pdf_count = sum(1 for f in entry.iterdir() if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS)
                                         except Exception:
                                             sub_pdf_count = 0
                                     dirs.append({
@@ -1510,7 +1573,7 @@ def create_handler(server_ctx: ConferenciaServer):
 
                         if mode == "pdf":
                             try:
-                                files_pdf_count = sum(1 for f in p.glob("*.pdf"))
+                                files_pdf_count = sum(1 for f in p.iterdir() if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS)
                             except Exception:
                                 files_pdf_count = 0
                 except (PermissionError, OSError):

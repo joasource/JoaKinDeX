@@ -764,7 +764,18 @@
                     class="hidden text-[10px] text-amber-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-amber-500/30 rounded" title="Limpar pendentes">✕</span>
             </button>
 
-            <!-- 5. Botão Limpar Todos os Filtros Ativos -->
+            <!-- 5. Pílula: Formato (PDF, Word, Imagens, Texto) -->
+            <button type="button" id="pillFormato" onclick="toggleFilterPopover('popoverFormato')"
+                    class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                    title="Filtrar por formato do arquivo">
+              <i class="fa-solid fa-file-circle-check text-sky-400 text-[10.5px]"></i>
+              <span id="labelPillFormato">Formato</span>
+              <i id="chevronPillFormato" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
+              <span id="clearPillFormato" onclick="event.stopPropagation(); resetFormatoFilter();"
+                    class="hidden text-[10px] text-sky-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-sky-500/30 rounded" title="Limpar formato">✕</span>
+            </button>
+
+            <!-- 6. Botão Limpar Todos os Filtros Ativos -->
             <button type="button" id="btnClearAllFilters" onclick="resetAllFilters()"
                     class="hidden px-2 py-1 rounded-lg text-[11px] font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/30 transition shrink-0 items-center gap-1"
                     title="Limpar todos os filtros ativos">
@@ -868,6 +879,22 @@
               </div>
             </div>
             <div id="statusChips" class="flex flex-wrap gap-1.5 pt-0.5"></div>
+          </div>
+
+          <!-- POPOVER 6: FORMATO DE ARQUIVO -->
+          <div id="popoverFormato" class="hidden absolute left-0 right-0 top-full mt-1.5 z-50 bg-slate-900/98 border border-slate-700/90 rounded-xl shadow-2xl p-3 text-xs backdrop-blur-md">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+              <div class="flex items-center gap-2 font-medium text-slate-200">
+                <i class="fa-solid fa-file-circle-check text-sky-400 text-[11px]"></i>
+                <span>Formato de Arquivo</span>
+                <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="btnClearFormato" onclick="resetFormatoFilter()" class="hidden text-[11px] text-sky-400 hover:underline">Limpar</button>
+                <button type="button" onclick="closeAllFilterPopovers()" class="text-slate-400 hover:text-white p-0.5"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+            <div id="formatoChips" class="flex flex-wrap gap-1.5 pt-0.5"></div>
           </div>
 
         </div>
@@ -1254,6 +1281,144 @@
             </div>
           </div>
 
+          <!-- 2.1 CARD EXCLUSIVO DE DADOS CADASTRAIS / CARTÃO CNPJ (Contextual) -->
+          <div id="cartaoCnpjCard" class="hidden bg-gradient-to-br from-sky-950/60 via-slate-900/95 to-slate-950 border border-sky-500/40 rounded-xl p-3.5 space-y-3 shadow-lg ring-1 ring-sky-500/20">
+            <div class="flex items-center justify-between border-b border-sky-500/30 pb-2">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-400">
+                  <i class="fa-solid fa-landmark text-xs"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-sky-300 uppercase tracking-wide">Comprovante de Situação Cadastral</h4>
+                  <span class="text-[10px] text-slate-400">Receita Federal do Brasil • Pessoa Jurídica</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span id="cnpjSituacaoBadge" class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-emerald-500/30">ATIVA</span>
+              </div>
+            </div>
+
+            <!-- CNPJ em Destaque com Copiar -->
+            <div class="bg-slate-950/80 p-2.5 rounded-lg border border-sky-500/30 flex items-center justify-between">
+              <div class="flex-1">
+                <label for="input_cnpj" class="block text-[10px] font-semibold uppercase text-sky-400/90">Número de Inscrição (CNPJ)</label>
+                <input type="text" id="input_cnpj" oninput="syncCnpjToGeneral(this.value); markDirty();" placeholder="00.000.000/0000-00"
+                       class="bg-transparent text-base sm:text-lg font-bold font-mono text-sky-300 focus:outline-none w-full placeholder-sky-900">
+              </div>
+              <button type="button" onclick="copyFieldValue('input_cnpj', 'CNPJ', this)" title="Copiar CNPJ"
+                      class="text-xs text-slate-400 hover:text-sky-400 px-2 py-1 rounded hover:bg-slate-800 transition">
+                <i class="fa-regular fa-copy"></i>
+              </button>
+            </div>
+
+            <!-- Razão Social e Nome Fantasia -->
+            <div class="space-y-2 text-xs">
+              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                    <i class="fa-solid fa-building text-sky-400 text-[9px]"></i> Nome Empresarial (Razão Social)
+                  </span>
+                  <button type="button" onclick="copyFieldValue('input_cnpj_razao_social', 'Razão Social', this)" class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+                <input type="text" id="input_cnpj_razao_social" oninput="syncRazaoSocialFromCnpjCard(this.value); markDirty();" placeholder="Nome Empresarial Oficial"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500 font-medium">
+              </div>
+
+              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                    <i class="fa-solid fa-tag text-slate-400 text-[9px]"></i> Título do Estabelecimento (Nome Fantasia)
+                  </span>
+                  <button type="button" onclick="copyFieldValue('input_cnpj_nome_fantasia', 'Nome Fantasia', this)" class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1">
+                    <i class="fa-regular fa-copy"></i> Copiar
+                  </button>
+                </div>
+                <input type="text" id="input_cnpj_nome_fantasia" oninput="markDirty()" placeholder="Nome Fantasia (se houver)"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
+              </div>
+            </div>
+
+            <!-- Situação Cadastral e Data de Abertura -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+                <label for="input_cnpj_situacao" class="block text-[10px] font-semibold text-slate-400">Situação Cadastral</label>
+                <input type="text" id="input_cnpj_situacao" oninput="updateCnpjBadge(); markDirty();" placeholder="Ex: ATIVA"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs font-semibold text-emerald-400 placeholder-slate-600 focus:outline-none focus:border-sky-500 uppercase">
+              </div>
+              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+                <label for="input_cnpj_data_abertura" class="block text-[10px] font-semibold text-slate-400">Data de Abertura</label>
+                <input type="text" id="input_cnpj_data_abertura" oninput="markDirty()" placeholder="DD/MM/AAAA"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
+              </div>
+            </div>
+
+            <!-- Atividade Econômica Principal (CNAE) -->
+            <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+              <div class="flex items-center justify-between">
+                <label for="input_cnpj_cnae" class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                  <i class="fa-solid fa-briefcase text-slate-400 text-[9px]"></i> Atividade Principal (CNAE)
+                </label>
+                <button type="button" onclick="copyFieldValue('input_cnpj_cnae', 'CNAE', this)" class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+              <input type="text" id="input_cnpj_cnae" oninput="markDirty()" placeholder="Código e descrição CNAE"
+                     class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
+            </div>
+
+            <!-- Natureza Jurídica -->
+            <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+              <label for="input_cnpj_natureza_juridica" class="block text-[10px] font-semibold text-slate-400">Natureza Jurídica</label>
+              <input type="text" id="input_cnpj_natureza_juridica" oninput="markDirty()" placeholder="Ex: 206-2 - Sociedade Empresária Limitada"
+                     class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-sky-500">
+            </div>
+
+            <!-- Endereço Completo -->
+            <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+              <div class="flex items-center justify-between">
+                <label for="input_cnpj_endereco" class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                  <i class="fa-solid fa-location-dot text-rose-400 text-[9px]"></i> Endereço Cadastral Completo
+                </label>
+                <button type="button" onclick="copyFieldValue('input_cnpj_endereco', 'Endereço', this)" class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+              <textarea id="input_cnpj_endereco" rows="2" oninput="markDirty()" placeholder="Logradouro, número, bairro, município, UF, CEP"
+                        class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 resize-none"></textarea>
+            </div>
+
+            <!-- Telefone e E-mail de Contato -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+                <div class="flex items-center justify-between">
+                  <label for="input_cnpj_telefone" class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                    <i class="fa-solid fa-phone text-emerald-400 text-[9px]"></i> Telefone
+                  </label>
+                  <button type="button" onclick="copyFieldValue('input_cnpj_telefone', 'Telefone', this)" class="text-[10px] text-slate-400 hover:text-sky-400">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+                <input type="text" id="input_cnpj_telefone" oninput="markDirty()" placeholder="(00) 0000-0000"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
+              </div>
+
+              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+                <div class="flex items-center justify-between">
+                  <label for="input_cnpj_email" class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                    <i class="fa-solid fa-envelope text-amber-400 text-[9px]"></i> E-mail
+                  </label>
+                  <button type="button" onclick="copyFieldValue('input_cnpj_email', 'E-mail', this)" class="text-[10px] text-slate-400 hover:text-sky-400">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+                <input type="text" id="input_cnpj_email" oninput="markDirty()" placeholder="contato@empresa.com.br"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
+              </div>
+            </div>
+          </div>
+
           <!-- 3. BLOCO DE IDENTIFICAÇÃO DO TITULAR / PESSOA (Comum a todos os tipos) -->
           <div class="space-y-3">
             <!-- Beneficiário / Titular -->
@@ -1272,35 +1437,49 @@
                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
 
-            <!-- CPF e RG do Beneficiário lado a lado -->
-            <div class="grid grid-cols-2 gap-3">
+            <!-- CPF, RG e CNPJ lado a lado -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div>
                 <div class="flex items-center justify-between mb-1">
-                  <label for="input_cpf" class="text-xs font-medium text-slate-300">CPF</label>
-                  <div class="flex items-center gap-2">
-                    <span class="text-[10px] text-slate-500 font-mono">cpf</span>
+                  <label for="input_cpf" id="label_cpf" class="text-xs font-medium text-slate-300">CPF</label>
+                  <div class="flex items-center gap-1.5">
+                    <span id="badge_cpf" class="text-[10px] text-slate-500 font-mono">cpf</span>
                     <button type="button" onclick="copyFieldValue('input_cpf', 'CPF', this)" title="Copiar CPF"
-                            class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                      <i class="fa-regular fa-copy"></i> Copiar
+                            class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-800 transition">
+                      <i class="fa-regular fa-copy"></i>
                     </button>
                   </div>
                 </div>
-                <input type="text" id="input_cpf" oninput="markDirty()" placeholder="000.000.000-00"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                <input type="text" id="input_cpf" oninput="onCpfInput(this.value)" placeholder="000.000.000-00"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
               </div>
               <div>
                 <div class="flex items-center justify-between mb-1">
-                  <label for="input_rg" class="text-xs font-medium text-slate-300">RG / Identidade</label>
-                  <div class="flex items-center gap-2">
+                  <label for="input_rg" id="label_rg" class="text-xs font-medium text-slate-300">RG / Identidade</label>
+                  <div class="flex items-center gap-1.5">
                     <span class="text-[10px] text-slate-500 font-mono">rg</span>
                     <button type="button" onclick="copyFieldValue('input_rg', 'RG', this)" title="Copiar RG"
-                            class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                      <i class="fa-regular fa-copy"></i> Copiar
+                            class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-800 transition">
+                      <i class="fa-regular fa-copy"></i>
                     </button>
                   </div>
                 </div>
                 <input type="text" id="input_rg" oninput="markDirty()" placeholder="Ex: 2030359 SSP-ES"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label for="input_doc_cnpj" class="text-xs font-medium text-slate-300">CNPJ</label>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] text-slate-500 font-mono">cnpj</span>
+                    <button type="button" onclick="copyFieldValue('input_doc_cnpj', 'CNPJ', this)" title="Copiar CNPJ"
+                            class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-800 transition">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+                <input type="text" id="input_doc_cnpj" oninput="syncGeneralCnpjToCard(this.value); markDirty();" placeholder="00.000.000/0000-00"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-sky-300 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
               </div>
             </div>
           </div>
@@ -1717,6 +1896,17 @@
                   class="hidden text-[10px] text-amber-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-amber-500/30 rounded" title="Limpar pendentes">✕</span>
           </button>
 
+          <!-- 5. Pílula: Formato (PDF, Word, Imagens, Texto) -->
+          <button type="button" id="g-pillFormato" onclick="toggleFilterPopover('g-popoverFormato')"
+                  class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                  title="Filtrar por formato de arquivo">
+            <i class="fa-solid fa-file-circle-check text-sky-400 text-[10.5px]"></i>
+            <span id="g-labelPillFormato">Formato</span>
+            <i id="g-chevronPillFormato" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
+            <span id="g-clearPillFormato" onclick="event.stopPropagation(); resetFormatoFilter();"
+                  class="hidden text-[10px] text-sky-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-sky-500/30 rounded" title="Limpar formato">✕</span>
+          </button>
+
           <!-- Botão Limpar Todos os Filtros Ativos da Galeria -->
           <button type="button" id="g-btnClearAllFilters" onclick="resetAllFilters()"
                   class="hidden px-2 py-1 rounded-lg text-[11px] font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/30 transition shrink-0 items-center gap-1"
@@ -1812,6 +2002,22 @@
             </div>
           </div>
           <div id="g-statusChips" class="flex flex-wrap gap-1.5 pt-0.5"></div>
+        </div>
+
+        <!-- POPOVER 6: FORMATO DE ARQUIVO DA GALERIA -->
+        <div id="g-popoverFormato" class="hidden absolute left-0 max-w-xl w-full top-full mt-1.5 z-50 bg-slate-900/98 border border-slate-700/90 rounded-xl shadow-2xl p-3.5 text-xs backdrop-blur-md">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+            <div class="flex items-center gap-2 font-medium text-slate-200">
+              <i class="fa-solid fa-file-circle-check text-sky-400 text-[11px]"></i>
+              <span>Formato de Arquivo</span>
+              <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="g-btnClearFormato" onclick="resetFormatoFilter()" class="hidden text-[11px] text-sky-400 hover:underline">Limpar</button>
+              <button type="button" onclick="closeAllFilterPopovers()" class="text-slate-400 hover:text-white p-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div id="g-formatoChips" class="flex flex-wrap gap-1.5 pt-0.5"></div>
         </div>
       </div>
 
@@ -3111,6 +3317,7 @@
     const selectedTipos = new Set();
     const selectedNaturezas = new Set();
     const selectedStatus = new Set();
+    const selectedFormatos = new Set();
     let allUniqueInstituicoes = [];
     let openFilterPopoverId = null;
 
@@ -3120,6 +3327,7 @@
       activeTipoFilter = selectedTipos.size === 1 ? Array.from(selectedTipos)[0] : '';
       activeNaturezaFilter = selectedNaturezas.size === 1 ? Array.from(selectedNaturezas)[0] : '';
       activeStatusFilter = selectedStatus.size === 1 ? Array.from(selectedStatus)[0] : (selectedStatus.size === 0 ? 'todos' : 'multiplo');
+      activeFormatoFilter = selectedFormatos.size === 1 ? Array.from(selectedFormatos)[0] : '';
     }
 
     // =========================================================================
@@ -3218,7 +3426,8 @@
         matchDoc: (doc, tiposSet) => {
           const dom = safeString(doc.dominio_documento).trim().toLowerCase();
           if (dom === 'profissional') return true;
-          const profKeywords = ['curriculo', 'experiencia profissional', 'lattes', 'carteira de trabalho', 'ctps', 'situacao cadastral', 'registro profissional', 'crf', 'crm', 'oab', 'crea'];
+          if (doc.cnpj || (doc.dados_extras && doc.dados_extras.cnpj)) return true;
+          const profKeywords = ['curriculo', 'experiencia profissional', 'lattes', 'carteira de trabalho', 'ctps', 'situacao cadastral', 'cnpj', 'cartao cnpj', 'receita federal', 'registro profissional', 'crf', 'crm', 'oab', 'crea'];
           for (const t of tiposSet) {
             const tl = normalizeText(t);
             if (profKeywords.some(kw => tl.includes(kw))) return true;
@@ -3313,8 +3522,8 @@
     }
 
     function closeAllFilterPopovers() {
-      ['popoverInstituicao', 'popoverTipo', 'popoverNatureza', 'popoverStatus', 'popoverDominio',
-       'g-popoverInstituicao', 'g-popoverTipo', 'g-popoverNatureza', 'g-popoverStatus', 'g-popoverDominio'].forEach(id => {
+      ['popoverInstituicao', 'popoverTipo', 'popoverNatureza', 'popoverStatus', 'popoverDominio', 'popoverFormato',
+       'g-popoverInstituicao', 'g-popoverTipo', 'g-popoverNatureza', 'g-popoverStatus', 'g-popoverDominio', 'g-popoverFormato'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -3744,7 +3953,33 @@
           }
         }
 
-        // 5. Botão Limpar Tudo (aparece se houver algum filtro ativo)
+        // 5. Pílula: Formato (PDF, Word, Imagens, Texto)
+        const pillFmt = document.getElementById(`${p}pillFormato`);
+        const lblFmt = document.getElementById(`${p}labelPillFormato`);
+        const chevFmt = document.getElementById(`${p}chevronPillFormato`);
+        const clrFmt = document.getElementById(`${p}clearPillFormato`);
+        if (pillFmt && lblFmt) {
+          if (selectedFormatos.size > 0) {
+            pillFmt.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-sky-500/20 text-sky-300 border-sky-500/40 shadow-sm";
+            if (selectedFormatos.size === 1) {
+              const fmtVal = Array.from(selectedFormatos)[0];
+              const fMap = { 'pdf': 'PDF', 'word': 'Word / Docs', 'image': 'Imagens', 'text': 'Texto Puro' };
+              lblFmt.innerText = fMap[fmtVal] || fmtVal;
+            } else {
+              lblFmt.innerText = `Formato (${selectedFormatos.size})`;
+            }
+            if (chevFmt) chevFmt.classList.add('hidden');
+            if (clrFmt) clrFmt.classList.remove('hidden');
+          } else {
+            pillFmt.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
+            lblFmt.innerText = "Formato";
+            lblFmt.title = "Filtrar por formato do arquivo";
+            if (chevFmt) chevFmt.classList.remove('hidden');
+            if (clrFmt) clrFmt.classList.add('hidden');
+          }
+        }
+
+        // 6. Botão Limpar Tudo (aparece se houver algum filtro ativo)
         const btnClearAll = document.getElementById(`${p}btnClearAllFilters`);
         if (btnClearAll) {
           const hasAnyActive = (
@@ -3752,7 +3987,8 @@
             selectedInstituicoes.size > 0 ||
             selectedTipos.size > 0 ||
             selectedNaturezas.size > 0 ||
-            selectedStatus.size > 0
+            selectedStatus.size > 0 ||
+            selectedFormatos.size > 0
           );
           if (hasAnyActive) {
             btnClearAll.classList.remove('hidden');
@@ -3881,6 +4117,11 @@
       if (exclude !== 'natureza' && selectedNaturezas.size > 0) {
         const docNat = safeString(doc.natureza_curso).trim();
         if (!Array.from(selectedNaturezas).some(sn => docNat === sn || classifyNatureza(docNat) === sn)) return false;
+      }
+
+      if (exclude !== 'formato' && selectedFormatos.size > 0) {
+        const fmt = getDocFormatMeta(doc);
+        if (!selectedFormatos.has(fmt.type)) return false;
       }
 
       return matchDocumentSearch(doc, rawSearch);
@@ -4359,6 +4600,61 @@
       return file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg') || file.endsWith('.webp');
     }
 
+    function isWordDoc(doc) {
+      if (!doc) return false;
+      const ext = safeString(doc.extensao || '').toLowerCase();
+      if (['.docx', '.doc', '.odt', '.rtf'].includes(ext)) return true;
+      const file = safeString(doc.nome_arquivo || doc.caminho_relativo || '').toLowerCase();
+      return file.endsWith('.docx') || file.endsWith('.doc') || file.endsWith('.odt') || file.endsWith('.rtf');
+    }
+
+    function isTextDoc(doc) {
+      if (!doc) return false;
+      const ext = safeString(doc.extensao || '').toLowerCase();
+      if (ext === '.txt') return true;
+      const file = safeString(doc.nome_arquivo || doc.caminho_relativo || '').toLowerCase();
+      return file.endsWith('.txt');
+    }
+
+    function getDocFormatMeta(doc) {
+      if (isWordDoc(doc)) {
+        const ext = safeString(doc.extensao || 'DOCX').replace('.', '').toUpperCase();
+        return { 
+          type: 'word', 
+          label: ext, 
+          icon: 'fa-solid fa-file-word', 
+          color: 'text-sky-400', 
+          badgeClass: 'bg-sky-500/15 text-sky-300 border-sky-500/30' 
+        };
+      }
+      if (isImageDoc(doc)) {
+        const ext = safeString(doc.extensao || 'IMG').replace('.', '').toUpperCase();
+        return { 
+          type: 'image', 
+          label: ext, 
+          icon: 'fa-regular fa-image', 
+          color: 'text-emerald-400', 
+          badgeClass: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' 
+        };
+      }
+      if (isTextDoc(doc)) {
+        return { 
+          type: 'text', 
+          label: 'TXT', 
+          icon: 'fa-regular fa-file-lines', 
+          color: 'text-amber-400', 
+          badgeClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' 
+        };
+      }
+      return { 
+        type: 'pdf', 
+        label: 'PDF', 
+        icon: 'fa-regular fa-file-pdf', 
+        color: 'text-rose-400', 
+        badgeClass: 'bg-rose-500/15 text-rose-300 border-rose-500/30' 
+      };
+    }
+
     function applyImageTransform() {
       const imgEl = document.getElementById('docImageEl');
       if (imgEl) {
@@ -4424,6 +4720,19 @@
       }
 
       // Visibilidade do card PIX e adaptação contextual de rótulos
+      const cnpjCard = document.getElementById('cartaoCnpjCard');
+      const cnpjVal = (document.getElementById('input_doc_cnpj')?.value || document.getElementById('input_cnpj')?.value || '').trim();
+      const tipoVal = (document.getElementById('select_tipo_documento')?.value || '').toLowerCase();
+      const isCnpjDoc = dom === 'profissional' || Boolean(cnpjVal) || tipoVal.includes('cnpj') || tipoVal.includes('cadastral');
+
+      if (cnpjCard) {
+        if (isCnpjDoc) {
+          cnpjCard.classList.remove('hidden');
+        } else {
+          cnpjCard.classList.add('hidden');
+        }
+      }
+
       if (dom === 'financeiro') {
         if (pixCard) pixCard.classList.remove('hidden');
         if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Favorecido / Recebedor (Destino)";
@@ -4456,6 +4765,86 @@
         if (labelFaculdade) labelFaculdade.innerText = "Faculdade / Instituição Emissora";
         if (labelData) labelData.innerText = "Data de Conclusão / Emissão";
       }
+
+      // Adaptação contextual do campo de CPF/CNPJ e RG/Registro
+      const labelCpf = document.getElementById('label_cpf');
+      const badgeCpf = document.getElementById('badge_cpf');
+      const inputCpf = document.getElementById('input_cpf');
+      const labelRg = document.getElementById('label_rg');
+      const inputRg = document.getElementById('input_rg');
+
+      if (isCnpjDoc) {
+        if (labelCpf) labelCpf.innerText = "CNPJ / CPF";
+        if (badgeCpf) badgeCpf.innerText = "cnpj";
+        if (inputCpf) inputCpf.placeholder = "00.000.000/0000-00";
+        if (labelRg) labelRg.innerText = "Inscrição Estadual / Registro";
+        if (inputRg) inputRg.placeholder = "Ex: ISENTO ou Nº de Registro";
+      } else {
+        if (labelCpf) labelCpf.innerText = "CPF";
+        if (badgeCpf) badgeCpf.innerText = "cpf";
+        if (inputCpf) inputCpf.placeholder = "000.000.000-00";
+        if (labelRg) labelRg.innerText = "RG / Identidade";
+        if (inputRg) inputRg.placeholder = "Ex: 2030359 SSP-ES";
+      }
+    }
+
+    function updateCnpjBadge() {
+      const sitEl = document.getElementById('input_cnpj_situacao');
+      const badge = document.getElementById('cnpjSituacaoBadge');
+      if (!badge || !sitEl) return;
+      const sit = (sitEl.value || '').trim().toUpperCase();
+      badge.innerText = sit || 'ATIVA';
+      if (sit.includes('ATIVA')) {
+        badge.className = "bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-emerald-500/30";
+      } else if (sit.includes('BAIXADA') || sit.includes('INAPTA') || sit.includes('NULA')) {
+        badge.className = "bg-rose-500/20 text-rose-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-rose-500/30";
+      } else if (sit.includes('SUSPENSA')) {
+        badge.className = "bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-amber-500/30";
+      } else {
+        badge.className = "bg-sky-500/20 text-sky-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-sky-500/30";
+      }
+    }
+
+    function syncCnpjToGeneral(val) {
+      const gEl = document.getElementById('input_doc_cnpj');
+      if (gEl) gEl.value = val;
+      const cpfEl = document.getElementById('input_cpf');
+      const selectDom = document.getElementById('select_dominio');
+      if (cpfEl && selectDom && (selectDom.value === 'profissional' || !cpfEl.value || cpfEl.value.includes('/'))) {
+        cpfEl.value = val;
+      }
+    }
+
+    function syncGeneralCnpjToCard(val) {
+      const cEl = document.getElementById('input_cnpj');
+      if (cEl) cEl.value = val;
+      const cpfEl = document.getElementById('input_cpf');
+      const selectDom = document.getElementById('select_dominio');
+      if (cpfEl && selectDom && (selectDom.value === 'profissional' || !cpfEl.value || cpfEl.value.includes('/'))) {
+        cpfEl.value = val;
+      }
+      const cnpjCard = document.getElementById('cartaoCnpjCard');
+      if (cnpjCard && val && val.trim().length >= 4) {
+        cnpjCard.classList.remove('hidden');
+      }
+    }
+
+    function onCpfInput(val) {
+      markDirty();
+      const selectDom = document.getElementById('select_dominio');
+      if ((selectDom && selectDom.value === 'profissional') || (val && val.includes('/'))) {
+        const cEl = document.getElementById('input_cnpj');
+        if (cEl) cEl.value = val;
+        const gEl = document.getElementById('input_doc_cnpj');
+        if (gEl) gEl.value = val;
+      }
+    }
+
+    function syncRazaoSocialFromCnpjCard(val) {
+      const benEl = document.getElementById('input_beneficiario');
+      if (benEl && (!benEl.value || benEl.value.trim() === '')) {
+        benEl.value = val;
+      }
     }
 
     function onTipoDocumentoChange() {
@@ -4468,12 +4857,13 @@
         'Certificado': 'academico',
         'Histórico Escolar': 'academico',
         'Declaração': 'academico',
-        'Currículo': 'academico',
+        'Currículo': 'profissional',
         'Comprovante PIX': 'financeiro',
         'Recibo de Pagamento': 'financeiro',
         'Boleto Bancário': 'financeiro',
         'Extrato Bancário': 'financeiro',
         'Nota Fiscal': 'financeiro',
+        'Cartão CNPJ / Situação Cadastral': 'profissional',
         'Comprovante de Inscrição e de Situação Cadastral': 'profissional',
         'Cartão CNPJ': 'profissional',
         'Carteira de Trabalho': 'profissional',
@@ -5018,6 +5408,7 @@
       updateTipoFilterOptions();
       updateNaturezaFilterOptions();
       updateStatusFilterOptions();
+      updateFormatoFilterOptions();
       updateFilterPillsUI();
     }
 
@@ -5188,8 +5579,19 @@
 
       const t = normalizeText(tipo || '');
 
-      // 2. Carreira & Profissional (Currículo, Lattes, Experiência, Carteira de Trabalho)
-      if (t.includes('curriculo') || t.includes('experiencia profissional') || t.includes('lattes') || t.includes('carteira de trabalho') || t.includes('ctps') || t.includes('situacao cadastral') || t.includes('registro profissional')) {
+      // 2. CNPJ / Comprovante de Inscrição e Situação Cadastral (Receita Federal)
+      if (t.includes('cnpj') || t.includes('situacao cadastral') || t.includes('receita federal') || t.includes('cartao cnpj') || t.includes('inscricao cadastral')) {
+        return {
+          icon: 'fa-solid fa-building',
+          color: 'text-teal-400',
+          bg: 'bg-teal-950/40 border-teal-800/70 text-teal-200 hover:bg-teal-900/50 hover:border-teal-500',
+          activeBg: 'bg-teal-600 border-teal-400 text-white',
+          category: 'Carreira & Profissional'
+        };
+      }
+
+      // 3. Carreira & Profissional (Currículo, Lattes, Experiência, Carteira de Trabalho)
+      if (t.includes('curriculo') || t.includes('experiencia profissional') || t.includes('lattes') || t.includes('carteira de trabalho') || t.includes('ctps') || t.includes('registro profissional')) {
         return {
           icon: 'fa-solid fa-briefcase',
           color: 'text-sky-400',
@@ -5348,7 +5750,34 @@
       const subtags = [];
       const de = doc.dados_extras || {};
 
-      if (docDom === 'profissional' || normTag.includes('curriculo') || normTag.includes('experiencia profissional')) {
+      const isCnpjDoc = normTag.includes('cnpj') || normTag.includes('cadastral') || Boolean(doc.cnpj || de.cnpj);
+      if (isCnpjDoc && (docDom === 'profissional' || normTag.includes('cnpj') || normTag.includes('cadastral'))) {
+        const cnpjVal = safeString(doc.cnpj || de.cnpj).trim();
+        if (cnpjVal) subtags.push({ label: `CNPJ: ${cnpjVal}`, title: 'CNPJ', icon: 'fa-solid fa-id-card text-emerald-400' });
+
+        const sit = safeString(de.situacao_cadastral || doc.situacao_cadastral).trim().toUpperCase();
+        if (sit) {
+          const isAtiva = sit.includes('ATIVA');
+          const sitIcon = isAtiva ? 'fa-solid fa-circle-check text-emerald-400' : 'fa-solid fa-circle-xmark text-rose-400';
+          subtags.push({ label: sit, title: `Situação: ${sit}`, icon: sitIcon });
+        }
+
+        const fantasia = safeString(de.nome_fantasia || doc.nome_fantasia).trim();
+        if (fantasia) subtags.push({ label: fantasia, title: 'Nome Fantasia', icon: 'fa-solid fa-store text-sky-400' });
+
+        const cnae = safeString(de.cnae_principal || doc.cnae_principal).trim();
+        if (cnae) {
+          const cnaeShort = cnae.length > 28 ? cnae.substring(0, 25) + '...' : cnae;
+          subtags.push({ label: cnaeShort, title: `CNAE: ${cnae}`, icon: 'fa-solid fa-industry text-indigo-400' });
+        }
+
+        const end = safeString(de.endereco_completo || doc.endereco_completo).trim();
+        if (end) {
+          const mUf = end.match(/([A-ZÀ-Ú\s]+)\s*[-/]\s*([A-Z]{2})\b/i);
+          const loc = mUf ? `${mUf[1].trim()} - ${mUf[2].toUpperCase()}` : (end.length > 24 ? end.substring(0, 21) + '...' : end);
+          subtags.push({ label: loc, title: `Localização: ${end}`, icon: 'fa-solid fa-location-dot text-amber-400' });
+        }
+      } else if (docDom === 'profissional' || normTag.includes('curriculo') || normTag.includes('experiencia profissional')) {
         const cargo = safeString(doc.curso || doc.cargo || de.cargo || de.funcao).trim();
         if (cargo) subtags.push({ label: cargo, title: 'Cargo / Especialidade', icon: 'fa-solid fa-briefcase text-sky-400' });
         const empresa = safeString(doc.faculdade || doc.empresa || de.empresa).trim();
@@ -5666,20 +6095,29 @@
       const pixPag = normalizeText(doc.pix_pagador_nome || de.pix_pagador_nome);
       const pixPagBanco = normalizeText(doc.pix_pagador_banco || de.pix_pagador_banco);
       const pixRecBanco = normalizeText(doc.pix_recebedor_banco || de.pix_recebedor_banco);
+      const cnpj = normalizeText(doc.cnpj || de.cnpj);
+      const cnpjDigits = extractDigits(doc.cnpj || de.cnpj);
+      const cnpjRazao = normalizeText(de.razao_social || doc.razao_social);
+      const cnpjFantasia = normalizeText(de.nome_fantasia || doc.nome_fantasia);
+      const cnpjSituacao = normalizeText(de.situacao_cadastral || doc.situacao_cadastral);
+      const cnpjCnae = normalizeText(de.cnae_principal || doc.cnae_principal);
+      const cnpjNatJur = normalizeText(de.natureza_juridica || doc.natureza_juridica);
+      const cnpjEnd = normalizeText(de.endereco_completo || doc.endereco_completo);
       const todosTipos = Array.isArray(doc.todos_tipos) ? normalizeText(doc.todos_tipos.join(' ')) : '';
       const todosDominios = Array.isArray(doc.todos_dominios) ? normalizeText(doc.todos_dominios.join(' ')) : '';
 
-      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${todosTipos} ${data} ${carga} ${obs} ${dominio} ${todosDominios} ${extensao} ${valor} ${pixChave} ${pixE2e} ${pixAut} ${pixPag} ${pixPagBanco} ${pixRecBanco}`;
+      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${cnpj} ${cnpjDigits} ${cnpjRazao} ${cnpjFantasia} ${cnpjSituacao} ${cnpjCnae} ${cnpjNatJur} ${cnpjEnd} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${todosTipos} ${data} ${carga} ${obs} ${dominio} ${todosDominios} ${extensao} ${valor} ${pixChave} ${pixE2e} ${pixAut} ${pixPag} ${pixPagBanco} ${pixRecBanco}`;
 
       return tokens.every(token => {
         // 1. Busca textual direta na junção de todos os campos
         if (fullBlob.includes(token)) return true;
 
-        // 2. Busca por dígitos de CPF ou RG (sem traço ou pontos)
+        // 2. Busca por dígitos de CPF, RG ou CNPJ (sem traço, barra ou pontos)
         const tokenDigits = extractDigits(token);
         if (tokenDigits.length >= 2) {
           if (cpfDigits && cpfDigits.includes(tokenDigits)) return true;
           if (rgDigits && rgDigits.includes(tokenDigits)) return true;
+          if (cnpjDigits && cnpjDigits.includes(tokenDigits)) return true;
         }
 
         return false;
@@ -5874,6 +6312,83 @@
 
     function resetStatusFilter() {
       selectedStatus.clear();
+      syncActiveFilterVars();
+      applyFilter(false);
+    }
+
+    // Filtro de Formato de Arquivo (PDF, Word, Imagens, Texto - Multi-seleção)
+    function updateFormatoFilterOptions() {
+      const rawSearch = (document.getElementById('searchInput').value || '').trim();
+      const baseDocs = documents.filter(doc => docMatchesFilters(doc, rawSearch, 'formato'));
+
+      let countPdf = 0;
+      let countWord = 0;
+      let countImage = 0;
+      let countText = 0;
+
+      baseDocs.forEach(d => {
+        const fmt = getDocFormatMeta(d);
+        if (fmt.type === 'pdf') countPdf++;
+        else if (fmt.type === 'word') countWord++;
+        else if (fmt.type === 'image') countImage++;
+        else if (fmt.type === 'text') countText++;
+      });
+
+      ['formatoChips', 'g-formatoChips'].forEach(cid => {
+        const chipsContainer = document.getElementById(cid);
+        if (!chipsContainer) return;
+        chipsContainer.innerHTML = '';
+        const formatoItems = [
+          { key: 'pdf', label: 'PDFs', count: countPdf, icon: 'fa-regular fa-file-pdf', color: 'text-rose-400', activeBg: 'bg-rose-600 border-rose-500 text-white' },
+          { key: 'word', label: 'Word / Docs', count: countWord, icon: 'fa-solid fa-file-word', color: 'text-sky-400', activeBg: 'bg-sky-600 border-sky-500 text-white' },
+          { key: 'image', label: 'Imagens', count: countImage, icon: 'fa-regular fa-image', color: 'text-emerald-400', activeBg: 'bg-emerald-600 border-emerald-500 text-white' },
+          { key: 'text', label: 'Arquivos Texto', count: countText, icon: 'fa-regular fa-file-lines', color: 'text-amber-400', activeBg: 'bg-amber-600 border-amber-500 text-white' }
+        ];
+
+        formatoItems.forEach(item => {
+          const isSelected = selectedFormatos.has(item.key);
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = `px-2.5 py-1 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 ${
+            isSelected
+              ? `${item.activeBg} font-semibold ring-1 ring-sky-400/50 shadow-sm`
+              : (item.count === 0 
+                  ? 'bg-slate-950/40 text-slate-500 border-slate-900/60 opacity-60 hover:opacity-90 hover:text-slate-300' 
+                  : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:bg-slate-800/80 hover:text-sky-300')
+          }`;
+          chip.innerHTML = `
+            <i class="${item.icon} text-[10.5px] ${isSelected ? 'text-white' : item.color}"></i>
+            <span>${item.label}</span>
+            <span class="text-[10px] px-1.5 py-0.2 rounded-full font-mono ml-0.5 ${isSelected ? 'bg-black/30 text-white font-bold' : 'bg-slate-800 text-slate-400'}">${item.count}</span>
+          `;
+          chip.onclick = () => {
+            toggleFormatoFilter(item.key);
+          };
+          chipsContainer.appendChild(chip);
+        });
+      });
+
+      ['btnClearFormato', 'g-btnClearFormato'].forEach(bid => {
+        const btnClear = document.getElementById(bid);
+        if (btnClear) {
+          if (selectedFormatos.size > 0) btnClear.classList.remove('hidden');
+          else btnClear.classList.add('hidden');
+        }
+      });
+    }
+
+    function toggleFormatoFilter(fmt) {
+      if (selectedFormatos.has(fmt)) {
+        selectedFormatos.delete(fmt);
+      } else {
+        selectedFormatos.add(fmt);
+      }
+      syncActiveFilterVars();
+      applyFilter(false);
+    }
+
+    function resetFormatoFilter() {
+      selectedFormatos.clear();
       syncActiveFilterVars();
       applyFilter(false);
     }
@@ -6164,9 +6679,8 @@
           statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0">Pendente</span>`;
         }
 
-        const extIcon = isImg 
-          ? `<i class="fa-regular fa-image text-emerald-400 text-[10px]" title="Arquivo Imagem ${safeString(doc.extensao).toUpperCase()}"></i>`
-          : `<i class="fa-regular fa-file-pdf text-rose-400 text-[10px]" title="Documento PDF"></i>`;
+        const fmt = getDocFormatMeta(doc);
+        const extIcon = `<i class="${fmt.icon} ${fmt.color} text-[10px]" title="Arquivo ${fmt.label}"></i>`;
 
         let middleBadge = '';
         if (docDom === 'financeiro') {
@@ -6185,7 +6699,7 @@
         }
 
         const tipoBadge = isUnproc
-          ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1">${extIcon}<span>${isImg ? 'IMG' : 'PDF'}</span></span>`
+          ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1">${extIcon}<span>${fmt.label}</span></span>`
           : getTipoBadge(doc.tipo_documento);
 
         const md5Short = safeString(doc.md5).substring(0, 10);
@@ -6301,6 +6815,7 @@
       selectedTipos.clear();
       selectedNaturezas.clear();
       selectedStatus.clear();
+      selectedFormatos.clear();
       syncActiveFilterVars();
 
       ['inputSearchInst', 'g-inputSearchInst'].forEach(id => {
@@ -6334,6 +6849,10 @@
         if (btn) btn.classList.add('hidden');
       });
       ['btnClearStatus', 'g-btnClearStatus'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.add('hidden');
+      });
+      ['btnClearFormato', 'g-btnClearFormato'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.classList.add('hidden');
       });
@@ -6461,7 +6980,7 @@
         if (pdfLoading) pdfLoading.classList.add('hidden');
         currentLoadedPdfMd5 = doc.md5;
       } else {
-        // Modo visualização de PDF
+        // Modo visualização de PDF ou Documento Word / Texto
         if (imgViewer) imgViewer.classList.add('hidden');
         if (imgControls) {
           imgControls.classList.add('hidden');
@@ -6469,8 +6988,17 @@
         }
         if (pdfFrame) pdfFrame.classList.remove('hidden');
 
-        if (docTypeHeaderIcon) docTypeHeaderIcon.className = "fa-regular fa-file-pdf text-rose-400";
-        if (docTypeHeaderLabel) docTypeHeaderLabel.innerText = "Visualização do PDF:";
+        const fmt = getDocFormatMeta(doc);
+        if (docTypeHeaderIcon) docTypeHeaderIcon.className = `${fmt.icon} ${fmt.color}`;
+        if (docTypeHeaderLabel) {
+          if (fmt.type === 'word') {
+            docTypeHeaderLabel.innerText = `Visualização do Documento Word (${fmt.label}):`;
+          } else if (fmt.type === 'text') {
+            docTypeHeaderLabel.innerText = `Visualização de Arquivo de Texto (${fmt.label}):`;
+          } else {
+            docTypeHeaderLabel.innerText = "Visualização do PDF:";
+          }
+        }
 
         loadPdfInFrame(force ? `${doc.md5}?t=${Date.now()}` : doc.md5, force);
       }
@@ -6523,7 +7051,10 @@
       if (inputValor) inputValor.value = '';
       ['input_pix_pagador_nome', 'input_pix_pagador_cpf_cnpj', 'input_pix_pagador_banco',
        'input_pix_recebedor_nome_preview', 'input_pix_recebedor_cpf_preview', 'input_pix_recebedor_banco',
-       'input_pix_chave', 'input_pix_e2e_id', 'input_pix_autenticacao'].forEach(id => {
+       'input_pix_chave', 'input_pix_e2e_id', 'input_pix_autenticacao',
+       'input_doc_cnpj', 'input_cnpj', 'input_cnpj_razao_social', 'input_cnpj_nome_fantasia',
+       'input_cnpj_situacao', 'input_cnpj_data_abertura', 'input_cnpj_cnae',
+       'input_cnpj_natureza_juridica', 'input_cnpj_endereco', 'input_cnpj_telefone', 'input_cnpj_email'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
@@ -6532,6 +7063,7 @@
       document.getElementById('input_beneficiario').value = '';
       document.getElementById('input_cpf').value = '';
       document.getElementById('input_rg').value = '';
+      document.getElementById('input_doc_cnpj').value = '';
       document.getElementById('select_natureza_curso').value = '';
       document.getElementById('input_curso').value = '';
       document.getElementById('input_carga_horaria').value = '';
@@ -6567,7 +7099,24 @@
       loadMediaForDocument(doc);
 
       document.getElementById('pdfMd5Title').innerText = safeString(doc.md5);
-      document.getElementById('openPdfNewTab').href = `/api/arquivo/${doc.md5}`;
+      const openBtn = document.getElementById('openPdfNewTab');
+      if (openBtn) {
+        openBtn.href = `/api/arquivo/${doc.md5}`;
+        const fmt = getDocFormatMeta(doc);
+        if (fmt.type === 'word') {
+          openBtn.title = `Baixar arquivo Word original editável (${fmt.label})`;
+          openBtn.setAttribute('download', `${doc.nome_arquivo || (doc.md5 + '.' + fmt.label.toLowerCase())}`);
+          openBtn.innerHTML = `<i class="fa-solid fa-file-word text-sky-400"></i><span class="hidden sm:inline">Baixar Word</span>`;
+        } else if (fmt.type === 'image') {
+          openBtn.title = 'Abrir imagem original em nova aba';
+          openBtn.removeAttribute('download');
+          openBtn.innerHTML = `<i class="fa-solid fa-up-right-from-square"></i><span class="hidden sm:inline">Abrir Imagem</span>`;
+        } else {
+          openBtn.title = 'Abrir documento em nova aba';
+          openBtn.removeAttribute('download');
+          openBtn.innerHTML = `<i class="fa-solid fa-up-right-from-square"></i><span class="hidden sm:inline">Nova Aba</span>`;
+        }
+      }
 
       // Preenche campos do formulário de forma segura
       document.getElementById('field_md5').innerText = safeString(doc.md5);
@@ -6600,10 +7149,25 @@
       setVal('input_pix_e2e_id', doc.pix_e2e_id || de.pix_e2e_id);
       setVal('input_pix_autenticacao', doc.pix_autenticacao || de.pix_autenticacao);
 
+      // CNPJ e dados cadastrais da empresa
+      const cnpjVal = safeString(doc.cnpj || de.cnpj || (doc.cpf && doc.cpf.includes('/') ? doc.cpf : ''));
+      setVal('input_doc_cnpj', cnpjVal);
+      setVal('input_cnpj', cnpjVal);
+      setVal('input_cnpj_razao_social', de.razao_social || doc.razao_social || (cnpjVal ? doc.beneficiario : ''));
+      setVal('input_cnpj_nome_fantasia', de.nome_fantasia || doc.nome_fantasia);
+      setVal('input_cnpj_situacao', de.situacao_cadastral || doc.situacao_cadastral || (cnpjVal ? 'ATIVA' : ''));
+      setVal('input_cnpj_data_abertura', de.data_abertura || doc.data_abertura);
+      setVal('input_cnpj_cnae', de.cnae_principal || doc.cnae_principal);
+      setVal('input_cnpj_natureza_juridica', de.natureza_juridica || doc.natureza_juridica);
+      setVal('input_cnpj_endereco', de.endereco_completo || doc.endereco_completo);
+      setVal('input_cnpj_telefone', de.telefone || doc.telefone);
+      setVal('input_cnpj_email', de.email || doc.email);
+      updateCnpjBadge();
+
       onDominioChange();
 
       document.getElementById('input_beneficiario').value = safeString(doc.beneficiario);
-      document.getElementById('input_cpf').value = safeString(doc.cpf);
+      document.getElementById('input_cpf').value = safeString(doc.cpf || cnpjVal);
       document.getElementById('input_rg').value = safeString(doc.rg);
       
       // Natureza do Curso: seleciona ou insere opção dinamicamente se necessário
@@ -7316,6 +7880,30 @@
       const pixE2eId = getVal('input_pix_e2e_id');
       const pixAutenticacao = getVal('input_pix_autenticacao');
 
+      const cnpjVal = getVal('input_doc_cnpj') || getVal('input_cnpj') || null;
+      const cnpjRazao = getVal('input_cnpj_razao_social') || null;
+      const cnpjFantasia = getVal('input_cnpj_nome_fantasia') || null;
+      const cnpjSituacao = getVal('input_cnpj_situacao') || null;
+      const cnpjDataAbertura = getVal('input_cnpj_data_abertura') || null;
+      const cnpjCnae = getVal('input_cnpj_cnae') || null;
+      const cnpjNatureza = getVal('input_cnpj_natureza_juridica') || null;
+      const cnpjEndereco = getVal('input_cnpj_endereco') || null;
+      const cnpjTelefone = getVal('input_cnpj_telefone') || null;
+      const cnpjEmail = getVal('input_cnpj_email') || null;
+
+      if (cnpjVal || cnpjRazao || cnpjFantasia || cnpjSituacao || cnpjCnae || cnpjEndereco) {
+        if (cnpjVal) dadosExtras.cnpj = cnpjVal;
+        if (cnpjRazao) dadosExtras.razao_social = cnpjRazao;
+        if (cnpjFantasia) dadosExtras.nome_fantasia = cnpjFantasia;
+        if (cnpjSituacao) dadosExtras.situacao_cadastral = cnpjSituacao;
+        if (cnpjDataAbertura) dadosExtras.data_abertura = cnpjDataAbertura;
+        if (cnpjCnae) dadosExtras.cnae_principal = cnpjCnae;
+        if (cnpjNatureza) dadosExtras.natureza_juridica = cnpjNatureza;
+        if (cnpjEndereco) dadosExtras.endereco_completo = cnpjEndereco;
+        if (cnpjTelefone) dadosExtras.telefone = cnpjTelefone;
+        if (cnpjEmail) dadosExtras.email = cnpjEmail;
+      }
+
       const primaryTipo = document.getElementById('select_tipo_documento').value || null;
       let todosTipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
       if (primaryTipo && !todosTipos.some(t => t.toLowerCase() === primaryTipo.toLowerCase())) {
@@ -7378,6 +7966,7 @@
         beneficiario: document.getElementById('input_beneficiario').value.trim() || null,
         cpf: document.getElementById('input_cpf').value.trim() || null,
         rg: document.getElementById('input_rg').value.trim() || null,
+        cnpj: cnpjVal,
         natureza_curso: document.getElementById('select_natureza_curso').value || null,
         curso: document.getElementById('input_curso').value.trim() || null,
         carga_horaria: document.getElementById('input_carga_horaria').value.trim() || null,
@@ -8116,7 +8705,9 @@
 
       const typeBadge = document.getElementById('auditFileTypeBadge');
       if (typeBadge) {
-        typeBadge.innerText = isImageDoc(doc) ? (doc.extensao || 'IMG').toUpperCase() : 'PDF';
+        const fmt = getDocFormatMeta(doc);
+        typeBadge.innerText = fmt.label;
+        typeBadge.className = `text-[10px] font-mono px-2 py-0.5 rounded border ${fmt.badgeClass || 'bg-slate-800 text-slate-300 border-slate-700'}`;
       }
     }
 
@@ -8241,6 +8832,33 @@
         if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
         if (faculdade) items.push({ label: 'Órgão Emissor', val: faculdade });
         if (dataDoc) items.push({ label: 'Data de Emissão', val: dataDoc });
+      } else if (dominio === 'profissional' || (document.getElementById('input_cnpj')?.value || '').trim()) {
+        boxTitle = 'COMPROVANTE DE INSCRIÇÃO E SITUAÇÃO CADASTRAL / PROFISSIONAL';
+        themeColor = '#0d9488'; // Teal
+        const getVal = (id) => (document.getElementById(id)?.value || '').trim();
+        const cnpjVal = getVal('input_cnpj') || getVal('input_doc_cnpj');
+        const razao = getVal('input_cnpj_razao_social') || beneficiario;
+        const fantasia = getVal('input_cnpj_nome_fantasia');
+        const situacao = getVal('input_cnpj_situacao');
+        const abertura = getVal('input_cnpj_data_abertura');
+        const cnae = getVal('input_cnpj_cnae');
+        const naturezaJur = getVal('input_cnpj_natureza_juridica');
+        const endereco = getVal('input_cnpj_endereco');
+        const tel = getVal('input_cnpj_telefone');
+        const email = getVal('input_cnpj_email');
+
+        if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
+        if (cnpjVal) items.push({ label: 'CNPJ', val: cnpjVal, mono: true, highlight: true });
+        if (razao) items.push({ label: 'Razão Social', val: razao, highlight: true });
+        if (fantasia) items.push({ label: 'Nome Fantasia', val: fantasia });
+        if (situacao) items.push({ label: 'Situação Cadastral', val: situacao });
+        if (abertura) items.push({ label: 'Data de Abertura', val: abertura });
+        if (cnae) items.push({ label: 'CNAE Principal', val: cnae });
+        if (naturezaJur) items.push({ label: 'Natureza Jurídica', val: naturezaJur });
+        if (endereco) items.push({ label: 'Endereço Completo', val: endereco });
+        if (tel) items.push({ label: 'Telefone', val: tel });
+        if (email) items.push({ label: 'E-mail', val: email });
+        if (dataDoc && !abertura) items.push({ label: 'Data do Documento', val: dataDoc });
       } else {
         // Acadêmico e outros
         if (beneficiario) items.push({ label: 'Titular / Beneficiário', val: beneficiario, highlight: true });
@@ -8434,6 +9052,7 @@
         { key: 'beneficiario', header: 'Beneficiario' },
         { key: 'cpf', header: 'CPF' },
         { key: 'rg', header: 'RG' },
+        { key: 'cnpj', header: 'CNPJ' },
         { key: 'faculdade', header: 'Instituicao_Ensino' },
         { key: 'curso', header: 'Curso' },
         { key: 'natureza_curso', header: 'Natureza_Curso' },
@@ -9742,6 +10361,7 @@
         const isUnproc = isDocumentUnprocessed(doc);
         const isApproved = !isUnproc && safeString(doc.status_conferencia).toLowerCase() === 'aprovado';
         const isImg = isImageDoc(doc);
+        const docFmt = getDocFormatMeta(doc);
         const docDom = safeString(doc.dominio || 'academico').toLowerCase();
         const md5Short = safeString(doc.md5).substring(0, 8);
         const thumbSrc = `/api/thumbnail/${doc.md5}?w=720`;
@@ -9836,6 +10456,9 @@
                        onchange="toggleSelectDoc('${doc.md5}', this.checked); updateGalleryCardSelection('${doc.md5}', this.checked);"
                        class="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-3.5 w-3.5"
                        title="Selecionar para ações em lote">
+                <span class="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${docFmt.badgeClass}" title="Formato: ${docFmt.label}">
+                  <i class="${docFmt.icon} text-[8px] mr-0.5"></i>${docFmt.label}
+                </span>
                 ${dossieBadge}
               </div>
               <div class="shrink-0" id="gcard-status-${doc.md5}">
@@ -9849,8 +10472,8 @@
                    class="w-full h-full object-cover object-top transition duration-200 group-hover/thumb:scale-[1.03]"
                    onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
               <div class="hidden w-full h-full flex flex-col items-center justify-center text-slate-600 bg-slate-950 p-2 text-center">
-                <i class="fa-regular fa-file-lines text-3xl text-slate-700 mb-1"></i>
-                <span class="text-[9px] font-mono">${isImg ? 'IMAGEM' : 'PDF'}</span>
+                <i class="${docFmt.icon} text-3xl ${docFmt.color} opacity-60 mb-1"></i>
+                <span class="text-[9px] font-mono font-semibold text-slate-400">${docFmt.label}</span>
               </div>
 
               <!-- Hover Action Overlay (Paperless Action Bar) -->
@@ -10208,6 +10831,25 @@
         } else if (docDom === 'juridico') {
           metaHtml = `
             <span><strong>Emissor / Cartório:</strong> ${escapeHtml(safeString(doc.faculdade) || '-')}</span>
+            <span>•</span>
+            <span><strong>Data:</strong> ${escapeHtml(safeString(doc.data || doc.data_modificacao) || '-')}</span>
+            <span>•</span>
+            <span><strong>TAGs:</strong> ${escapeHtml(allTags)}</span>
+          `;
+        } else if (docDom === 'profissional' || doc.cnpj || (doc.dados_extras && doc.dados_extras.cnpj)) {
+          const de = doc.dados_extras || {};
+          const cnpjVal = safeString(doc.cnpj || de.cnpj || '-');
+          const sit = safeString(de.situacao_cadastral || doc.situacao_cadastral || '');
+          const sitHtml = sit ? `<span>•</span><span><strong>Situação:</strong> <span class="${sit.includes('ATIVA') ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}">${escapeHtml(sit)}</span></span>` : '';
+          const fantasia = safeString(de.nome_fantasia || doc.nome_fantasia || '');
+          const fantasiaHtml = fantasia ? `<span>•</span><span><strong>Fantasia:</strong> ${escapeHtml(fantasia)}</span>` : '';
+          const cnae = safeString(de.cnae_principal || doc.cnae_principal || '');
+          const cnaeHtml = cnae ? `<span>•</span><span><strong>CNAE:</strong> ${escapeHtml(cnae.length > 28 ? cnae.substring(0, 25) + '...' : cnae)}</span>` : '';
+          metaHtml = `
+            <span><strong>CNPJ:</strong> <span class="font-mono text-emerald-400">${escapeHtml(cnpjVal)}</span></span>
+            ${sitHtml}
+            ${fantasiaHtml}
+            ${cnaeHtml}
             <span>•</span>
             <span><strong>Data:</strong> ${escapeHtml(safeString(doc.data || doc.data_modificacao) || '-')}</span>
             <span>•</span>

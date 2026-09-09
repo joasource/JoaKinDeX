@@ -17,7 +17,7 @@ from datetime import datetime
 
 COLUMNS = [
     "md5", "nome_arquivo", "caminho_relativo", "extensao", "dominio", "data_modificacao", "data",
-    "beneficiario", "cpf", "rg", "curso", "natureza_curso", "carga_horaria",
+    "beneficiario", "cpf", "rg", "cnpj", "curso", "natureza_curso", "carga_horaria",
     "faculdade", "tipo_documento", "valor_monetario", "status", "status_conferencia",
     "metodo_leitura", "tentativa_ocr_llm", "erro", "processado_em",
     "conferido_em", "revisado_em", "observacoes_conferencia",
@@ -67,6 +67,7 @@ def create_schema(conn: sqlite3.Connection) -> None:
         beneficiario TEXT,
         cpf TEXT,
         rg TEXT,
+        cnpj TEXT,
         curso TEXT,
         natureza_curso TEXT,
         carga_horaria TEXT,
@@ -98,6 +99,8 @@ def create_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE documentos ADD COLUMN extensao TEXT;")
     if "dominio" not in existing_cols:
         conn.execute("ALTER TABLE documentos ADD COLUMN dominio TEXT DEFAULT 'academico';")
+    if "cnpj" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN cnpj TEXT;")
     if "valor_monetario" not in existing_cols:
         conn.execute("ALTER TABLE documentos ADD COLUMN valor_monetario TEXT;")
     if "todos_dominios" not in existing_cols:
@@ -111,6 +114,7 @@ def create_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_status ON documentos(status);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_status_conf ON documentos(status_conferencia);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_cpf ON documentos(cpf);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_cnpj ON documentos(cnpj);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_faculdade ON documentos(faculdade);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_natureza ON documentos(natureza_curso);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_tipo ON documentos(tipo_documento);")
@@ -175,6 +179,7 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
     beneficiario = item.get("beneficiario")
     cpf = item.get("cpf")
     rg = item.get("rg")
+    cnpj = item.get("cnpj")
     curso = item.get("curso")
     natureza_curso = item.get("natureza_curso")
     carga_horaria = item.get("carga_horaria")
@@ -229,7 +234,7 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
 
     return (
         md5, nome_arquivo, caminho_relativo, extensao, dominio, data_modificacao, data,
-        beneficiario, cpf, rg, curso, natureza_curso, carga_horaria,
+        beneficiario, cpf, rg, cnpj, curso, natureza_curso, carga_horaria,
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr, erro, processado_em,
         conferido_em, revisado_em, obs_conf,
@@ -355,12 +360,12 @@ def upsert_document(db_path: Union[str, Path], doc: Dict[str, Any]) -> None:
     sql = """
     INSERT INTO documentos (
         md5, nome_arquivo, caminho_relativo, extensao, dominio, data_modificacao, data,
-        beneficiario, cpf, rg, curso, natureza_curso, carga_horaria,
+        beneficiario, cpf, rg, cnpj, curso, natureza_curso, carga_horaria,
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
         conferido_em, revisado_em, observacoes_conferencia,
         todos_dominios, todos_tipos, dossie_paginas, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
@@ -371,6 +376,7 @@ def upsert_document(db_path: Union[str, Path], doc: Dict[str, Any]) -> None:
         beneficiario = excluded.beneficiario,
         cpf = excluded.cpf,
         rg = excluded.rg,
+        cnpj = excluded.cnpj,
         curso = excluded.curso,
         natureza_curso = excluded.natureza_curso,
         carga_horaria = excluded.carga_horaria,
@@ -406,12 +412,12 @@ def upsert_documents_batch(db_path: Union[str, Path], docs: List[Dict[str, Any]]
     sql = """
     INSERT INTO documentos (
         md5, nome_arquivo, caminho_relativo, extensao, dominio, data_modificacao, data,
-        beneficiario, cpf, rg, curso, natureza_curso, carga_horaria,
+        beneficiario, cpf, rg, cnpj, curso, natureza_curso, carga_horaria,
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
         conferido_em, revisado_em, observacoes_conferencia,
         todos_dominios, todos_tipos, dossie_paginas, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
@@ -422,6 +428,7 @@ def upsert_documents_batch(db_path: Union[str, Path], docs: List[Dict[str, Any]]
         beneficiario = excluded.beneficiario,
         cpf = excluded.cpf,
         rg = excluded.rg,
+        cnpj = excluded.cnpj,
         curso = excluded.curso,
         natureza_curso = excluded.natureza_curso,
         carga_horaria = excluded.carga_horaria,
