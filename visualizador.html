@@ -1978,14 +1978,14 @@
 
     <!-- Centro: Visualização da Imagem/PDF ampliada -->
     <div class="flex-1 min-h-0 flex items-center justify-center p-4 overflow-hidden relative" onclick="if(event.target === this) closeGalleryLightbox()">
-      <button type="button" onclick="navigateLightbox(-1)" title="Documento anterior (←)"
+      <button type="button" id="lightboxBtnPrev" onclick="navigateLightbox(-1)" title="Documento anterior (←)"
               class="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 shadow-xl transition opacity-80 hover:opacity-100 z-10">
         <i class="fa-solid fa-chevron-left text-base"></i>
       </button>
 
-      <img id="lightboxImageEl" src="" alt="Miniatura Ampliada" class="max-h-full max-w-full object-contain rounded-lg shadow-2xl border border-slate-800">
+      <img id="lightboxImageEl" src="" alt="Miniatura Ampliada" class="max-h-full max-w-full object-contain rounded-lg shadow-2xl border border-slate-800 cursor-zoom-in transition-transform duration-150" onclick="toggleLightboxZoom()" title="Clique para ampliar/reduzir zoom">
 
-      <button type="button" onclick="navigateLightbox(1)" title="Próximo documento (→)"
+      <button type="button" id="lightboxBtnNext" onclick="navigateLightbox(1)" title="Próximo documento (→)"
               class="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 shadow-xl transition opacity-80 hover:opacity-100 z-10">
         <i class="fa-solid fa-chevron-right text-base"></i>
       </button>
@@ -5944,6 +5944,7 @@
     }
 
     let currentLoadedPdfMd5 = null;
+    let currentDossieActivePage = 1;
     let pdfLoadTimeout = null;
 
     function loadPdfInFrame(md5, force = false) {
@@ -6253,6 +6254,7 @@
       if (typeof updateClassificationButtonsState === 'function') {
         updateClassificationButtonsState();
       }
+      currentDossieActivePage = 1;
       renderMultiTags(doc);
       renderDossierPageShortcuts(doc);
       renderDossierPagesGrid(doc);
@@ -6363,22 +6365,121 @@
       doc.dossie_paginas.forEach(p => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/70 text-[10px] flex items-center gap-1 transition-colors';
+        btn.id = `dossierShortcutPage_${p.pagina}`;
+        const isActive = (currentDossieActivePage === p.pagina);
+        btn.className = isActive
+          ? 'px-1.5 py-0.5 rounded bg-emerald-600 text-white font-semibold border border-emerald-500 text-[10px] flex items-center gap-1 transition-colors shadow-sm'
+          : 'px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/70 text-[10px] flex items-center gap-1 transition-colors';
         btn.title = `Pular para a página ${p.pagina} (${p.tipo})`;
-        btn.innerHTML = `<span class="font-mono text-cyan-400 font-semibold">P.${p.pagina}</span> <span class="truncate max-w-[100px]">${p.tipo}</span>`;
+        btn.innerHTML = `<span class="font-mono ${isActive ? 'text-white font-bold' : 'text-cyan-400 font-semibold'}">P.${p.pagina}</span> <span class="truncate max-w-[100px]">${escapeHtml(p.tipo)}</span>`;
         btn.onclick = () => jumpToPdfPage(p.pagina);
         list.appendChild(btn);
       });
     }
 
+    function updateDossieActivePageHighlight(activePage) {
+      currentDossieActivePage = activePage;
+      const totalPages = (currentIndex >= 0 && filteredDocs && filteredDocs[currentIndex])
+        ? Math.max(1, parseInt(filteredDocs[currentIndex].paginas) || (Array.isArray(filteredDocs[currentIndex].dossie_paginas) ? filteredDocs[currentIndex].dossie_paginas.length : 1))
+        : 100;
+
+      for (let p = 1; p <= totalPages; p++) {
+        const card = document.getElementById(`dossieCardPage_${p}`);
+        const btn = document.getElementById(`dossieBtnPage_${p}`);
+        const pill = document.getElementById(`dossiePillPage_${p}`);
+        const shortcut = document.getElementById(`dossierShortcutPage_${p}`);
+
+        const isActive = (p === activePage);
+
+        if (card) {
+          if (isActive) {
+            card.classList.add('ring-2', 'ring-emerald-500', 'border-emerald-500', 'bg-slate-800/90');
+            card.classList.remove('border-slate-800');
+          } else {
+            card.classList.remove('ring-2', 'ring-emerald-500', 'border-emerald-500', 'bg-slate-800/90');
+            card.classList.add('border-slate-800');
+          }
+        }
+
+        if (btn) {
+          if (isActive) {
+            btn.className = 'w-full py-1.5 px-2 bg-emerald-600 text-white font-semibold rounded text-[10px] shadow transition flex items-center justify-center gap-1.5';
+            btn.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-200 text-[10px]"></i> <span>Exibindo no Leitor</span>';
+          } else {
+            btn.className = 'w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-300 rounded text-[10px] font-medium transition flex items-center justify-center gap-1.5';
+            btn.innerHTML = '<i class="fa-solid fa-eye text-slate-400 text-[9px]"></i> <span>Exibir no Leitor</span>';
+          }
+        }
+
+        if (pill) {
+          if (isActive) {
+            pill.className = 'px-2 py-0.5 rounded bg-emerald-600 text-white font-semibold border border-emerald-500 text-[10px] flex items-center gap-1 transition shadow-sm';
+          } else {
+            pill.className = 'px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 border border-slate-700/80 text-[10px] flex items-center gap-1 transition';
+          }
+        }
+
+        if (shortcut) {
+          if (isActive) {
+            shortcut.className = 'px-1.5 py-0.5 rounded bg-emerald-600 text-white font-semibold border border-emerald-500 text-[10px] flex items-center gap-1 transition-colors shadow-sm';
+          } else {
+            shortcut.className = 'px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/70 text-[10px] flex items-center gap-1 transition-colors';
+          }
+        }
+      }
+    }
+
     function jumpToPdfPage(pageNum) {
       if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
       const doc = filteredDocs[currentIndex];
-      if (isImageDoc(doc)) return;
+      if (isImageDoc(doc)) {
+        showToast('Documento em formato de imagem (página única).', 'info');
+        return;
+      }
+      const p = parseInt(pageNum) || 1;
+      currentDossieActivePage = p;
+
       const pdfFrame = document.getElementById('pdfFrame');
+      const pdfEmpty = document.getElementById('pdfEmptyState');
+      const pdfLoading = document.getElementById('pdfLoadingState');
+      const imgViewer = document.getElementById('imageViewerContainer');
+      const imgControls = document.getElementById('imageControls');
+
+      if (pdfEmpty) pdfEmpty.classList.add('hidden');
+      if (imgViewer) imgViewer.classList.add('hidden');
+      if (imgControls) {
+        imgControls.classList.add('hidden');
+        imgControls.classList.remove('flex');
+      }
+
       if (pdfFrame) {
-        pdfFrame.src = `/api/pdf/${doc.md5}#page=${pageNum}&toolbar=1&navpanes=0`;
-        showToast(`Exibindo página ${pageNum} (${doc.nome_arquivo || ''})`, 'info');
+        pdfFrame.classList.remove('hidden');
+
+        if (pdfLoading) {
+          pdfLoading.classList.remove('hidden');
+          pdfLoading.style.opacity = '1';
+          setTimeout(() => {
+            if (pdfLoading) {
+              pdfLoading.style.opacity = '0';
+              setTimeout(() => {
+                if (pdfLoading) pdfLoading.classList.add('hidden');
+              }, 150);
+            }
+          }, 350);
+        }
+
+        const ts = Date.now();
+        // A chave com query string (?p=N&_t=TS) força o Chromium a reconhecer a navegação
+        // e passar o fragmento #page=N para o visualizador de PDF interno
+        pdfFrame.src = `/api/pdf/${doc.md5}?p=${p}&_t=${ts}#page=${p}&toolbar=1&navpanes=0`;
+
+        updateDossieActivePageHighlight(p);
+
+        const dossie = Array.isArray(doc.dossie_paginas) ? doc.dossie_paginas : [];
+        const pageItem = dossie.find(item => item.pagina === p);
+        const pType = pageItem ? pageItem.tipo : `Página ${p}`;
+
+        showToast(`Exibindo página ${p} (${pType}) no Leitor`, 'info');
       }
     }
 
@@ -6970,9 +7071,13 @@
         if (pillsEl && item.pagina) {
           const pill = document.createElement('button');
           pill.type = 'button';
-          pill.className = 'px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 border border-slate-700/80 text-[10px] flex items-center gap-1 transition';
+          pill.id = `dossiePillPage_${item.pagina}`;
+          const isPillActive = (currentDossieActivePage === item.pagina);
+          pill.className = isPillActive
+            ? 'px-2 py-0.5 rounded bg-emerald-600 text-white font-semibold border border-emerald-500 text-[10px] flex items-center gap-1 transition shadow-sm'
+            : 'px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 border border-slate-700/80 text-[10px] flex items-center gap-1 transition';
           pill.title = `Ir para página ${item.pagina} (${item.tipo || 'Página'})`;
-          pill.innerHTML = `<span class="font-mono text-cyan-400 font-semibold">P.${item.pagina}</span> <span class="truncate max-w-[120px]">${item.tipo || ''}</span>`;
+          pill.innerHTML = `<span class="font-mono ${isPillActive ? 'text-white' : 'text-cyan-400'} font-semibold">P.${item.pagina}</span> <span class="truncate max-w-[120px]">${escapeHtml(item.tipo || '')}</span>`;
           pill.onclick = () => jumpToPdfPage(item.pagina);
           pillsEl.appendChild(pill);
         }
@@ -6987,7 +7092,9 @@
       for (let pNum = 1; pNum <= totalPages; pNum++) {
         const pageType = pageTypeMap[pNum] || (pNum === 1 ? (doc.tipo_documento || 'Página Inicial') : `Página ${pNum}`);
         const card = document.createElement('div');
-        card.className = 'bg-slate-900/90 border border-slate-800 hover:border-emerald-500/60 rounded-xl p-2.5 flex flex-col gap-2 transition-all hover:shadow-lg group';
+        card.id = `dossieCardPage_${pNum}`;
+        const isCardActive = (currentDossieActivePage === pNum);
+        card.className = `bg-slate-900/90 border ${isCardActive ? 'ring-2 ring-emerald-500 border-emerald-500 bg-slate-800/90' : 'border-slate-800 hover:border-emerald-500/60'} rounded-xl p-2.5 flex flex-col gap-2 transition-all hover:shadow-lg group`;
 
         const thumbUrl = isImg ? `/api/arquivo/${doc.md5}` : `/api/thumbnail/${doc.md5}/${pNum}?w=720`;
 
@@ -6996,27 +7103,27 @@
             <span class="font-mono font-bold text-cyan-400 flex items-center gap-1">
               <i class="fa-regular fa-file-lines text-[10px]"></i> Pág. ${pNum}
             </span>
-            <span class="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 truncate max-w-[110px]" title="${pageType}">
-              ${pageType}
+            <span class="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 truncate max-w-[110px]" title="${escapeHtmlAttr(pageType)}">
+              ${escapeHtml(pageType)}
             </span>
           </div>
-          <div class="relative aspect-[3/4] bg-slate-950 rounded-lg overflow-hidden border border-slate-800/80 cursor-pointer" onclick="jumpToPdfPage(${pNum})">
+          <div class="relative aspect-[3/4] bg-slate-950 rounded-lg overflow-hidden border border-slate-800/80 cursor-pointer" onclick="openDossiePageLightbox(${pNum})" title="Clique para Visualizar em Alta Resolução (Página ${pNum})">
             <img src="${thumbUrl}" loading="lazy" alt="Página ${pNum}" class="w-full h-full object-cover object-top transition-transform duration-200 group-hover:scale-105"
                  onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
             <div class="hidden w-full h-full flex flex-col items-center justify-center text-slate-600 bg-slate-950 p-2 text-center">
               <i class="fa-regular fa-file-pdf text-2xl text-slate-700 mb-1"></i>
               <span class="text-[10px]">Página ${pNum}</span>
             </div>
-            <div class="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-              <span class="bg-slate-900/90 text-emerald-400 text-[10px] font-semibold px-2 py-1 rounded shadow border border-emerald-500/30 flex items-center gap-1">
-                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> Visualizar
+            <div class="absolute inset-0 bg-emerald-500/15 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+              <span class="bg-slate-900/90 text-emerald-400 text-[10px] font-semibold px-2.5 py-1.5 rounded shadow-lg border border-emerald-500/40 flex items-center gap-1.5 backdrop-blur-sm">
+                <i class="fa-solid fa-magnifying-glass-plus text-[10px]"></i> Visualizar Ampliado
               </span>
             </div>
           </div>
-          <button type="button" onclick="jumpToPdfPage(${pNum})"
-                  class="w-full py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-300 rounded text-[10px] font-medium transition flex items-center justify-center gap-1">
-            <i class="fa-solid fa-eye text-[9px]"></i>
-            <span>Exibir no Leitor</span>
+          <button type="button" id="dossieBtnPage_${pNum}" onclick="jumpToPdfPage(${pNum})"
+                  class="w-full py-1.5 px-2 ${isCardActive ? 'bg-emerald-600 text-white font-semibold shadow' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-300'} rounded text-[10px] font-medium transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid ${isCardActive ? 'fa-circle-check text-emerald-200' : 'fa-eye text-slate-400'} text-[9px]"></i>
+            <span>${isCardActive ? 'Exibindo no Leitor' : 'Exibir no Leitor'}</span>
           </button>
         `;
         gridEl.appendChild(card);
@@ -8661,6 +8768,9 @@
     let gallerySort = 'data_desc';
     let galleryDensity = 'normal'; // 'compact' | 'normal' | 'large'
     let currentLightboxDoc = null;
+    let lightboxMode = 'gallery'; // 'gallery' | 'dossie'
+    let currentLightboxDossiePage = 1;
+    let lightboxZoomed = false;
 
     function getSortedGalleryDocs() {
       const docs = [...filteredDocs];
@@ -9119,11 +9229,26 @@
       updateCounters();
     }
 
+    function toggleLightboxZoom() {
+      const imgEl = document.getElementById('lightboxImageEl');
+      if (!imgEl) return;
+      lightboxZoomed = !lightboxZoomed;
+      if (lightboxZoomed) {
+        imgEl.style.transform = 'scale(1.8)';
+        imgEl.style.cursor = 'zoom-out';
+      } else {
+        imgEl.style.transform = '';
+        imgEl.style.cursor = 'zoom-in';
+      }
+    }
+
     function openGalleryLightbox(md5, event) {
       if (event) event.stopPropagation();
       const doc = documents.find(d => d.md5 === md5);
       if (!doc) return;
       currentLightboxDoc = doc;
+      lightboxMode = 'gallery';
+      lightboxZoomed = false;
 
       const modal = document.getElementById('galleryLightboxModal');
       const titleEl = document.getElementById('lightboxTitle');
@@ -9131,6 +9256,23 @@
       const badgeEl = document.getElementById('lightboxStatusBadge');
       const imgEl = document.getElementById('lightboxImageEl');
       const detailsEl = document.getElementById('lightboxDetails');
+      const btnPrev = document.getElementById('lightboxBtnPrev');
+      const btnNext = document.getElementById('lightboxBtnNext');
+
+      if (btnPrev) {
+        btnPrev.style.display = '';
+        btnPrev.title = 'Documento anterior (←)';
+      }
+      if (btnNext) {
+        btnNext.style.display = '';
+        btnNext.title = 'Próximo documento (→)';
+      }
+
+      if (imgEl) {
+        imgEl.style.transform = '';
+        imgEl.style.cursor = 'zoom-in';
+        imgEl.src = `/api/thumbnail/${doc.md5}?w=1080`;
+      }
 
       if (titleEl) titleEl.innerText = safeString(doc.beneficiario) || doc.nome_arquivo || 'Documento';
 
@@ -9140,8 +9282,6 @@
         const posText = curIdx !== -1 ? `[${curIdx + 1} de ${sorted.length}] ` : '';
         md5El.innerText = `${posText}MD5: ${doc.md5}`;
       }
-
-      if (imgEl) imgEl.src = `/api/thumbnail/${doc.md5}?w=1080`;
 
       const isAppr = safeString(doc.status_conferencia).toLowerCase() === 'aprovado';
       const isUnproc = isDocumentUnprocessed(doc);
@@ -9160,21 +9300,138 @@
 
       if (detailsEl) {
         detailsEl.innerHTML = `
-          <span><strong>Curso:</strong> ${safeString(doc.curso) || '-'}</span>
+          <span><strong>Curso:</strong> ${escapeHtml(safeString(doc.curso) || '-')}</span>
           <span>•</span>
-          <span><strong>Instituição:</strong> ${safeString(doc.faculdade) || '-'}</span>
+          <span><strong>Instituição:</strong> ${escapeHtml(safeString(doc.faculdade) || '-')}</span>
           <span>•</span>
-          <span><strong>Data:</strong> ${safeString(doc.data || doc.data_modificacao) || '-'}</span>
+          <span><strong>Data:</strong> ${escapeHtml(safeString(doc.data || doc.data_modificacao) || '-')}</span>
           <span>•</span>
-          <span><strong>Tipo:</strong> ${safeString(doc.tipo_documento) || '-'}</span>
+          <span><strong>Tipo:</strong> ${escapeHtml(safeString(doc.tipo_documento) || '-')}</span>
         `;
       }
 
+      updateLightboxActionButtons();
       if (modal) modal.classList.remove('hidden');
+    }
+
+    function openDossiePageLightbox(pageNum) {
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      currentLightboxDoc = doc;
+      lightboxMode = 'dossie';
+      currentLightboxDossiePage = parseInt(pageNum) || 1;
+      lightboxZoomed = false;
+
+      const modal = document.getElementById('galleryLightboxModal');
+      const titleEl = document.getElementById('lightboxTitle');
+      const md5El = document.getElementById('lightboxMd5');
+      const badgeEl = document.getElementById('lightboxStatusBadge');
+      const imgEl = document.getElementById('lightboxImageEl');
+      const detailsEl = document.getElementById('lightboxDetails');
+      const btnPrev = document.getElementById('lightboxBtnPrev');
+      const btnNext = document.getElementById('lightboxBtnNext');
+
+      const isImg = isImageDoc(doc);
+      const dossie = (Array.isArray(doc.dossie_paginas) && doc.dossie_paginas.length > 0)
+        ? doc.dossie_paginas
+        : [{ pagina: 1, tipo: doc.tipo_documento || 'Documento' }];
+      const totalPages = Math.max(1, parseInt(doc.paginas) || dossie.length);
+
+      if (currentLightboxDossiePage < 1) currentLightboxDossiePage = 1;
+      if (currentLightboxDossiePage > totalPages) currentLightboxDossiePage = totalPages;
+
+      const pageItem = dossie.find(d => d.pagina === currentLightboxDossiePage);
+      const pageType = pageItem ? pageItem.tipo : (currentLightboxDossiePage === 1 ? (doc.tipo_documento || 'Página Inicial') : `Página ${currentLightboxDossiePage}`);
+
+      if (btnPrev) {
+        btnPrev.style.display = (totalPages > 1) ? '' : 'none';
+        btnPrev.title = 'Página anterior (←)';
+      }
+      if (btnNext) {
+        btnNext.style.display = (totalPages > 1) ? '' : 'none';
+        btnNext.title = 'Próxima página (→)';
+      }
+
+      if (imgEl) {
+        imgEl.style.transform = '';
+        imgEl.style.cursor = 'zoom-in';
+        imgEl.src = isImg ? `/api/arquivo/${doc.md5}` : `/api/thumbnail/${doc.md5}/${currentLightboxDossiePage}?w=1440`;
+      }
+
+      if (titleEl) {
+        titleEl.innerText = `${doc.nome_arquivo || 'Documento'} — Página ${currentLightboxDossiePage} de ${totalPages}`;
+      }
+
+      if (md5El) {
+        md5El.innerText = `Pág. ${currentLightboxDossiePage} de ${totalPages} • MD5: ${doc.md5}`;
+      }
+
+      if (badgeEl) {
+        badgeEl.className = 'text-[10px] px-2.5 py-0.5 rounded font-medium border bg-cyan-500/15 text-cyan-300 border-cyan-500/40 shrink-0';
+        badgeEl.innerText = pageType;
+      }
+
+      if (detailsEl) {
+        detailsEl.innerHTML = `
+          <span><strong>Arquivo:</strong> ${escapeHtml(doc.nome_arquivo || '-')}</span>
+          <span>•</span>
+          <span><strong>Página:</strong> ${currentLightboxDossiePage} de ${totalPages}</span>
+          <span>•</span>
+          <span><strong>Classificação da Página:</strong> <span class="text-cyan-300 font-semibold">${escapeHtml(pageType)}</span></span>
+          <span>•</span>
+          <span><strong>Beneficiário:</strong> ${escapeHtml(doc.beneficiario || '-')}</span>
+        `;
+      }
+
+      updateLightboxActionButtons();
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function updateLightboxActionButtons() {
+      const btnConf = document.getElementById('lightboxBtnConferir');
+      if (!btnConf) return;
+      if (lightboxMode === 'dossie') {
+        btnConf.className = 'px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow';
+        btnConf.innerHTML = `<i class="fa-solid fa-eye"></i><span>Exibir no Leitor (Pág. ${currentLightboxDossiePage})</span>`;
+        btnConf.onclick = () => jumpToPdfPageFromLightbox(currentLightboxDossiePage);
+      } else {
+        btnConf.className = 'px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow';
+        btnConf.innerHTML = `<i class="fa-solid fa-table-columns"></i><span>Abrir na Conferência</span>`;
+        btnConf.onclick = () => openLightboxDocInConference();
+      }
+    }
+
+    function jumpToPdfPageFromLightbox(pageNum) {
+      closeGalleryLightbox();
+      if (typeof currentMainTab !== 'undefined' && currentMainTab !== 'conferencia') {
+        switchMainTab('conferencia');
+      }
+      jumpToPdfPage(pageNum);
+      const card = document.getElementById(`dossieCardPage_${pageNum}`);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     }
 
     function navigateLightbox(step) {
       if (!currentLightboxDoc) return;
+
+      if (lightboxMode === 'dossie') {
+        const doc = currentLightboxDoc;
+        const totalPages = Math.max(1, parseInt(doc.paginas) || (Array.isArray(doc.dossie_paginas) ? doc.dossie_paginas.length : 1));
+        const nextPage = currentLightboxDossiePage + step;
+        if (nextPage >= 1 && nextPage <= totalPages) {
+          openDossiePageLightbox(nextPage);
+        } else {
+          if (step > 0) {
+            showToast('Você já está na última página deste dossiê.', 'info');
+          } else {
+            showToast('Você já está na primeira página deste dossiê.', 'info');
+          }
+        }
+        return;
+      }
+
       const sorted = getSortedGalleryDocs();
       const idx = sorted.findIndex(d => d.md5 === currentLightboxDoc.md5);
       if (idx !== -1) {
@@ -9188,7 +9445,15 @@
     function closeGalleryLightbox() {
       const modal = document.getElementById('galleryLightboxModal');
       if (modal) modal.classList.add('hidden');
+      const imgEl = document.getElementById('lightboxImageEl');
+      if (imgEl) {
+        imgEl.style.transform = '';
+        imgEl.style.cursor = 'zoom-in';
+      }
+      lightboxZoomed = false;
       currentLightboxDoc = null;
+      lightboxMode = 'gallery';
+      currentLightboxDossiePage = 1;
     }
 
     function openLightboxDocInConference() {
