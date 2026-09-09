@@ -362,6 +362,48 @@
       background-color: #f8fafc !important;
     }
 
+    /* Estilos Gerais da Galeria (Mosaico Paperless-ngx) */
+    .gallery-card {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .gallery-card:hover {
+      transform: translateY(-2px);
+    }
+    .gallery-thumbnail-container {
+      aspect-ratio: 3 / 4;
+    }
+
+    /* Galeria no Tema Claro */
+    html.theme-light #viewGaleria {
+      background-color: #f8fafc !important;
+    }
+    html.theme-light #galleryControlsBar {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light #galleryPaginationBar {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light .gallery-card {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+    html.theme-light .gallery-card:hover {
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.08) !important;
+    }
+    html.theme-light .gallery-thumbnail-container {
+      background-color: #f1f5f9 !important;
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light .gallery-card.is-selected {
+      background-color: #ecfdf5 !important;
+      border-color: #10b981 !important;
+      box-shadow: 0 0 0 1px #10b981 !important;
+    }
+
     /* Modais */
     html.theme-light #configModal > div:last-child,
     html.theme-light #folderPickerModal > div:last-child,
@@ -412,6 +454,12 @@
                 class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-emerald-600 text-white shadow">
           <i class="fa-solid fa-table-columns text-emerald-100"></i>
           <span>Conferência</span>
+        </button>
+        <button id="tabMainGaleria" onclick="switchMainTab('galeria')"
+                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+          <i class="fa-solid fa-grip text-amber-400"></i>
+          <span>Galeria</span>
+          <span id="tabBadgeGaleriaCount" class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded-full font-mono">0</span>
         </button>
         <button id="tabMainBI" onclick="switchMainTab('bi')"
                 class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
@@ -577,6 +625,31 @@
                   class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
             <i class="fa-solid fa-print text-indigo-400"></i>
             <span>Imprimir</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- TOOLBAR GALERIA DE DOCUMENTOS (PAPERLESS-NGX MOSAIC) -->
+      <div id="galeriaToolbar" class="hidden w-full items-center justify-between gap-4">
+        <!-- Esquerda: Título do contexto e contador rápido -->
+        <div class="flex items-center gap-2.5 text-xs text-slate-300 font-medium">
+          <i class="fa-solid fa-grip text-amber-400 text-sm"></i>
+          <span class="font-semibold text-slate-200">Galeria Visual de Documentos</span>
+          <span class="text-slate-600 hidden sm:inline">•</span>
+          <span id="galeriaSubheaderCounter" class="text-slate-400 text-[11px] font-mono hidden sm:inline">Exibindo catálogo...</span>
+        </div>
+
+        <!-- Direita: Ações Rápidas da Galeria -->
+        <div id="galeriaNavControls" class="flex items-center gap-2 shrink-0 text-xs">
+          <button onclick="switchMainTab('conferencia')" title="Abrir o documento selecionado na Conferência Humana"
+                  class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+            <i class="fa-solid fa-table-columns text-emerald-400"></i>
+            <span class="hidden sm:inline">Ir para Conferência</span>
+          </button>
+          <button onclick="renderGalleryView()" title="Recarregar grade de miniaturas"
+                  class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+            <i class="fa-solid fa-rotate text-amber-400"></i>
+            <span>Atualizar</span>
           </button>
         </div>
       </div>
@@ -1529,7 +1602,209 @@
   </main>
 
   <!-- ==================================================================== -->
-  <!-- 2. PAINEL DE BUSINESS INTELLIGENCE (BI) & ANÁLISE ESTATÍSTICA -->
+  <!-- 2. GALERIA DE DOCUMENTOS (MOSAICO DE THUMBNAILS - ESTILO PAPERLESS) -->
+  <!-- ==================================================================== -->
+  <main id="viewGaleria" class="flex-1 min-h-0 flex flex-col overflow-hidden split-pane bg-slate-950 hidden select-none">
+    
+    <!-- BARRA SUPERIOR DE FILTROS & CONTROLES DA GALERIA -->
+    <div id="galleryControlsBar" class="bg-slate-900/90 border-b border-slate-800 px-4 py-2.5 space-y-2.5 shrink-0 select-none">
+      <!-- LINHA 1: Busca Rápida + Visões Rápidas (Paperless Quick Views) -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <!-- Campo de Busca Local da Galeria -->
+        <div class="relative flex-1 min-w-[260px] max-w-xl">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+          <input type="text" id="gallerySearchInput" oninput="onGallerySearchInput(this.value)"
+                 placeholder="Buscar por Nome, CPF, RG, MD5, Curso, Faculdade, Banco..."
+                 class="w-full bg-slate-950 border border-slate-700/80 rounded-lg pl-9 pr-8 py-1.5 text-xs text-slate-100 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition">
+          <button type="button" id="galleryClearSearchBtn" onclick="clearGallerySearch()" class="hidden absolute right-2.5 top-2 text-slate-400 hover:text-white p-0.5">
+            <i class="fa-solid fa-xmark text-xs"></i>
+          </button>
+        </div>
+
+        <!-- Visões Rápidas (Pills) -->
+        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-[10.5px]">
+          <button type="button" onclick="setQuickView('todos')" id="gqv-todos" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm" title="Exibir todos os documentos">
+            <i class="fa-solid fa-star text-[9px] text-emerald-400"></i> Todos
+          </button>
+          <button type="button" onclick="setQuickView('dossies')" id="gqv-dossies" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Dossiês com 2 ou mais documentos / páginas">
+            <i class="fa-solid fa-folder-open text-[9px] text-cyan-400"></i> Dossiês (+2)
+          </button>
+          <button type="button" onclick="setQuickView('pendentes')" id="gqv-pendentes" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Documentos pendentes de conferência humana">
+            <i class="fa-solid fa-triangle-exclamation text-[9px] text-amber-400"></i> Pendentes
+          </button>
+          <button type="button" onclick="setQuickView('cursos')" id="gqv-cursos" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Diplomas, certificados e históricos acadêmicos">
+            <i class="fa-solid fa-graduation-cap text-[9px] text-indigo-400"></i> Acadêmico
+          </button>
+          <button type="button" onclick="setQuickView('financeiro')" id="gqv-financeiro" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Comprovantes PIX, recibos e financeiro">
+            <i class="fa-brands fa-pix text-[9px] text-emerald-400"></i> PIX / Fin
+          </button>
+          <button type="button" onclick="setQuickView('identificacao')" id="gqv-identificacao" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Identificação (RG, CNH, CPF)">
+            <i class="fa-regular fa-id-badge text-[9px] text-purple-400"></i> Identidade
+          </button>
+          <button type="button" onclick="setQuickView('nao_processado')" id="gqv-nao_processado" class="px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800" title="Arquivos que ainda não foram classificados pela IA">
+            <i class="fa-solid fa-circle-question text-[9px] text-rose-400"></i> Não Lidos
+          </button>
+        </div>
+      </div>
+
+      <!-- LINHA 2: Ordenação, Densidade de Grid, Seleção em Lote e Itens por Página -->
+      <div class="flex items-center justify-between gap-4 flex-wrap text-xs pt-1 border-t border-slate-800/80">
+        <!-- Esquerda: Ordenação & Densidade -->
+        <div class="flex items-center gap-3 flex-wrap">
+          <!-- Seletor de Ordenação -->
+          <div class="flex items-center gap-1.5 text-xs text-slate-300">
+            <i class="fa-solid fa-arrow-down-short-wide text-amber-400"></i>
+            <span class="text-[11px] text-slate-400 font-medium">Ordenar:</span>
+            <select id="gallerySortSelect" onchange="setGallerySort(this.value)"
+                    class="bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-medium">
+              <option value="data_desc">Data (Mais recente primeiro)</option>
+              <option value="data_asc">Data (Mais antigo primeiro)</option>
+              <option value="nome_asc">Nome do Titular (A-Z)</option>
+              <option value="nome_desc">Nome do Titular (Z-A)</option>
+              <option value="faculdade_asc">Instituição Emissora (A-Z)</option>
+              <option value="status_pendente">Status (Pendentes primeiro)</option>
+              <option value="dossie_desc">Dossiês (+ Páginas primeiro)</option>
+            </select>
+          </div>
+
+          <!-- Controle de Densidade da Grade -->
+          <div class="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-xs">
+            <button type="button" onclick="setGalleryDensity('compact')" id="btnDensityCompact" title="Visualização Compacta (Mais miniaturas por linha)"
+                    class="px-2 py-1 rounded text-[11px] font-medium transition text-slate-400 hover:text-slate-200">
+              <i class="fa-solid fa-grip-cells"></i>
+              <span class="hidden md:inline">Compacto</span>
+            </button>
+            <button type="button" onclick="setGalleryDensity('normal')" id="btnDensityNormal" title="Visualização Padrão (Recomendada)"
+                    class="px-2 py-1 rounded text-[11px] font-medium transition bg-slate-800 text-amber-300 shadow-sm">
+              <i class="fa-solid fa-grip"></i>
+              <span class="hidden md:inline">Padrão</span>
+            </button>
+            <button type="button" onclick="setGalleryDensity('large')" id="btnDensityLarge" title="Visualização Ampla (Miniaturas grandes com detalhes)"
+                    class="px-2 py-1 rounded text-[11px] font-medium transition text-slate-400 hover:text-slate-200">
+              <i class="fa-solid fa-square"></i>
+              <span class="hidden md:inline">Amplo</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Direita: Contador de Resultados, Selecionar Todos & Itens por Página -->
+        <div class="flex items-center gap-3 flex-wrap">
+          <button type="button" onclick="toggleSelectAllGallery()" id="btnGallerySelectAll"
+                  class="px-2.5 py-1 rounded-lg border border-slate-700/80 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white text-xs flex items-center gap-1.5 transition">
+            <i class="fa-regular fa-square-check text-emerald-400"></i>
+            <span>Marcar Todos da Pág.</span>
+          </button>
+
+          <span id="galleryCountText" class="text-xs text-slate-300 font-mono">Exibindo 0 de 0</span>
+
+          <div class="flex items-center gap-1 text-xs text-slate-400">
+            <span class="text-[11px]">Por pág:</span>
+            <select id="galleryPageSizeSelect" onchange="setGalleryPageSize(Number(this.value))"
+                    class="bg-slate-950 border border-slate-700/80 rounded px-2 py-0.5 text-xs text-slate-200 font-mono">
+              <option value="24">24</option>
+              <option value="48" selected>48</option>
+              <option value="96">96</option>
+              <option value="192">192</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ÁREA DA GRADE DE CARDS COM SCROLL -->
+    <div id="galleryScrollContainer" class="flex-1 overflow-y-auto p-4 sm:p-5">
+      <!-- Container da Grade Responsiva -->
+      <div id="galleryCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+        <!-- Cards de documentos injetados dinamicamente via renderGalleryView() -->
+      </div>
+
+      <!-- Estado Vazio (Sem resultados) -->
+      <div id="galleryEmptyState" class="hidden flex flex-col items-center justify-center py-20 px-4 text-xs text-slate-500 space-y-3">
+        <i class="fa-solid fa-filter-circle-xmark text-4xl text-slate-600"></i>
+        <p class="font-semibold text-slate-300 text-sm">Nenhum documento encontrado</p>
+        <p class="text-slate-400 max-w-sm text-center">Nenhum registro corresponde aos filtros ou à pesquisa ativa.</p>
+        <button onclick="resetAllFilters()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition mt-2">
+          Limpar Filtros e Busca
+        </button>
+      </div>
+    </div>
+
+    <!-- BARRA DE PAGINAÇÃO INFERIOR FIXA -->
+    <footer id="galleryPaginationBar" class="bg-slate-900/95 border-t border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0 select-none">
+      <!-- Esquerda: Indicador de Páginas -->
+      <div class="flex items-center gap-2 text-xs text-slate-400">
+        <span>Página</span>
+        <span id="galleryPageNum" class="font-bold text-slate-100 font-mono px-2 py-0.5 bg-slate-950 rounded border border-slate-800">1</span>
+        <span>de</span>
+        <span id="galleryTotalPages" class="font-bold text-slate-300 font-mono">1</span>
+      </div>
+
+      <!-- Centro: Controles de Navegação -->
+      <div id="galleryPaginationButtons" class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+        <!-- Injetados dinamicamente via renderGalleryPagination() -->
+      </div>
+
+      <!-- Direita: Dica de atalhos -->
+      <div class="hidden md:flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+        <span class="inline-flex items-center gap-1">
+          <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-400 font-mono">← / →</kbd>
+          <span>Páginas</span>
+        </span>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- LIGHTBOX / QUICK PREVIEW MODAL DA GALERIA -->
+  <div id="galleryLightboxModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex flex-col p-4 sm:p-6 overflow-hidden select-none">
+    <!-- Topo do Lightbox -->
+    <div class="flex items-center justify-between gap-3 pb-3 border-b border-slate-800 shrink-0">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span id="lightboxStatusBadge" class="text-[10px] px-2 py-0.5 rounded font-medium border bg-amber-500/10 text-amber-400 border-amber-500/30 shrink-0">Pendente</span>
+        <h3 id="lightboxTitle" class="text-sm font-bold text-slate-100 truncate">Visualização do Documento</h3>
+        <span id="lightboxMd5" class="text-xs text-emerald-400 font-mono hidden sm:inline"></span>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="lightboxBtnConferir" onclick="openLightboxDocInConference()"
+                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow">
+          <i class="fa-solid fa-table-columns"></i>
+          <span>Abrir na Conferência</span>
+        </button>
+        <button onclick="closeGalleryLightbox()" title="Fechar (Esc)"
+                class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Centro: Visualização da Imagem/PDF ampliada -->
+    <div class="flex-1 min-h-0 flex items-center justify-center p-4 overflow-hidden relative" onclick="if(event.target === this) closeGalleryLightbox()">
+      <button type="button" onclick="navigateLightbox(-1)" title="Documento anterior (←)"
+              class="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 shadow-xl transition opacity-80 hover:opacity-100 z-10">
+        <i class="fa-solid fa-chevron-left text-base"></i>
+      </button>
+
+      <img id="lightboxImageEl" src="" alt="Miniatura Ampliada" class="max-h-full max-w-full object-contain rounded-lg shadow-2xl border border-slate-800">
+
+      <button type="button" onclick="navigateLightbox(1)" title="Próximo documento (→)"
+              class="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 shadow-xl transition opacity-80 hover:opacity-100 z-10">
+        <i class="fa-solid fa-chevron-right text-base"></i>
+      </button>
+    </div>
+
+    <!-- Rodapé do Lightbox: Metadados resumidos -->
+    <div id="lightboxFooter" class="pt-3 border-t border-slate-800 shrink-0 flex items-center justify-between gap-4 text-xs text-slate-400 flex-wrap">
+      <div id="lightboxDetails" class="flex items-center gap-3 flex-wrap text-[11.5px]">
+        <!-- Injetado dinamicamente -->
+      </div>
+      <div class="text-[11px] text-slate-500">
+        Pressione <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-300 font-mono">Esc</kbd> para fechar
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- 3. PAINEL DE BUSINESS INTELLIGENCE (BI) & ANÁLISE ESTATÍSTICA -->
   <!-- ==================================================================== -->
   <main id="viewBI" class="flex-1 min-h-0 overflow-y-auto split-pane bg-slate-950 p-4 sm:p-6 hidden space-y-6">
 
@@ -3033,13 +3308,15 @@
     function updateQuickViewUI() {
       const qvIds = ['todos', 'dossies', 'pendentes', 'cursos', 'financeiro', 'identificacao', 'nao_processado'];
       qvIds.forEach(id => {
-        const btn = document.getElementById(`qv-${id}`);
-        if (!btn) return;
-        if (id === activeQuickView) {
-          btn.className = "px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm";
-        } else {
-          btn.className = "px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800";
-        }
+        ['qv-', 'gqv-'].forEach(prefix => {
+          const btn = document.getElementById(`${prefix}${id}`);
+          if (!btn) return;
+          if (id === activeQuickView) {
+            btn.className = "px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm";
+          } else {
+            btn.className = "px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800";
+          }
+        });
       });
     }
 
@@ -4777,6 +5054,10 @@
       updateCounters();
       renderSidebar();
 
+      if (typeof currentMainTab !== 'undefined' && currentMainTab === 'galeria') {
+        renderGalleryView();
+      }
+
       if (filteredDocs.length > 0) {
         let targetIndex = 0;
         if (preserveCurrentDoc && currentSelectedMd5) {
@@ -5063,6 +5344,18 @@
         barElem.style.width = `${pctHumano}%`;
       }
 
+      // Atualiza contadores da Galeria de Documentos
+      const tabBadgeGal = document.getElementById('tabBadgeGaleriaCount');
+      if (tabBadgeGal) {
+        const c = typeof filteredDocs !== 'undefined' ? filteredDocs.length : total;
+        tabBadgeGal.innerText = c.toLocaleString('pt-BR');
+      }
+      const subCounter = document.getElementById('galeriaSubheaderCounter');
+      if (subCounter) {
+        const c = typeof filteredDocs !== 'undefined' ? filteredDocs.length : total;
+        subCounter.innerText = `${c.toLocaleString('pt-BR')} documentos no filtro atual`;
+      }
+
       if (typeof currentMainTab !== 'undefined' && currentMainTab === 'bi') {
         renderBIDashboard();
       }
@@ -5320,6 +5613,12 @@
     function resetAllFilters() {
       document.getElementById('searchInput').value = '';
       document.getElementById('clearSearchBtn').classList.add('hidden');
+      const gSearch = document.getElementById('gallerySearchInput');
+      if (gSearch) gSearch.value = '';
+      const gClear = document.getElementById('galleryClearSearchBtn');
+      if (gClear) gClear.classList.add('hidden');
+      if (typeof galleryCurrentPage !== 'undefined') galleryCurrentPage = 1;
+
       activeQuickView = 'todos';
       updateQuickViewUI();
 
@@ -7035,6 +7334,11 @@
         const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
 
         if (e.key === 'Escape') {
+          const lbModal = document.getElementById('galleryLightboxModal');
+          if (lbModal && !lbModal.classList.contains('hidden')) {
+            closeGalleryLightbox();
+            return;
+          }
           if (openFilterPopoverId) {
             closeAllFilterPopovers();
             return;
@@ -7067,10 +7371,37 @@
           e.preventDefault();
           saveCurrentDoc();
         } else if (!isInput) {
-          if (e.key === 'ArrowLeft' || e.key === '[') {
-            navigateDoc(-1);
-          } else if (e.key === 'ArrowRight' || e.key === ']') {
-            navigateDoc(1);
+          const lbModal = document.getElementById('galleryLightboxModal');
+          const isLightboxOpen = lbModal && !lbModal.classList.contains('hidden');
+
+          if (isLightboxOpen) {
+            if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+              e.preventDefault();
+              navigateLightbox(-1);
+            } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+              e.preventDefault();
+              navigateLightbox(1);
+            }
+          } else if (typeof currentMainTab !== 'undefined' && currentMainTab === 'galeria') {
+            const sorted = getSortedGalleryDocs();
+            const totalPages = Math.ceil(sorted.length / galleryPageSize) || 1;
+            if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+              if (galleryCurrentPage > 1) {
+                e.preventDefault();
+                changeGalleryPage(galleryCurrentPage - 1);
+              }
+            } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+              if (galleryCurrentPage < totalPages) {
+                e.preventDefault();
+                changeGalleryPage(galleryCurrentPage + 1);
+              }
+            }
+          } else {
+            if (e.key === 'ArrowLeft' || e.key === '[') {
+              navigateDoc(-1);
+            } else if (e.key === 'ArrowRight' || e.key === ']') {
+              navigateDoc(1);
+            }
           }
         }
       });
@@ -8059,9 +8390,555 @@
     }
 
     // =========================================================================
+    // MÓDULO DE GALERIA DE DOCUMENTOS (MOSAICO DE THUMBNAILS - PAPERLESS-NGX)
+    // =========================================================================
+    let galleryCurrentPage = 1;
+    let galleryPageSize = 48;
+    let gallerySort = 'data_desc';
+    let galleryDensity = 'normal'; // 'compact' | 'normal' | 'large'
+    let currentLightboxDoc = null;
+
+    function getSortedGalleryDocs() {
+      const docs = [...filteredDocs];
+      switch (gallerySort) {
+        case 'data_asc':
+          return docs.sort((a, b) => {
+            const dA = safeString(a.data || a.data_modificacao || '');
+            const dB = safeString(b.data || b.data_modificacao || '');
+            return dA.localeCompare(dB);
+          });
+        case 'data_desc':
+          return docs.sort((a, b) => {
+            const dA = safeString(a.data || a.data_modificacao || '');
+            const dB = safeString(b.data || b.data_modificacao || '');
+            return dB.localeCompare(dA);
+          });
+        case 'nome_asc':
+          return docs.sort((a, b) => {
+            const nA = safeString(a.beneficiario || a.nome_arquivo || '').toLowerCase();
+            const nB = safeString(b.beneficiario || b.nome_arquivo || '').toLowerCase();
+            return nA.localeCompare(nB);
+          });
+        case 'nome_desc':
+          return docs.sort((a, b) => {
+            const nA = safeString(a.beneficiario || a.nome_arquivo || '').toLowerCase();
+            const nB = safeString(b.beneficiario || b.nome_arquivo || '').toLowerCase();
+            return nB.localeCompare(nA);
+          });
+        case 'faculdade_asc':
+          return docs.sort((a, b) => {
+            const fA = safeString(a.faculdade || '').toLowerCase();
+            const fB = safeString(b.faculdade || '').toLowerCase();
+            return fA.localeCompare(fB);
+          });
+        case 'status_pendente':
+          return docs.sort((a, b) => {
+            const isUnprocA = isDocumentUnprocessed(a) ? 1 : 0;
+            const isUnprocB = isDocumentUnprocessed(b) ? 1 : 0;
+            const isPendA = safeString(a.status_conferencia).toLowerCase() === 'pendente' ? 0 : 1;
+            const isPendB = safeString(b.status_conferencia).toLowerCase() === 'pendente' ? 0 : 1;
+            if (isPendA !== isPendB) return isPendA - isPendB;
+            return isUnprocA - isUnprocB;
+          });
+        case 'dossie_desc':
+          return docs.sort((a, b) => {
+            const pA = Array.isArray(a.dossie_paginas) ? a.dossie_paginas.length : 0;
+            const pB = Array.isArray(b.dossie_paginas) ? b.dossie_paginas.length : 0;
+            return pB - pA;
+          });
+        default:
+          return docs;
+      }
+    }
+
+    function renderGalleryView() {
+      const grid = document.getElementById('galleryCardsGrid');
+      const emptyState = document.getElementById('galleryEmptyState');
+      if (!grid) return;
+
+      // Sincroniza busca e contadores da galeria
+      const searchInp = document.getElementById('gallerySearchInput');
+      const mainSearch = document.getElementById('searchInput');
+      if (searchInp && mainSearch && searchInp.value !== mainSearch.value) {
+        searchInp.value = mainSearch.value;
+      }
+      const clearBtn = document.getElementById('galleryClearSearchBtn');
+      if (clearBtn) {
+        if (searchInp && searchInp.value) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+      }
+
+      // Sincroniza Quick Views visuais da galeria
+      const gqvIds = ['todos', 'dossies', 'pendentes', 'cursos', 'financeiro', 'identificacao', 'nao_processado'];
+      gqvIds.forEach(id => {
+        const btn = document.getElementById(`gqv-${id}`);
+        if (!btn) return;
+        if (id === activeQuickView) {
+          btn.className = "px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm";
+        } else {
+          btn.className = "px-2.5 py-1 rounded-full font-medium shrink-0 transition flex items-center gap-1 border bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800";
+        }
+      });
+
+      // Aplica classe de densidade na grade
+      if (galleryDensity === 'compact') {
+        grid.className = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3";
+      } else if (galleryDensity === 'large') {
+        grid.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5";
+      } else {
+        grid.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4";
+      }
+
+      const sorted = getSortedGalleryDocs();
+      const totalDocs = sorted.length;
+      const totalPages = Math.max(1, Math.ceil(totalDocs / galleryPageSize));
+      if (galleryCurrentPage > totalPages) galleryCurrentPage = totalPages;
+      if (galleryCurrentPage < 1) galleryCurrentPage = 1;
+
+      const startIdx = totalDocs === 0 ? 0 : (galleryCurrentPage - 1) * galleryPageSize;
+      const endIdx = Math.min(startIdx + galleryPageSize, totalDocs);
+      const pageDocs = sorted.slice(startIdx, endIdx);
+
+      // Atualiza indicadores de texto
+      const countEl = document.getElementById('galleryCountText');
+      if (countEl) {
+        countEl.innerText = totalDocs === 0 
+          ? '0 de 0' 
+          : `Exibindo ${startIdx + 1}–${endIdx} de ${totalDocs.toLocaleString('pt-BR')}`;
+      }
+      const subCounter = document.getElementById('galeriaSubheaderCounter');
+      if (subCounter) {
+        subCounter.innerText = `${totalDocs.toLocaleString('pt-BR')} documentos no filtro atual`;
+      }
+      const tabBadge = document.getElementById('tabBadgeGaleriaCount');
+      if (tabBadge) {
+        tabBadge.innerText = totalDocs.toLocaleString('pt-BR');
+      }
+
+      if (totalDocs === 0) {
+        grid.innerHTML = '';
+        if (emptyState) emptyState.classList.remove('hidden');
+        renderGalleryPagination(0, 1);
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+
+      // Gera HTML dos cards estilo Paperless-ngx
+      let html = '';
+      pageDocs.forEach(doc => {
+        const isDocChecked = selectedMd5s.has(doc.md5);
+        const isUnproc = isDocumentUnprocessed(doc);
+        const isApproved = !isUnproc && safeString(doc.status_conferencia).toLowerCase() === 'aprovado';
+        const isImg = isImageDoc(doc);
+        const docDom = safeString(doc.dominio || 'academico').toLowerCase();
+        const md5Short = safeString(doc.md5).substring(0, 8);
+        const thumbSrc = `/api/thumbnail/${doc.md5}`;
+
+        // Nome / Beneficiário
+        const nome = safeString(doc.beneficiario) || (isUnproc ? (doc.nome_arquivo || 'Arquivo não lido') : 'Sem titular');
+        
+        // Subtítulo contextual
+        let subTitle = '';
+        if (docDom === 'financeiro') {
+          const de = doc.dados_extras || {};
+          subTitle = doc.valor_monetario ? `Valor: ${doc.valor_monetario}` : (doc.pix_chave || de.pix_chave || 'Comprovante PIX');
+        } else if (docDom === 'identificacao') {
+          subTitle = doc.rg ? `RG: ${doc.rg}` : 'Documento de Identificação';
+        } else {
+          subTitle = safeString(doc.curso) || 'Curso não informado';
+        }
+
+        // Faculdade / Emissor
+        const faculdade = safeString(doc.faculdade) || (docDom === 'financeiro' ? 'Instituição Bancária' : 'Instituição não informada');
+        const dataDoc = safeString(doc.data || doc.data_modificacao) || '-';
+
+        // Badge de Status
+        let statusBadge = '';
+        if (isUnproc) {
+          statusBadge = `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded text-[9.5px] font-semibold flex items-center gap-1"><i class="fa-solid fa-circle-question text-[8px]"></i> Não Lido</span>`;
+        } else if (isApproved) {
+          statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[9.5px] font-semibold flex items-center gap-1"><i class="fa-solid fa-check text-[8px]"></i> OK</span>`;
+        } else {
+          statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[9.5px] font-semibold flex items-center gap-1"><i class="fa-regular fa-clock text-[8px]"></i> Pendente</span>`;
+        }
+
+        // Indicador de dossiê multipáginas
+        const pgsCount = Array.isArray(doc.dossie_paginas) ? doc.dossie_paginas.length : 1;
+        const dossieBadge = pgsCount > 1 
+          ? `<span class="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold shrink-0" title="Dossiê com ${pgsCount} páginas">+${pgsCount}p</span>`
+          : '';
+
+        // Badge de tipo e natureza
+        const tipoStr = safeString(doc.tipo_documento).trim() || (isImg ? 'Imagem' : 'Documento');
+        const natStr = safeString(doc.natureza_curso).trim();
+
+        html += `
+          <div id="gcard-${doc.md5}" onclick="openInConference('${doc.md5}')"
+               class="gallery-card group bg-slate-900/90 border border-slate-800 hover:border-slate-700/90 rounded-xl p-3 flex flex-col justify-between shadow-sm cursor-pointer select-none relative overflow-hidden ${isDocChecked ? 'is-selected ring-2 ring-emerald-500/60 bg-emerald-950/20 border-emerald-500/70' : ''}">
+            
+            <!-- Topo do Card: Checkbox + Badges -->
+            <div class="flex items-center justify-between gap-1.5 mb-2 shrink-0">
+              <div class="flex items-center gap-1.5" onclick="event.stopPropagation()">
+                <input type="checkbox" ${isDocChecked ? 'checked' : ''}
+                       onchange="toggleSelectDoc('${doc.md5}', this.checked); updateGalleryCardSelection('${doc.md5}', this.checked);"
+                       class="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-3.5 w-3.5"
+                       title="Selecionar para ações em lote">
+                ${dossieBadge}
+              </div>
+              <div class="shrink-0" id="gcard-status-${doc.md5}">
+                ${statusBadge}
+              </div>
+            </div>
+
+            <!-- Miniatura do Documento (Proporção A4) com Overlay de Ações -->
+            <div class="gallery-thumbnail-container relative w-full bg-slate-950 rounded-lg border border-slate-800/80 overflow-hidden mb-2.5 flex items-center justify-center shadow-inner group/thumb">
+              <img src="${thumbSrc}" loading="lazy" decoding="async" alt="Capa"
+                   class="w-full h-full object-cover object-top transition duration-200 group-hover/thumb:scale-[1.03]"
+                   onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
+              <div class="hidden w-full h-full flex flex-col items-center justify-center text-slate-600 bg-slate-950 p-2 text-center">
+                <i class="fa-regular fa-file-lines text-3xl text-slate-700 mb-1"></i>
+                <span class="text-[9px] font-mono">${isImg ? 'IMAGEM' : 'PDF'}</span>
+              </div>
+
+              <!-- Hover Action Overlay (Paperless Action Bar) -->
+              <div class="absolute inset-0 bg-slate-950/75 backdrop-blur-[2px] opacity-0 group-hover/thumb:opacity-100 transition-all duration-200 flex items-center justify-center gap-1.5 p-2" onclick="event.stopPropagation()">
+                <button type="button" onclick="openGalleryLightbox('${doc.md5}', event)" title="Visualizar Ampliado"
+                        class="p-2 bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs shadow transition">
+                  <i class="fa-solid fa-magnifying-glass-plus"></i>
+                </button>
+                <button type="button" onclick="openInConference('${doc.md5}', event)" title="Abrir na Conferência Humana"
+                        class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow transition flex items-center gap-1">
+                  <i class="fa-solid fa-table-columns text-[10px]"></i>
+                  <span>Conferir</span>
+                </button>
+                <button type="button" onclick="quickApproveFromGallery('${doc.md5}', event)" title="Aprovar Documento Instantaneamente"
+                        class="p-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs shadow transition">
+                  <i class="fa-solid fa-check"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Corpo de Metadados -->
+            <div class="flex-1 flex flex-col gap-1 min-w-0">
+              <!-- Nome / Titular -->
+              <div class="font-bold text-xs text-slate-100 truncate group-hover:text-amber-300 transition" title="${nome}">
+                ${nome}
+              </div>
+
+              <!-- Subtítulo (Curso / Chave) -->
+              <div class="text-[11px] text-slate-400 truncate" title="${subTitle}">
+                ${subTitle}
+              </div>
+
+              <!-- Faculdade / Emissor -->
+              <div class="text-[10.5px] text-slate-400 flex items-center gap-1 truncate" title="${faculdade}">
+                <i class="fa-solid fa-building-columns text-[9px] text-amber-400/80 shrink-0"></i>
+                <span class="truncate">${faculdade}</span>
+              </div>
+
+              <!-- Tags / Pills -->
+              <div class="flex items-center gap-1 flex-wrap pt-1 mt-auto">
+                <span class="text-[9.5px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 font-medium truncate max-w-[120px]" title="${tipoStr}">${tipoStr}</span>
+                ${natStr ? `<span class="text-[9.5px] px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/20 font-medium truncate max-w-[120px]" title="${natStr}">${formatShortNature(natStr)}</span>` : ''}
+              </div>
+
+              <!-- Rodapé do Card: Data & Hash MD5 -->
+              <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-800/80 mt-1 font-mono">
+                <span class="flex items-center gap-1"><i class="fa-regular fa-calendar text-[9px]"></i>${dataDoc}</span>
+                <span title="${doc.md5}">${md5Short}...</span>
+              </div>
+            </div>
+
+          </div>
+        `;
+      });
+
+      grid.innerHTML = html;
+      renderGalleryPagination(totalPages, galleryCurrentPage);
+    }
+
+    function renderGalleryPagination(totalPages, curPage) {
+      const btnContainer = document.getElementById('galleryPaginationButtons');
+      const pageNumEl = document.getElementById('galleryPageNum');
+      const totalPagesEl = document.getElementById('galleryTotalPages');
+
+      if (pageNumEl) pageNumEl.innerText = totalPages === 0 ? 0 : curPage;
+      if (totalPagesEl) totalPagesEl.innerText = totalPages;
+      if (!btnContainer) return;
+
+      if (totalPages <= 1) {
+        btnContainer.innerHTML = '';
+        return;
+      }
+
+      let btns = '';
+
+      // Primeira página
+      btns += `
+        <button type="button" onclick="changeGalleryPage(1)" ${curPage === 1 ? 'disabled' : ''}
+                class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 border border-slate-700 text-xs font-mono" title="Primeira Página">
+          <i class="fa-solid fa-angles-left"></i>
+        </button>
+      `;
+
+      // Página anterior
+      btns += `
+        <button type="button" onclick="changeGalleryPage(${curPage - 1})" ${curPage === 1 ? 'disabled' : ''}
+                class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 border border-slate-700 text-xs flex items-center gap-1 font-medium" title="Página Anterior">
+          <i class="fa-solid fa-chevron-left"></i>
+          <span class="hidden sm:inline">Anterior</span>
+        </button>
+      `;
+
+      // Páginas ao redor
+      const maxButtons = 5;
+      let startP = Math.max(1, curPage - 2);
+      let endP = Math.min(totalPages, startP + maxButtons - 1);
+      if (endP - startP < maxButtons - 1) {
+        startP = Math.max(1, endP - maxButtons + 1);
+      }
+
+      if (startP > 1) {
+        btns += `<button type="button" onclick="changeGalleryPage(1)" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800 text-xs font-mono">1</button>`;
+        if (startP > 2) btns += `<span class="px-1 text-slate-600 font-mono">...</span>`;
+      }
+
+      for (let p = startP; p <= endP; p++) {
+        if (p === curPage) {
+          btns += `<button type="button" class="px-2.5 py-1 rounded bg-amber-600 text-white font-bold border border-amber-500 text-xs font-mono shadow-sm">${p}</button>`;
+        } else {
+          btns += `<button type="button" onclick="changeGalleryPage(${p})" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-mono transition">${p}</button>`;
+        }
+      }
+
+      if (endP < totalPages) {
+        if (endP < totalPages - 1) btns += `<span class="px-1 text-slate-600 font-mono">...</span>`;
+        btns += `<button type="button" onclick="changeGalleryPage(${totalPages})" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800 text-xs font-mono">${totalPages}</button>`;
+      }
+
+      // Próxima página
+      btns += `
+        <button type="button" onclick="changeGalleryPage(${curPage + 1})" ${curPage === totalPages ? 'disabled' : ''}
+                class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 border border-slate-700 text-xs flex items-center gap-1 font-medium" title="Próxima Página">
+          <span class="hidden sm:inline">Próxima</span>
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      `;
+
+      // Última página
+      btns += `
+        <button type="button" onclick="changeGalleryPage(${totalPages})" ${curPage === totalPages ? 'disabled' : ''}
+                class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 border border-slate-700 text-xs font-mono" title="Última Página">
+          <i class="fa-solid fa-angles-right"></i>
+        </button>
+      `;
+
+      btnContainer.innerHTML = btns;
+    }
+
+    function changeGalleryPage(newPage) {
+      galleryCurrentPage = newPage;
+      renderGalleryView();
+      const scrollEl = document.getElementById('galleryScrollContainer');
+      if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function setGallerySort(sortKey) {
+      gallerySort = sortKey;
+      galleryCurrentPage = 1;
+      renderGalleryView();
+    }
+
+    function setGalleryDensity(density) {
+      galleryDensity = density;
+      ['compact', 'normal', 'large'].forEach(d => {
+        const btn = document.getElementById(`btnDensity${d.charAt(0).toUpperCase() + d.slice(1)}`);
+        if (btn) {
+          if (d === density) {
+            btn.className = "px-2 py-1 rounded text-[11px] font-medium transition bg-slate-800 text-amber-300 shadow-sm";
+          } else {
+            btn.className = "px-2 py-1 rounded text-[11px] font-medium transition text-slate-400 hover:text-slate-200";
+          }
+        }
+      });
+      renderGalleryView();
+    }
+
+    function setGalleryPageSize(size) {
+      galleryPageSize = size;
+      galleryCurrentPage = 1;
+      renderGalleryView();
+    }
+
+    function onGallerySearchInput(val) {
+      const mainSearch = document.getElementById('searchInput');
+      if (mainSearch) {
+        mainSearch.value = val;
+      }
+      clearTimeout(searchDebounceTimeout);
+      searchDebounceTimeout = setTimeout(() => {
+        applyFilter(true);
+      }, 250);
+    }
+
+    function clearGallerySearch() {
+      const gSearch = document.getElementById('gallerySearchInput');
+      if (gSearch) gSearch.value = '';
+      const mSearch = document.getElementById('searchInput');
+      if (mSearch) mSearch.value = '';
+      applyFilter(true);
+    }
+
+    function updateGalleryCardSelection(md5, isChecked) {
+      const card = document.getElementById(`gcard-${md5}`);
+      if (!card) return;
+      if (isChecked) {
+        card.classList.add('is-selected', 'ring-2', 'ring-emerald-500/60', 'bg-emerald-950/20', 'border-emerald-500/70');
+      } else {
+        card.classList.remove('is-selected', 'ring-2', 'ring-emerald-500/60', 'bg-emerald-950/20', 'border-emerald-500/70');
+      }
+    }
+
+    function toggleSelectAllGallery() {
+      const sorted = getSortedGalleryDocs();
+      const startIdx = (galleryCurrentPage - 1) * galleryPageSize;
+      const endIdx = Math.min(startIdx + galleryPageSize, sorted.length);
+      const pageDocs = sorted.slice(startIdx, endIdx);
+
+      const allPageSelected = pageDocs.every(d => selectedMd5s.has(d.md5));
+      pageDocs.forEach(d => {
+        if (allPageSelected) {
+          selectedMd5s.delete(d.md5);
+        } else {
+          selectedMd5s.add(d.md5);
+        }
+      });
+
+      renderGalleryView();
+      updateBulkUI();
+      renderSidebar();
+    }
+
+    function openInConference(md5, event) {
+      if (event) event.stopPropagation();
+      const idx = filteredDocs.findIndex(d => d.md5 === md5);
+      if (idx !== -1) {
+        selectDocument(idx);
+      }
+      switchMainTab('conferencia');
+    }
+
+    async function quickApproveFromGallery(md5, event) {
+      if (event) event.stopPropagation();
+      const doc = documents.find(d => d.md5 === md5);
+      if (!doc) return;
+
+      doc.status_conferencia = 'aprovado';
+      const statusBadgeContainer = document.getElementById(`gcard-status-${md5}`);
+      if (statusBadgeContainer) {
+        statusBadgeContainer.innerHTML = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[9.5px] font-semibold flex items-center gap-1 animate-pulse"><i class="fa-solid fa-check text-[8px]"></i> OK</span>`;
+      }
+
+      showToast(`Documento ${safeString(doc.beneficiario) || md5.substring(0, 8)} aprovado!`, 'success');
+
+      try {
+        await fetch('/api/save_classification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(doc)
+        });
+      } catch (e) {
+        console.warn('Erro ao salvar aprovação no servidor:', e);
+      }
+
+      updateCounters();
+    }
+
+    function openGalleryLightbox(md5, event) {
+      if (event) event.stopPropagation();
+      const doc = documents.find(d => d.md5 === md5);
+      if (!doc) return;
+      currentLightboxDoc = doc;
+
+      const modal = document.getElementById('galleryLightboxModal');
+      const titleEl = document.getElementById('lightboxTitle');
+      const md5El = document.getElementById('lightboxMd5');
+      const badgeEl = document.getElementById('lightboxStatusBadge');
+      const imgEl = document.getElementById('lightboxImageEl');
+      const detailsEl = document.getElementById('lightboxDetails');
+
+      if (titleEl) titleEl.innerText = safeString(doc.beneficiario) || doc.nome_arquivo || 'Documento';
+
+      const sorted = getSortedGalleryDocs();
+      const curIdx = sorted.findIndex(d => d.md5 === doc.md5);
+      if (md5El) {
+        const posText = curIdx !== -1 ? `[${curIdx + 1} de ${sorted.length}] ` : '';
+        md5El.innerText = `${posText}MD5: ${doc.md5}`;
+      }
+
+      if (imgEl) imgEl.src = `/api/thumbnail/${doc.md5}`;
+
+      const isAppr = safeString(doc.status_conferencia).toLowerCase() === 'aprovado';
+      const isUnproc = isDocumentUnprocessed(doc);
+      if (badgeEl) {
+        if (isUnproc) {
+          badgeEl.className = 'text-[10px] px-2 py-0.5 rounded font-medium border bg-rose-500/10 text-rose-400 border-rose-500/30 shrink-0';
+          badgeEl.innerText = 'Não Lido';
+        } else if (isAppr) {
+          badgeEl.className = 'text-[10px] px-2 py-0.5 rounded font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shrink-0';
+          badgeEl.innerText = 'Aprovado / OK';
+        } else {
+          badgeEl.className = 'text-[10px] px-2 py-0.5 rounded font-medium border bg-amber-500/10 text-amber-400 border-amber-500/30 shrink-0';
+          badgeEl.innerText = 'Pendente';
+        }
+      }
+
+      if (detailsEl) {
+        detailsEl.innerHTML = `
+          <span><strong>Curso:</strong> ${safeString(doc.curso) || '-'}</span>
+          <span>•</span>
+          <span><strong>Instituição:</strong> ${safeString(doc.faculdade) || '-'}</span>
+          <span>•</span>
+          <span><strong>Data:</strong> ${safeString(doc.data || doc.data_modificacao) || '-'}</span>
+          <span>•</span>
+          <span><strong>Tipo:</strong> ${safeString(doc.tipo_documento) || '-'}</span>
+        `;
+      }
+
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function navigateLightbox(step) {
+      if (!currentLightboxDoc) return;
+      const sorted = getSortedGalleryDocs();
+      const idx = sorted.findIndex(d => d.md5 === currentLightboxDoc.md5);
+      if (idx !== -1) {
+        const nextIdx = idx + step;
+        if (nextIdx >= 0 && nextIdx < sorted.length) {
+          openGalleryLightbox(sorted[nextIdx].md5);
+        }
+      }
+    }
+
+    function closeGalleryLightbox() {
+      const modal = document.getElementById('galleryLightboxModal');
+      if (modal) modal.classList.add('hidden');
+      currentLightboxDoc = null;
+    }
+
+    function openLightboxDocInConference() {
+      if (currentLightboxDoc && currentLightboxDoc.md5) {
+        const md5 = currentLightboxDoc.md5;
+        closeGalleryLightbox();
+        openInConference(md5);
+      }
+    }
+
+    // =========================================================================
     // MÓDULO DE BUSINESS INTELLIGENCE (BI) & ESTATÍSTICAS INTERATIVAS
     // =========================================================================
-    let currentMainTab = 'conferencia'; // 'conferencia' | 'bi'
+    let currentMainTab = 'conferencia'; // 'conferencia' | 'galeria' | 'bi'
     let biState = {
       scope: 'classificados', // 'classificados' | 'todos' | 'aprovados'
       unitMode: 'ambos'       // 'ambos' | 'absoluto' | 'relativo'
@@ -8071,58 +8948,41 @@
     function switchMainTab(tabName) {
       currentMainTab = tabName;
       const btnConf = document.getElementById('tabMainConferencia');
+      const btnGal = document.getElementById('tabMainGaleria');
       const btnBI = document.getElementById('tabMainBI');
       const viewConf = document.getElementById('viewConferencia');
+      const viewGal = document.getElementById('viewGaleria');
       const viewBI = document.getElementById('viewBI');
       const confToolbar = document.getElementById('conferenciaToolbar');
+      const galToolbar = document.getElementById('galeriaToolbar');
       const biToolbar = document.getElementById('biToolbar');
-      const confNav = document.getElementById('conferenciaNavControls');
-      const biNav = document.getElementById('biNavControls');
+
+      // Reseta todos os botões de abas para o estado inativo
+      if (btnConf) btnConf.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+      if (btnGal) btnGal.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+      if (btnBI) btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+
+      // Esconde todas as visões principais e toolbars
+      if (viewConf) viewConf.classList.add('hidden');
+      if (viewGal) viewGal.classList.add('hidden');
+      if (viewBI) viewBI.classList.add('hidden');
+      if (confToolbar) { confToolbar.classList.add('hidden'); confToolbar.classList.remove('flex'); }
+      if (galToolbar) { galToolbar.classList.add('hidden'); galToolbar.classList.remove('flex'); }
+      if (biToolbar) { biToolbar.classList.add('hidden'); biToolbar.classList.remove('flex'); }
 
       if (tabName === 'conferencia') {
-        if (btnConf) {
-          btnConf.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-emerald-600 text-white shadow';
-        }
-        if (btnBI) {
-          btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
-        }
+        if (btnConf) btnConf.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-emerald-600 text-white shadow';
         if (viewConf) viewConf.classList.remove('hidden');
-        if (viewBI) viewBI.classList.add('hidden');
-        if (confToolbar) {
-          confToolbar.classList.remove('hidden');
-          confToolbar.classList.add('flex');
-        }
-        if (biToolbar) {
-          biToolbar.classList.add('hidden');
-          biToolbar.classList.remove('flex');
-        }
-        if (confNav) confNav.classList.remove('hidden');
-        if (biNav) {
-          biNav.classList.add('hidden');
-          biNav.classList.remove('flex');
-        }
-      } else {
-        if (btnConf) {
-          btnConf.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
-        }
-        if (btnBI) {
-          btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-cyan-600 text-white shadow';
-        }
-        if (viewConf) viewConf.classList.add('hidden');
+        if (confToolbar) { confToolbar.classList.remove('hidden'); confToolbar.classList.add('flex'); }
+      } else if (tabName === 'galeria') {
+        if (btnGal) btnGal.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-amber-600 text-white shadow';
+        if (viewGal) viewGal.classList.remove('hidden');
+        if (galToolbar) { galToolbar.classList.remove('hidden'); galToolbar.classList.add('flex'); }
+        renderGalleryView();
+      } else if (tabName === 'bi') {
+        if (btnBI) btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-cyan-600 text-white shadow';
         if (viewBI) viewBI.classList.remove('hidden');
-        if (confToolbar) {
-          confToolbar.classList.add('hidden');
-          confToolbar.classList.remove('flex');
-        }
-        if (biToolbar) {
-          biToolbar.classList.remove('hidden');
-          biToolbar.classList.add('flex');
-        }
-        if (confNav) confNav.classList.add('hidden');
-        if (biNav) {
-          biNav.classList.remove('hidden');
-          biNav.classList.add('flex');
-        }
+        if (biToolbar) { biToolbar.classList.remove('hidden'); biToolbar.classList.add('flex'); }
         renderBIDashboard();
       }
     }
