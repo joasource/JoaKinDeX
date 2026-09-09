@@ -106,6 +106,7 @@ except ImportError:
 try:
     from db_manager import (
         get_db_path,
+        get_json_path,
         init_database,
         upsert_document,
         upsert_documents_batch,
@@ -117,6 +118,7 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from db_manager import (
         get_db_path,
+        get_json_path,
         init_database,
         upsert_document,
         upsert_documents_batch,
