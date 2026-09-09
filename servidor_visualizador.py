@@ -47,7 +47,7 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
 
 try:
-    from classificador import (
+    from joakindex import (
         process_single_pdf,
         OllamaClient,
         OpenAIClient,
@@ -58,17 +58,15 @@ try:
 except Exception:
     import importlib.util
     main_py = Path(__file__).parent / "joakindex.py"
-    if not main_py.exists():
-        main_py = Path(__file__).parent / "joaclassificador-pdf.py"
-    spec = importlib.util.spec_from_file_location("classificador", main_py)
-    classificador = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(classificador)
-    process_single_pdf = classificador.process_single_pdf
-    OllamaClient = classificador.OllamaClient
-    OpenAIClient = classificador.OpenAIClient
-    run_batch_classification = getattr(classificador, "run_batch_classification", None)
-    detect_ollama_environments = getattr(classificador, "detect_ollama_environments", None)
-    get_available_ollama_models = getattr(classificador, "get_available_ollama_models", None)
+    spec = importlib.util.spec_from_file_location("joakindex", main_py)
+    joakindex = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(joakindex)
+    process_single_pdf = joakindex.process_single_pdf
+    OllamaClient = joakindex.OllamaClient
+    OpenAIClient = joakindex.OpenAIClient
+    run_batch_classification = getattr(joakindex, "run_batch_classification", None)
+    detect_ollama_environments = getattr(joakindex, "detect_ollama_environments", None)
+    get_available_ollama_models = getattr(joakindex, "get_available_ollama_models", None)
 
 try:
     from config_manager import (

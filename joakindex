@@ -17,8 +17,4 @@ elif [ -f "$DIR/.venv/bin/python" ]; then
     PYTHON_EXEC="$DIR/.venv/bin/python"
 fi
 
-if [ -f "$DIR/joakindex.py" ]; then
-    "$PYTHON_EXEC" "$DIR/joakindex.py" "$@"
-else
-    "$PYTHON_EXEC" "$DIR/joaclassificador-pdf.py" "$@"
-fi
+exec "$PYTHON_EXEC" "$DIR/joakindex.py" "$@"

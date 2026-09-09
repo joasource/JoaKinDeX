@@ -19,17 +19,11 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 CONFIG_FILE_NAME = ".joakindex_config.json"
-LEGACY_CONFIG_FILE_NAME = ".joaclassificador_config.json"
 
 
 def get_config_file_path() -> Path:
     """Retorna o caminho absoluto do arquivo de configuração no diretório da aplicação."""
-    p = Path(__file__).resolve().parent / CONFIG_FILE_NAME
-    if not p.exists():
-        legacy = Path(__file__).resolve().parent / LEGACY_CONFIG_FILE_NAME
-        if legacy.exists():
-            return legacy
-    return p
+    return Path(__file__).resolve().parent / CONFIG_FILE_NAME
 
 
 def get_factory_defaults() -> Dict[str, Any]:

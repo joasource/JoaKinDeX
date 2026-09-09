@@ -6,7 +6,7 @@
 [![GitHub](https://img.shields.io/badge/GitHub-joasource-181717?logo=github)](https://github.com/joasource/JoaKinDeX)
 [![Autor](https://img.shields.io/badge/Autor-Joaquim%20Ferreira%20Silva%20Neto-blue?logo=gmail&logoColor=white)](mailto:joaquimfsneto@gmail.com)
 
-**JoaKinDeX** (anteriormente `joaclassificador-pdf`) é uma ferramenta de linha de comando (CLI) e interface web para **classificação, indexação e extração estruturada de diplomas, certificados e documentos acadêmicos em massa**, utilizando modelos locais (**Ollama**) ou em nuvem (**OpenAI API**).
+**JoaKinDeX** é uma ferramenta de linha de comando (CLI) e interface web para **classificação, indexação e extração estruturada de diplomas, certificados e documentos acadêmicos em massa**, utilizando modelos locais (**Ollama**) ou em nuvem (**OpenAI API**).
 
 > **Criado e desenvolvido por:** **Joaquim Ferreira Silva Neto** ([joaquimfsneto@gmail.com](mailto:joaquimfsneto@gmail.com)).
 
