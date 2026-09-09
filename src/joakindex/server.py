@@ -47,7 +47,7 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
 
 try:
-    from joakindex import (
+    from joakindex.cli import (
         process_single_pdf,
         extract_file_author,
         extract_file_dublin_core,
@@ -63,27 +63,46 @@ try:
         SUPPORTED_EXTENSIONS
     )
 except Exception:
-    import importlib.util
-    main_py = Path(__file__).parent / "joakindex.py"
-    spec = importlib.util.spec_from_file_location("joakindex", main_py)
-    joakindex = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(joakindex)
-    process_single_pdf = joakindex.process_single_pdf
-    extract_file_author = getattr(joakindex, "extract_file_author", lambda p: None)
-    extract_file_dublin_core = getattr(joakindex, "extract_file_dublin_core", lambda p: {})
-    OllamaClient = joakindex.OllamaClient
-    OpenAIClient = joakindex.OpenAIClient
-    run_batch_classification = getattr(joakindex, "run_batch_classification", None)
-    detect_ollama_environments = getattr(joakindex, "detect_ollama_environments", None)
-    get_available_ollama_models = getattr(joakindex, "get_available_ollama_models", None)
-    convert_office_to_pdf = getattr(joakindex, "convert_office_to_pdf", None)
-    WORD_EXTENSIONS = getattr(joakindex, "WORD_EXTENSIONS", {".docx", ".doc", ".odt", ".rtf"})
-    TEXT_EXTENSIONS = getattr(joakindex, "TEXT_EXTENSIONS", {".txt"})
-    IMAGE_EXTENSIONS = getattr(joakindex, "IMAGE_EXTENSIONS", {".png", ".jpg", ".jpeg", ".webp"})
-    SUPPORTED_EXTENSIONS = getattr(joakindex, "SUPPORTED_EXTENSIONS", {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".docx", ".doc", ".odt", ".rtf", ".txt"})
+    try:
+        from .cli import (
+            process_single_pdf,
+            extract_file_author,
+            extract_file_dublin_core,
+            OllamaClient,
+            OpenAIClient,
+            run_batch_classification,
+            detect_ollama_environments,
+            get_available_ollama_models,
+            convert_office_to_pdf,
+            WORD_EXTENSIONS,
+            TEXT_EXTENSIONS,
+            IMAGE_EXTENSIONS,
+            SUPPORTED_EXTENSIONS
+        )
+    except Exception:
+        import importlib.util
+        main_py = Path(__file__).resolve().parent.parent.parent / "joakindex.py"
+        if not main_py.exists():
+            main_py = Path(__file__).parent / "joakindex.py"
+        spec = importlib.util.spec_from_file_location("joakindex", main_py)
+        joakindex = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(joakindex)
+        process_single_pdf = joakindex.process_single_pdf
+        extract_file_author = getattr(joakindex, "extract_file_author", lambda p: None)
+        extract_file_dublin_core = getattr(joakindex, "extract_file_dublin_core", lambda p: {})
+        OllamaClient = joakindex.OllamaClient
+        OpenAIClient = joakindex.OpenAIClient
+        run_batch_classification = getattr(joakindex, "run_batch_classification", None)
+        detect_ollama_environments = getattr(joakindex, "detect_ollama_environments", None)
+        get_available_ollama_models = getattr(joakindex, "get_available_ollama_models", None)
+        convert_office_to_pdf = getattr(joakindex, "convert_office_to_pdf", None)
+        WORD_EXTENSIONS = getattr(joakindex, "WORD_EXTENSIONS", {".docx", ".doc", ".odt", ".rtf"})
+        TEXT_EXTENSIONS = getattr(joakindex, "TEXT_EXTENSIONS", {".txt"})
+        IMAGE_EXTENSIONS = getattr(joakindex, "IMAGE_EXTENSIONS", {".png", ".jpg", ".jpeg", ".webp"})
+        SUPPORTED_EXTENSIONS = getattr(joakindex, "SUPPORTED_EXTENSIONS", {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".docx", ".doc", ".odt", ".rtf", ".txt"})
 
 try:
-    from config_manager import (
+    from joakindex.config import (
         get_visualizer_config,
         save_visualizer_config,
         reset_visualizer_config,
@@ -95,27 +114,43 @@ try:
         get_factory_defaults
     )
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from config_manager import (
-        get_visualizer_config,
-        save_visualizer_config,
-        reset_visualizer_config,
-        get_classifier_config,
-        save_classifier_config,
-        reset_classifier_config,
-        reset_all_config,
-        has_custom_config,
-        get_factory_defaults
-    )
+    try:
+        from .config import (
+            get_visualizer_config,
+            save_visualizer_config,
+            reset_visualizer_config,
+            get_classifier_config,
+            save_classifier_config,
+            reset_classifier_config,
+            reset_all_config,
+            has_custom_config,
+            get_factory_defaults
+        )
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from config_manager import (
+            get_visualizer_config,
+            save_visualizer_config,
+            reset_visualizer_config,
+            get_classifier_config,
+            save_classifier_config,
+            reset_classifier_config,
+            reset_all_config,
+            has_custom_config,
+            get_factory_defaults
+        )
 
 try:
-    from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
+    from joakindex.normalizer import normalizar_instituicao, uniformizar_base_dados
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
+    try:
+        from .normalizer import normalizar_instituicao, uniformizar_base_dados
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
 
 try:
-    from db_manager import (
+    from joakindex.db import (
         get_db_path,
         init_database,
         upsert_document,
@@ -128,19 +163,33 @@ try:
         sync_to_json
     )
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from db_manager import (
-        get_db_path,
-        init_database,
-        upsert_document,
-        upsert_documents_batch,
-        get_document_by_md5,
-        get_all_documents,
-        update_conference_status,
-        batch_update_conference_status,
-        batch_update_tag_domain,
-        sync_to_json
-    )
+    try:
+        from .db import (
+            get_db_path,
+            init_database,
+            upsert_document,
+            upsert_documents_batch,
+            get_document_by_md5,
+            get_all_documents,
+            update_conference_status,
+            batch_update_conference_status,
+            batch_update_tag_domain,
+            sync_to_json
+        )
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from db_manager import (
+            get_db_path,
+            init_database,
+            upsert_document,
+            upsert_documents_batch,
+            get_document_by_md5,
+            get_all_documents,
+            update_conference_status,
+            batch_update_conference_status,
+            batch_update_tag_domain,
+            sync_to_json
+        )
 
 
 def clean_path_input(raw: Any) -> str:
@@ -615,12 +664,31 @@ class BatchManager:
                 pass
 
 
+def resolve_html_path(raw: Optional[Union[str, Path]] = None) -> Path:
+    """Localiza o arquivo visualizador.html na pasta ui/, raiz do projeto ou caminho customizado."""
+    if raw:
+        p = Path(raw).expanduser().resolve()
+        if p.exists() and p.is_file():
+            return p
+    candidates = [
+        Path(__file__).resolve().parent.parent.parent / "ui" / "visualizador.html",
+        Path(__file__).resolve().parent / "ui" / "visualizador.html",
+        Path.cwd() / "ui" / "visualizador.html",
+        Path(__file__).resolve().parent.parent.parent / "visualizador.html",
+        Path.cwd() / "visualizador.html",
+    ]
+    for c in candidates:
+        if c.exists() and c.is_file():
+            return c
+    return (Path(__file__).resolve().parent.parent.parent / "ui" / "visualizador.html").resolve()
+
+
 class ConferenciaServer:
     def __init__(
         self,
         json_path: str,
         pdf_dir: str,
-        html_path: str,
+        html_path: str = None,
         provider: str = "ollama",
         model: str = None,
         ollama_url: str = "http://localhost:11434",
@@ -638,7 +706,8 @@ class ConferenciaServer:
             self.pdf_dir = self.pdf_dir.parent.resolve()
         self.db_path = get_db_path(self.json_path)
         init_database(self.db_path, initial_json_path=self.json_path)
-        self.html_path = Path(html_path).resolve()
+        self.html_path = resolve_html_path(html_path)
+
         self.provider = provider or "ollama"
         self.model = model
         self.ollama_url = ollama_url

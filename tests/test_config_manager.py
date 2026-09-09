@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from config_manager import (
+from joakindex.config import (
     get_factory_defaults,
     clean_path_string,
     resolve_classifier_output_dir,

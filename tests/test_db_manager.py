@@ -2,7 +2,7 @@ import pytest
 import sqlite3
 import json
 from pathlib import Path
-from db_manager import (
+from joakindex.db import (
     get_db_path,
     get_json_path,
     get_connection,

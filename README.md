@@ -60,19 +60,31 @@
 
 ```text
 JoaKinDeX/
-├── joakindex               # Executável CLI (Linux/macOS)
-├── joakindex.py            # Código-fonte principal em Python
-├── db_manager.py           # Gerenciador de Banco de Dados SQLite WAL
-├── config_manager.py       # Gerenciador de configurações persistentes
-├── normalizador_instituicoes.py # Normalizador inteligente de instituições
-├── joakindex_server.py     # Servidor HTTP / Central Web de conferência e lote
-├── iniciar_servidor.sh     # Script para iniciar o servidor web
-├── visualizador.html       # Interface web com PDF, formulário e BI
-├── docker-compose.yml      # Container Cloudflare Tunnel (acesso remoto HTTPS)
-├── .env.example            # Exemplo de configuração do token da Cloudflare
-├── requirements.txt        # Dependências Python (pip)
-├── environment.yml         # Arquivo de especificação do ambiente Conda
-└── README.md               # Documentação do projeto
+├── src/joakindex/              # Pacote Python modularizado (PEP 517/621)
+│   ├── __init__.py             # Exportações públicas da biblioteca
+│   ├── __main__.py             # Ponto de entrada python -m joakindex
+│   ├── cli.py                  # Motor de classificação e interface CLI
+│   ├── server.py               # Servidor HTTP / API REST / Endpoints
+│   ├── db.py                   # Gerenciador de Banco de Dados SQLite WAL
+│   ├── config.py               # Gerenciador de configurações persistentes
+│   └── normalizer.py           # Normalizador inteligente de instituições
+├── ui/
+│   └── visualizador.html       # Interface Web (Split-screen, Ficha, BI e Miniaturas)
+├── tests/                      # Suíte de testes automatizados com Pytest
+│   ├── test_config_manager.py
+│   ├── test_cpf_rg.py
+│   ├── test_db_manager.py
+│   ├── test_dublin_core.py
+│   └── test_normalizador.py
+├── .github/workflows/
+│   └── ci.yml                  # Pipeline de Integração Contínua (Python 3.10-3.12)
+├── joakindex                   # Executável CLI principal (Linux/macOS)
+├── iniciar_servidor.sh         # Launcher rápido da Central Web
+├── pyproject.toml              # Especificação de empacotamento moderna PEP 621
+├── requirements.txt            # Dependências Python mínimas
+├── environment.yml             # Arquivo de especificação do ambiente Conda
+├── docker-compose.yml          # Container Cloudflare Tunnel (acesso remoto HTTPS)
+└── README.md                   # Documentação completa do projeto
 ```
 
 ---

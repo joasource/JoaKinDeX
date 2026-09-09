@@ -22,8 +22,14 @@ CONFIG_FILE_NAME = ".joakindex_config.json"
 
 
 def get_config_file_path() -> Path:
-    """Retorna o caminho absoluto do arquivo de configuração no diretório da aplicação."""
-    return Path(__file__).resolve().parent / CONFIG_FILE_NAME
+    """Retorna o caminho absoluto do arquivo de configuração no diretório da aplicação ou de trabalho."""
+    cwd_cfg = Path.cwd() / CONFIG_FILE_NAME
+    if cwd_cfg.exists():
+        return cwd_cfg
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    if (repo_root / CONFIG_FILE_NAME).exists():
+        return repo_root / CONFIG_FILE_NAME
+    return cwd_cfg
 
 
 def get_factory_defaults() -> Dict[str, Any]:

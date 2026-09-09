@@ -10,5 +10,6 @@ elif [ -n "$CONDA_PREFIX" ] && [ -f "$CONDA_PREFIX/bin/python" ]; then
 elif [ -f "$DIR/.venv/bin/python" ]; then
     PYTHON_EXEC="$DIR/.venv/bin/python"
 fi
+export PYTHONPATH="$DIR/src:$PYTHONPATH"
+exec "$PYTHON_EXEC" -m joakindex server "$@"
 
-exec "$PYTHON_EXEC" "$DIR/joakindex_server.py" "$@"

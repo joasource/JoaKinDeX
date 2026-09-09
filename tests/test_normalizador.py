@@ -1,5 +1,5 @@
 import pytest
-from normalizador_instituicoes import (
+from joakindex.normalizer import (
     remover_acentos,
     formatar_titulo_pt,
     normalizar_instituicao,

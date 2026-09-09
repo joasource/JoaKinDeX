@@ -25,10 +25,13 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
 try:
-    from db_manager import get_db_path, upsert_documents_batch
+    from joakindex.db import get_db_path, upsert_documents_batch
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from db_manager import get_db_path, upsert_documents_batch
+    try:
+        from .db import get_db_path, upsert_documents_batch
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from db_manager import get_db_path, upsert_documents_batch
 
 # Conectivos que devem permanecer em minúsculas no padrão brasileiro de títulos
 CONNECTIVES = {

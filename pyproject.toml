@@ -62,14 +62,8 @@ Repository = "https://github.com/joasource/JoaKinDeX"
 "Bug Tracker" = "https://github.com/joasource/JoaKinDeX/issues"
 
 [project.scripts]
-joakindex = "joakindex:main"
-joakindex-server = "joakindex_server:main"
+joakindex = "joakindex.cli:main"
+joakindex-server = "joakindex.server:main"
 
-[tool.setuptools]
-py-modules = [
-    "joakindex",
-    "joakindex_server",
-    "db_manager",
-    "config_manager",
-    "normalizador_instituicoes"
-]
+[tool.setuptools.packages.find]
+where = ["src"]

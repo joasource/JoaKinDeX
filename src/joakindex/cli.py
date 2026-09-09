@@ -74,7 +74,7 @@ except ImportError:
     OpenAI = None
 
 try:
-    from config_manager import (
+    from joakindex.config import (
         get_classifier_config,
         save_classifier_config,
         reset_classifier_config,
@@ -85,26 +85,41 @@ try:
         resolve_dir_path
     )
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from config_manager import (
-        get_classifier_config,
-        save_classifier_config,
-        reset_classifier_config,
-        has_custom_config,
-        get_factory_defaults,
-        clean_path_string,
-        resolve_classifier_output_dir,
-        resolve_dir_path
-    )
+    try:
+        from .config import (
+            get_classifier_config,
+            save_classifier_config,
+            reset_classifier_config,
+            has_custom_config,
+            get_factory_defaults,
+            clean_path_string,
+            resolve_classifier_output_dir,
+            resolve_dir_path
+        )
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from config_manager import (
+            get_classifier_config,
+            save_classifier_config,
+            reset_classifier_config,
+            has_custom_config,
+            get_factory_defaults,
+            clean_path_string,
+            resolve_classifier_output_dir,
+            resolve_dir_path
+        )
 
 try:
-    from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
+    from joakindex.normalizer import normalizar_instituicao, uniformizar_base_dados
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
+    try:
+        from .normalizer import normalizar_instituicao, uniformizar_base_dados
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from normalizador_instituicoes import normalizar_instituicao, uniformizar_base_dados
 
 try:
-    from db_manager import (
+    from joakindex.db import (
         get_db_path,
         get_json_path,
         init_database,
@@ -115,17 +130,30 @@ try:
         sync_to_json
     )
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from db_manager import (
-        get_db_path,
-        get_json_path,
-        init_database,
-        upsert_document,
-        upsert_documents_batch,
-        get_document_by_md5,
-        get_all_documents,
-        sync_to_json
-    )
+    try:
+        from .db import (
+            get_db_path,
+            get_json_path,
+            init_database,
+            upsert_document,
+            upsert_documents_batch,
+            get_document_by_md5,
+            get_all_documents,
+            sync_to_json
+        )
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from db_manager import (
+            get_db_path,
+            get_json_path,
+            init_database,
+            upsert_document,
+            upsert_documents_batch,
+            get_document_by_md5,
+            get_all_documents,
+            sync_to_json
+        )
+
 
 
 
@@ -3853,13 +3881,18 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1].lower() in ["server", "web", "servidor"]:
         server_args = sys.argv[2:]
         try:
-            import joakindex_server
+            from joakindex.server import main as server_main
         except ImportError:
-            sys.path.insert(0, str(Path(__file__).resolve().parent))
-            import joakindex_server
-        sys.exit(joakindex_server.main(server_args))
+            try:
+                from .server import main as server_main
+            except ImportError:
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
+                import joakindex_server
+                server_main = joakindex_server.main
+        sys.exit(server_main(server_args))
 
     parser = argparse.ArgumentParser(
+        prog="joakindex",
         description="JoaKinDeX - Central de Indexação e Classificação Documental Multidomínio (Acadêmico, Civil e Financeiro)."
     )
     parser.add_argument(
