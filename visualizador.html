@@ -5795,7 +5795,7 @@
         const chkBoxHtml = `<input type="checkbox" ${isDocChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleSelectDoc('${doc.md5}', this.checked)" class="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-3.5 w-3.5 shrink-0 mr-0.5" title="Selecionar para ações em lote">`;
 
         if (sidebarViewMode === 'thumbnails') {
-          const thumbSrc = `/api/thumbnail/${doc.md5}`;
+          const thumbSrc = `/api/thumbnail/${doc.md5}?w=240`;
           card.innerHTML = `
             <div class="flex gap-2.5 items-start">
               <div class="w-14 h-18 sm:w-16 sm:h-20 bg-slate-950 rounded border border-slate-800/90 overflow-hidden shrink-0 shadow-sm relative group">
@@ -6989,7 +6989,7 @@
         const card = document.createElement('div');
         card.className = 'bg-slate-900/90 border border-slate-800 hover:border-emerald-500/60 rounded-xl p-2.5 flex flex-col gap-2 transition-all hover:shadow-lg group';
 
-        const thumbUrl = isImg ? `/api/arquivo/${doc.md5}` : `/api/thumbnail/${doc.md5}/${pNum}`;
+        const thumbUrl = isImg ? `/api/arquivo/${doc.md5}` : `/api/thumbnail/${doc.md5}/${pNum}?w=720`;
 
         card.innerHTML = `
           <div class="flex items-center justify-between text-[11px] pb-1 border-b border-slate-800/80">
@@ -8797,7 +8797,7 @@
         const isImg = isImageDoc(doc);
         const docDom = safeString(doc.dominio || 'academico').toLowerCase();
         const md5Short = safeString(doc.md5).substring(0, 8);
-        const thumbSrc = `/api/thumbnail/${doc.md5}`;
+        const thumbSrc = `/api/thumbnail/${doc.md5}?w=720`;
 
         // Nome / Beneficiário
         const nome = safeString(doc.beneficiario) || (isUnproc ? (doc.nome_arquivo || 'Arquivo não lido') : 'Sem titular');
@@ -9141,7 +9141,7 @@
         md5El.innerText = `${posText}MD5: ${doc.md5}`;
       }
 
-      if (imgEl) imgEl.src = `/api/thumbnail/${doc.md5}`;
+      if (imgEl) imgEl.src = `/api/thumbnail/${doc.md5}?w=1080`;
 
       const isAppr = safeString(doc.status_conferencia).toLowerCase() === 'aprovado';
       const isUnproc = isDocumentUnprocessed(doc);

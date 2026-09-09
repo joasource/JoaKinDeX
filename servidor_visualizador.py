@@ -24,6 +24,8 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
 import io
 import zipfile
+import subprocess
+import shutil
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Union
 
@@ -890,8 +892,8 @@ class ConferenciaServer:
             pass
 
 
-def get_or_create_thumbnail(server_ctx: "ConferenciaServer", md5_str: str, page_num: int = 1, target_width: int = 120) -> Optional[bytes]:
-    """Gera ou recupera miniatura ultra-rápida em cache JPEG comprimido."""
+def get_or_create_thumbnail(server_ctx: "ConferenciaServer", md5_str: str, page_num: int = 1, target_width: int = 720) -> Optional[bytes]:
+    """Gera ou recupera miniatura de alta definição em cache JPEG comprimido (720px padrão)."""
     thumb_dir = server_ctx.json_path.parent / ".thumbnails"
     try:
         thumb_dir.mkdir(parents=True, exist_ok=True)
@@ -899,14 +901,25 @@ def get_or_create_thumbnail(server_ctx: "ConferenciaServer", md5_str: str, page_
         pass
 
     page_idx = max(0, page_num - 1)
-    cache_name = f"{md5_str}_p{page_num}.jpg" if page_num > 1 else f"{md5_str}.jpg"
+    target_width = max(120, min(1600, int(target_width)))
+    cache_name = f"{md5_str}_p{page_num}_w{target_width}.jpg"
     cache_file = thumb_dir / cache_name
 
-    if cache_file.exists() and cache_file.stat().st_size > 0:
+    # 1. Verifica cache exato para a largura solicitada (desconsidera arquivos truncados < 5KB)
+    if cache_file.exists() and cache_file.stat().st_size > 5000:
         try:
             return cache_file.read_bytes()
         except Exception:
             pass
+
+    # 2. Se a largura for menor ou igual a 720, pode reaproveitar o cache padrão de alta resolução (720px)
+    if target_width <= 720:
+        cache_720 = thumb_dir / f"{md5_str}_p{page_num}_w720.jpg"
+        if cache_720.exists() and cache_720.stat().st_size > 15000:
+            try:
+                return cache_720.read_bytes()
+            except Exception:
+                pass
 
     pdf_file = server_ctx.md5_to_file.get(md5_str)
     if not pdf_file or not pdf_file.exists():
@@ -919,47 +932,88 @@ def get_or_create_thumbnail(server_ctx: "ConferenciaServer", md5_str: str, page_
     ext = pdf_file.suffix.lower()
     img_data = None
 
-    # Tratamento de imagem nativa
-    if ext in [".png", ".jpg", ".jpeg", ".webp"] and Image is not None:
-        try:
-            with Image.open(pdf_file) as im:
-                im = im.convert("RGB")
-                w, h = im.size
-                target_height = max(1, int(h * (target_width / max(1, w))))
-                im = im.resize((target_width, target_height), Image.LANCZOS)
-                buf = io.BytesIO()
-                im.save(buf, format="JPEG", quality=80, optimize=True)
-                img_data = buf.getvalue()
-        except Exception:
-            return None
-    elif ext == ".pdf" and pdfium is not None:
-        # Tratamento de arquivo PDF via pypdfium2 protegido por lock global
-        try:
-            pil_image = None
-            with _PDFIUM_LOCK:
-                pdf = pdfium.PdfDocument(str(pdf_file))
-                try:
-                    if 0 <= page_idx < len(pdf):
-                        page = pdf.get_page(page_idx)
-                        try:
-                            w, h = page.get_size()
-                            scale = float(target_width) / max(1.0, float(w))
-                            bitmap = page.render(scale=scale)
-                            try:
-                                pil_image = bitmap.to_pil().convert("RGB").copy()
-                            finally:
-                                bitmap.close()
-                        finally:
-                            page.close()
-                finally:
-                    pdf.close()
+    # 1. Tratamento de imagens nativas (.png, .jpg, .jpeg, .webp, .bmp, .tiff)
+    if ext in [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif"]:
+        if Image is not None:
+            try:
+                with Image.open(pdf_file) as im:
+                    im = im.convert("RGB")
+                    w, h = im.size
+                    if w > target_width:
+                        target_height = max(1, int(h * (target_width / max(1, w))))
+                        resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+                        im = im.resize((target_width, target_height), resample_filter)
+                    buf = io.BytesIO()
+                    im.save(buf, format="JPEG", quality=86, optimize=True)
+                    img_data = buf.getvalue()
+            except Exception as e:
+                print(f"[Aviso Thumbnail] Falha ao processar imagem {pdf_file.name} com PIL: {e}")
 
-            if pil_image:
-                buf = io.BytesIO()
-                pil_image.save(buf, format="JPEG", quality=80, optimize=True)
-                img_data = buf.getvalue()
-        except Exception:
-            return None
+        # Fallback para ffmpeg caso PIL falhe
+        if not img_data and shutil.which("ffmpeg"):
+            try:
+                cmd = [
+                    "ffmpeg", "-y", "-loglevel", "error",
+                    "-i", str(pdf_file),
+                    "-vf", f"scale={target_width}:-1",
+                    "-q:v", "3",
+                    "-f", "image2", "-"
+                ]
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10)
+                if res.returncode == 0 and len(res.stdout) > 500:
+                    img_data = res.stdout
+            except Exception:
+                pass
+
+    # 2. Tratamento de arquivos PDF
+    elif ext == ".pdf":
+        # Método Principal: pypdfium2 (ultra-rápido em memória)
+        if pdfium is not None:
+            try:
+                pil_image = None
+                with _PDFIUM_LOCK:
+                    pdf = pdfium.PdfDocument(str(pdf_file))
+                    try:
+                        if 0 <= page_idx < len(pdf):
+                            page = pdf.get_page(page_idx)
+                            try:
+                                w, h = page.get_size()
+                                scale = float(target_width) / max(1.0, float(w))
+                                bitmap = page.render(scale=scale)
+                                try:
+                                    pil_image = bitmap.to_pil().convert("RGB").copy()
+                                finally:
+                                    bitmap.close()
+                            finally:
+                                page.close()
+                    finally:
+                        pdf.close()
+
+                if pil_image:
+                    buf = io.BytesIO()
+                    pil_image.save(buf, format="JPEG", quality=86, optimize=True)
+                    img_data = buf.getvalue()
+            except Exception as e:
+                print(f"[Aviso Thumbnail] Falha pypdfium2 em {pdf_file.name}: {e}")
+
+        # Fallback Poppler (pdftoppm): robustez absoluta para qualquer PDF no Linux
+        if not img_data and shutil.which("pdftoppm"):
+            try:
+                cmd = [
+                    "pdftoppm",
+                    "-jpeg",
+                    "-jpegopt", "quality=86,optimize=y",
+                    "-f", str(page_num),
+                    "-l", str(page_num),
+                    "-scale-to-x", str(target_width),
+                    "-scale-to-y", "-1",
+                    str(pdf_file)
+                ]
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=12)
+                if res.returncode == 0 and len(res.stdout) > 500:
+                    img_data = res.stdout
+            except Exception as e:
+                print(f"[Aviso Thumbnail] Falha pdftoppm em {pdf_file.name}: {e}")
 
     if img_data:
         try:
@@ -968,6 +1022,30 @@ def get_or_create_thumbnail(server_ctx: "ConferenciaServer", md5_str: str, page_
             pass
 
     return img_data
+
+
+def start_background_thumbnail_generator(server_ctx: "ConferenciaServer", target_width: int = 720):
+    """Pré-aquecimento de miniaturas em segundo plano sem bloquear a inicialização."""
+    def _worker():
+        time.sleep(2.0)
+        thumb_dir = server_ctx.json_path.parent / ".thumbnails"
+        try:
+            thumb_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
+        md5_keys = list(server_ctx.md5_to_file.keys())
+        for md5 in md5_keys:
+            cache_file = thumb_dir / f"{md5}_p1_w{target_width}.jpg"
+            if not cache_file.exists():
+                try:
+                    get_or_create_thumbnail(server_ctx, md5, page_num=1, target_width=target_width)
+                except Exception:
+                    pass
+                time.sleep(0.01)
+
+    t = threading.Thread(target=_worker, daemon=True, name="JoaKinDeX-ThumbWorker")
+    t.start()
 
 
 def extract_document_text_content(server_ctx: "ConferenciaServer", md5_str: str) -> Dict[str, Any]:
@@ -1083,10 +1161,12 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.end_headers()
                 return
             elif path.startswith("/api/thumbnail/"):
+                query = urllib.parse.parse_qs(parsed.query)
+                width_req = int(query["w"][0]) if "w" in query and query["w"][0].isdigit() else 720
                 parts = path.split("/api/thumbnail/")[-1].strip("/").split("/")
                 md5_req = parts[0].strip().lower()
                 page_req = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
-                data = get_or_create_thumbnail(server_ctx, md5_req, page_num=page_req, target_width=120)
+                data = get_or_create_thumbnail(server_ctx, md5_req, page_num=page_req, target_width=width_req)
                 if data:
                     self._custom_cache_control = True
                     self.send_response(200)
@@ -1181,12 +1261,14 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.wfile.write(body)
                 return
 
-            # API de Miniaturas de Páginas (Thumbnail com Cache ultraleve)
+            # API de Miniaturas de Páginas (Thumbnail de Alta Definição com Cache)
             if path.startswith("/api/thumbnail/"):
+                query = urllib.parse.parse_qs(parsed.query)
+                width_req = int(query["w"][0]) if "w" in query and query["w"][0].isdigit() else 720
                 parts = path.split("/api/thumbnail/")[-1].strip("/").split("/")
                 md5_req = parts[0].strip().lower()
                 page_req = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
-                data = get_or_create_thumbnail(server_ctx, md5_req, page_num=page_req, target_width=120)
+                data = get_or_create_thumbnail(server_ctx, md5_req, page_num=page_req, target_width=width_req)
                 if data:
                     self._custom_cache_control = True
                     self.send_response(200)
@@ -2283,7 +2365,8 @@ def main():
     print(f"📄 Arquivo JSON espelhado  : {ctx.json_path}")
     print(f"📁 Pasta de PDFs indexada  : {ctx.pdf_dir} ({len(ctx.md5_to_file)} PDFs)")
     print("=" * 70)
-    print("Pressione Ctrl+C a qualquer momento para encerrar o servidor.\n")
+    start_background_thumbnail_generator(ctx, target_width=720)
+    print("⚡ Miniaturas HD: gerador em alta definição (720px) ativo em segundo plano.")
 
     try:
         httpd.serve_forever()
