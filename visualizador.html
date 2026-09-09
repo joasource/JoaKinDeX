@@ -727,8 +727,8 @@
                     class="hidden text-[10px] text-teal-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-teal-500/30 rounded" title="Limpar TAGs">✕</span>
             </button>
 
-            <!-- 2. Pílula: Nível / Natureza -->
-            <div id="containerFilterNatureza" class="inline-block shrink-0">
+            <!-- 2. Pílula: Nível / Natureza (Apenas para TAGs acadêmicas) -->
+            <div id="containerFilterNatureza" class="hidden shrink-0">
               <button type="button" id="pillNatureza" onclick="toggleFilterPopover('popoverNatureza')"
                       class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
                       title="Filtrar por nível ou natureza acadêmica">
@@ -740,16 +740,18 @@
               </button>
             </div>
 
-            <!-- 3. Pílula: Instituição / Emissor (um dos últimos, antes de pendentes e limpar) -->
-            <button type="button" id="pillInstituicao" onclick="toggleFilterPopover('popoverInstituicao')"
-                    class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
-                    title="Filtrar por faculdade ou instituição emissora">
-              <i class="fa-solid fa-building-columns text-amber-400 text-[10.5px]"></i>
-              <span id="labelPillInstituicao">Instituição</span>
-              <i id="chevronPillInstituicao" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
-              <span id="clearPillInstituicao" onclick="event.stopPropagation(); resetInstituicaoFilter();"
-                    class="hidden text-[10px] text-amber-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-amber-500/30 rounded" title="Limpar instituição">✕</span>
-            </button>
+            <!-- 3. Pílula: Instituição / Emissor (Faculdade, Banco, Órgão - Dinâmico por TAG) -->
+            <div id="containerFilterInstituicao" class="hidden shrink-0">
+              <button type="button" id="pillInstituicao" onclick="toggleFilterPopover('popoverInstituicao')"
+                      class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                      title="Filtrar por instituição emissora">
+                <i id="iconPillInstituicao" class="fa-solid fa-building-columns text-amber-400 text-[10.5px]"></i>
+                <span id="labelPillInstituicao">Instituição</span>
+                <i id="chevronPillInstituicao" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
+                <span id="clearPillInstituicao" onclick="event.stopPropagation(); resetInstituicaoFilter();"
+                      class="hidden text-[10px] text-amber-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-amber-500/30 rounded" title="Limpar instituição">✕</span>
+              </button>
+            </div>
 
             <!-- 4. Pílula: Pendentes / Status -->
             <button type="button" id="pillStatus" onclick="toggleFilterPopover('popoverStatus')"
@@ -775,8 +777,8 @@
           <div id="popoverInstituicao" class="hidden absolute left-0 right-0 top-full mt-1.5 z-50 bg-slate-900/98 border border-slate-700/90 rounded-xl shadow-2xl p-3 text-xs backdrop-blur-md">
             <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
               <div class="flex items-center gap-2 font-medium text-slate-200">
-                <i class="fa-solid fa-building-columns text-amber-400 text-[11px]"></i>
-                <span>Instituição / Emissor</span>
+                <i id="popoverIconInstituicao" class="fa-solid fa-building-columns text-amber-400 text-[11px]"></i>
+                <span id="popoverTitleInstituicao">Instituição / Emissor</span>
                 <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção)</span>
               </div>
               <div class="flex items-center gap-2">
@@ -824,8 +826,8 @@
             <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
               <div class="flex items-center gap-2 font-medium text-slate-200">
                 <i class="fa-solid fa-award text-indigo-400 text-[11px]"></i>
-                <span>Nível / Natureza</span>
-                <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção)</span>
+                <span>Nível / Natureza do Curso</span>
+                <span class="text-[10px] text-slate-500 font-normal">(Subcategoria Acadêmica)</span>
               </div>
               <div class="flex items-center gap-2">
                 <button type="button" id="btnClearNatureza" onclick="resetNaturezaFilter()" class="hidden text-[11px] text-indigo-400 hover:underline">Limpar</button>
@@ -1385,6 +1387,21 @@
               <textarea id="input_obs" oninput="markDirty()" rows="2" placeholder="Observações manuais sobre o documento..."
                         class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
             </div>
+
+            <!-- 6. METADADOS PERSONALIZADOS / ATRIBUTOS FLEXÍVEIS (Universal Key-Value) -->
+            <div id="section_dados_extras" class="pt-2 border-t border-slate-800/80 space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                  <i class="fa-solid fa-sliders text-cyan-400 text-[11px]"></i> Metadados Personalizados (Chave / Valor)
+                </label>
+                <button type="button" onclick="addCustomMetaKey()" class="text-[10px] px-2 py-0.5 rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/50 flex items-center gap-1 transition shadow-sm">
+                  <i class="fa-solid fa-plus text-[9px]"></i> Novo Atributo
+                </button>
+              </div>
+              <div id="customMetaContainer" class="space-y-1.5 text-xs">
+                <!-- Chaves dinâmicas renderizadas aqui -->
+              </div>
+            </div>
           </div>
 
         </div>
@@ -1605,6 +1622,7 @@
             <i class="fa-solid fa-xmark text-xs"></i>
           </button>
         </div>
+      </div>
 
       <!-- BARRA DE FILTROS DE TAG EM CARDS FLUTUANTES (TAGs, Nível, Instituição, Pendentes, Limpar) -->
       <div id="galleryFilterPopoversBar" class="relative pt-0.5 select-none">
@@ -1621,8 +1639,8 @@
                   class="hidden text-[10px] text-teal-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-teal-500/30 rounded" title="Limpar TAGs">✕</span>
           </button>
 
-          <!-- 2. Pílula: Nível / Natureza -->
-          <div id="g-containerFilterNatureza" class="inline-block shrink-0">
+          <!-- 2. Pílula: Nível / Natureza (Apenas para TAGs acadêmicas) -->
+          <div id="g-containerFilterNatureza" class="hidden shrink-0">
             <button type="button" id="g-pillNatureza" onclick="toggleFilterPopover('g-popoverNatureza')"
                     class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
                     title="Filtrar por nível ou natureza acadêmica">
@@ -1634,16 +1652,18 @@
             </button>
           </div>
 
-          <!-- 3. Pílula: Instituição / Emissor (um dos últimos, antes de pendentes e limpar) -->
-          <button type="button" id="g-pillInstituicao" onclick="toggleFilterPopover('g-popoverInstituicao')"
-                  class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
-                  title="Filtrar por faculdade ou instituição emissora">
-            <i class="fa-solid fa-building-columns text-amber-400 text-[10.5px]"></i>
-            <span id="g-labelPillInstituicao">Instituição</span>
-            <i id="g-chevronPillInstituicao" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
-            <span id="g-clearPillInstituicao" onclick="event.stopPropagation(); resetInstituicaoFilter();"
-                  class="hidden text-[10px] text-amber-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-amber-500/30 rounded" title="Limpar instituição">✕</span>
-          </button>
+          <!-- 3. Pílula: Instituição / Emissor (Faculdade, Banco, Órgão - Dinâmico por TAG) -->
+          <div id="g-containerFilterInstituicao" class="hidden shrink-0">
+            <button type="button" id="g-pillInstituicao" onclick="toggleFilterPopover('g-popoverInstituicao')"
+                    class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                    title="Filtrar por instituição emissora">
+              <i id="g-iconPillInstituicao" class="fa-solid fa-building-columns text-amber-400 text-[10.5px]"></i>
+              <span id="g-labelPillInstituicao">Instituição</span>
+              <i id="g-chevronPillInstituicao" class="fa-solid fa-chevron-down text-[9px] text-slate-500"></i>
+              <span id="g-clearPillInstituicao" onclick="event.stopPropagation(); resetInstituicaoFilter();"
+                    class="hidden text-[10px] text-amber-400 hover:text-white font-bold ml-0.5 px-0.5 hover:bg-amber-500/30 rounded" title="Limpar instituição">✕</span>
+            </button>
+          </div>
 
           <!-- 4. Pílula: Pendentes / Status -->
           <button type="button" id="g-pillStatus" onclick="toggleFilterPopover('g-popoverStatus')"
@@ -1669,8 +1689,8 @@
         <div id="g-popoverInstituicao" class="hidden absolute left-0 max-w-3xl w-full top-full mt-1.5 z-50 bg-slate-900/98 border border-slate-700/90 rounded-xl shadow-2xl p-3.5 text-xs backdrop-blur-md">
           <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
             <div class="flex items-center gap-2 font-medium text-slate-200">
-              <i class="fa-solid fa-building-columns text-amber-400 text-[11px]"></i>
-              <span>Instituição / Emissor</span>
+              <i id="g-popoverIconInstituicao" class="fa-solid fa-building-columns text-amber-400 text-[11px]"></i>
+              <span id="g-popoverTitleInstituicao">Instituição / Emissor</span>
               <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção de Tags)</span>
             </div>
             <div class="flex items-center gap-2">
@@ -1713,7 +1733,7 @@
             <div class="flex items-center gap-2 font-medium text-slate-200">
               <i class="fa-solid fa-award text-indigo-400 text-[11px]"></i>
               <span>Nível / Natureza do Curso</span>
-              <span class="text-[10px] text-slate-500 font-normal">(Multi-seleção de Tags)</span>
+              <span class="text-[10px] text-slate-500 font-normal">(Subcategoria Acadêmica)</span>
             </div>
             <div class="flex items-center gap-2">
               <button type="button" id="g-btnClearNatureza" onclick="resetNaturezaFilter()" class="hidden text-[11px] text-indigo-400 hover:underline">Limpar</button>
@@ -1805,7 +1825,7 @@
     </div>
 
     <!-- ÁREA DA GRADE DE CARDS COM SCROLL -->
-    <div id="galleryScrollContainer" class="flex-1 overflow-y-auto p-4 sm:p-5">
+    <div id="galleryScrollContainer" class="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
       <!-- Container da Grade Responsiva -->
       <div id="galleryCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
         <!-- Cards de documentos injetados dinamicamente via renderGalleryView() -->
@@ -2098,7 +2118,7 @@
         <div class="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
           <div class="flex items-center gap-2">
             <i class="fa-solid fa-graduation-cap text-indigo-400"></i>
-            <h3 class="text-sm font-semibold text-white">Distribuição por Nível / Natureza do Curso</h3>
+            <h3 class="text-sm font-semibold text-white">Cursos & Níveis Acadêmicos</h3>
           </div>
           <span class="text-[11px] text-slate-400 font-mono" id="labelNaturezaTotal">0 docs</span>
         </div>
@@ -2110,7 +2130,7 @@
             <table class="w-full text-left text-xs border-collapse">
               <thead>
                 <tr class="text-[11px] text-slate-400 border-b border-slate-800">
-                  <th class="pb-1.5 font-medium">Nível / Natureza</th>
+                  <th class="pb-1.5 font-medium">Nível Acadêmico</th>
                   <th class="pb-1.5 font-medium text-right">Absoluto</th>
                   <th class="pb-1.5 font-medium text-right">Relativo</th>
                   <th class="pb-1.5 font-medium text-right no-print">Ação</th>
@@ -3191,8 +3211,115 @@
     function toggleAccordion() {}
     function applyAccordionsState() {}
 
+    // Identifica contexto e categorias das TAGs selecionadas para refinamento dinâmico e progressivo
+    function getSelectedTagsCategoryContext() {
+      const hasTags = selectedTipos.size > 0;
+      if (!hasTags) {
+        return { hasTags: false, isAcademic: false, isFinancial: false, isIdentity: false };
+      }
+
+      let isAcademic = false;
+      let isFinancial = false;
+      let isIdentity = false;
+
+      selectedTipos.forEach(tipo => {
+        const meta = getTagMeta(tipo);
+        const cat = meta && meta.category ? meta.category : '';
+        const t = normalizeText(tipo || '');
+
+        if (['Diploma', 'Certificado', 'Histórico', 'Declaração', 'Conteúdo', 'Acadêmico'].includes(cat) ||
+            t.includes('diploma') || t.includes('certificado') || t.includes('historico') || 
+            t.includes('declaracao') || t.includes('ementa') || t.includes('conteudo') || 
+            t.includes('graduacao') || t.includes('academico') || t.includes('curso') || t.includes('escolar')) {
+          isAcademic = true;
+        } else if (['PIX / Fin', 'Financeiro'].includes(cat) ||
+                   t.includes('pix') || t.includes('recibo') || t.includes('comprovante') || 
+                   t.includes('boleto') || t.includes('pagamento') || t.includes('financeir') || 
+                   t.includes('banc') || t.includes('extrato')) {
+          isFinancial = true;
+        } else if (['Identificação'].includes(cat) ||
+                   t.includes('rg') || t.includes('cnh') || t.includes('cpf') || 
+                   t.includes('identidad') || t.includes('passaporte') || t.includes('certidao') || t.includes('titulo')) {
+          isIdentity = true;
+        }
+      });
+
+      return {
+        hasTags: true,
+        isAcademic: isAcademic,
+        isFinancial: isFinancial,
+        isIdentity: isIdentity
+      };
+    }
+
     // Atualiza estado visual e rótulos das Pílulas de Filtro Flutuantes (TAGs, Nível, Instituição, Pendentes, Limpar)
     function updateFilterPillsUI() {
+      const tagCtx = getSelectedTagsCategoryContext();
+      const shouldShowInstituicao = tagCtx.hasTags;
+      const shouldShowNatureza = tagCtx.hasTags && tagCtx.isAcademic;
+
+      // Limpar filtros dependentes caso suas facetas fiquem ocultas
+      if (!shouldShowNatureza && selectedNaturezas.size > 0) {
+        selectedNaturezas.clear();
+      }
+      if (!shouldShowInstituicao && selectedInstituicoes.size > 0) {
+        selectedInstituicoes.clear();
+      }
+
+      // Fechar popovers se a pílula correspondente foi ocultada
+      if (!shouldShowNatureza) {
+        ['popoverNatureza', 'g-popoverNatureza'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.add('hidden');
+        });
+      }
+      if (!shouldShowInstituicao) {
+        ['popoverInstituicao', 'g-popoverInstituicao'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.add('hidden');
+        });
+      }
+
+      // Configuração contextual do rótulo e ícone da pílula de Instituição / Emissor
+      let instLabelDefault = 'Instituição';
+      let instIconClass = 'fa-solid fa-building-columns text-amber-400 text-[10.5px]';
+      let instTitleDefault = 'Filtrar por faculdade ou instituição emissora';
+      let instHeaderTitle = 'Instituição / Emissor';
+      let instSearchPlaceholder = 'Filtrar instituições...';
+
+      if (tagCtx.isFinancial && !tagCtx.isAcademic && !tagCtx.isIdentity) {
+        instLabelDefault = 'Banco';
+        instIconClass = 'fa-solid fa-building-columns text-emerald-400 text-[10.5px]';
+        instTitleDefault = 'Filtrar por banco ou emissor financeiro';
+        instHeaderTitle = 'Banco / Emissor';
+        instSearchPlaceholder = 'Filtrar bancos...';
+      } else if (tagCtx.isIdentity && !tagCtx.isAcademic && !tagCtx.isFinancial) {
+        instLabelDefault = 'Órgão / UF';
+        instIconClass = 'fa-solid fa-id-card text-purple-400 text-[10.5px]';
+        instTitleDefault = 'Filtrar por órgão emissor ou estado';
+        instHeaderTitle = 'Órgão Emissor / UF';
+        instSearchPlaceholder = 'Filtrar órgãos ou UFs...';
+      } else if (tagCtx.isAcademic && !tagCtx.isFinancial && !tagCtx.isIdentity) {
+        instLabelDefault = 'Faculdade';
+        instIconClass = 'fa-solid fa-building-columns text-amber-400 text-[10.5px]';
+        instTitleDefault = 'Filtrar por faculdade ou instituição de ensino';
+        instHeaderTitle = 'Faculdade / Universidade';
+        instSearchPlaceholder = 'Filtrar faculdades...';
+      }
+
+      ['popoverTitleInstituicao', 'g-popoverTitleInstituicao'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = instHeaderTitle;
+      });
+      ['popoverIconInstituicao', 'g-popoverIconInstituicao'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.className = instIconClass.replace('text-[10.5px]', 'text-[11px]');
+      });
+      ['inputSearchInst', 'g-inputSearchInst'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.placeholder = instSearchPlaceholder;
+      });
+
       const prefixes = ['', 'g-'];
 
       prefixes.forEach(p => {
@@ -3224,7 +3351,12 @@
           }
         }
 
-        // 2. Pílula: Nível / Natureza do Curso
+        // 2. Pílula: Nível / Natureza do Curso (Visível apenas com TAG acadêmica ativa)
+        const contNat = document.getElementById(`${p}containerFilterNatureza`);
+        if (contNat) {
+          if (shouldShowNatureza) contNat.classList.remove('hidden');
+          else contNat.classList.add('hidden');
+        }
         const pillNat = document.getElementById(`${p}pillNatureza`);
         const lblNat = document.getElementById(`${p}labelPillNatureza`);
         const chevNat = document.getElementById(`${p}chevronPillNatureza`);
@@ -3251,11 +3383,20 @@
           }
         }
 
-        // 3. Pílula: Instituição / Emissor (um dos últimos, antes de pendentes e limpar)
+        // 3. Pílula: Instituição / Emissor (Faculdade, Banco, Órgão - Visível após selecionar TAG)
+        const contInst = document.getElementById(`${p}containerFilterInstituicao`);
+        if (contInst) {
+          if (shouldShowInstituicao) contInst.classList.remove('hidden');
+          else contInst.classList.add('hidden');
+        }
         const pillInst = document.getElementById(`${p}pillInstituicao`);
         const lblInst = document.getElementById(`${p}labelPillInstituicao`);
         const chevInst = document.getElementById(`${p}chevronPillInstituicao`);
         const clrInst = document.getElementById(`${p}clearPillInstituicao`);
+        const iconInst = document.getElementById(`${p}iconPillInstituicao`);
+        if (iconInst) {
+          iconInst.className = instIconClass;
+        }
         if (pillInst && lblInst) {
           if (selectedInstituicoes.size > 0) {
             pillInst.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm";
@@ -3265,15 +3406,15 @@
               lblInst.innerText = shortName;
               lblInst.title = instVal;
             } else {
-              lblInst.innerText = `Instituição (${selectedInstituicoes.size})`;
+              lblInst.innerText = `${instLabelDefault} (${selectedInstituicoes.size})`;
               lblInst.title = Array.from(selectedInstituicoes).join(', ');
             }
             if (chevInst) chevInst.classList.add('hidden');
             if (clrInst) clrInst.classList.remove('hidden');
           } else {
             pillInst.className = "px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition shrink-0 bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800";
-            lblInst.innerText = "Instituição";
-            lblInst.title = "Filtrar por faculdade ou instituição emissora";
+            lblInst.innerText = instLabelDefault;
+            lblInst.title = instTitleDefault;
             if (chevInst) chevInst.classList.remove('hidden');
             if (clrInst) clrInst.classList.add('hidden');
           }
@@ -4823,6 +4964,47 @@
       };
     }
 
+    // Extrai subtags contextuais (atributos filhos) da Tag Principal
+    function getPrimaryTagSubtags(doc, primaryTag, docDom) {
+      if (!doc) return [];
+      const normTag = normalizeText(primaryTag || '');
+      const subtags = [];
+      const de = doc.dados_extras || {};
+
+      if (docDom === 'financeiro' || normTag.includes('pix') || normTag.includes('recibo') || normTag.includes('pagamento') || normTag.includes('boleto')) {
+        const val = safeString(doc.valor_monetario).trim();
+        if (val) subtags.push({ label: val, title: 'Valor', icon: 'fa-solid fa-money-bill-wave text-emerald-400' });
+        const banco = safeString(doc.faculdade || doc.pix_pagador_banco || de.pix_pagador_banco).trim();
+        if (banco) subtags.push({ label: banco, title: 'Instituição / Banco', icon: 'fa-solid fa-building-columns text-slate-400' });
+        const chave = safeString(doc.pix_chave || de.pix_chave).trim();
+        if (chave) subtags.push({ label: chave, title: 'Chave PIX', icon: 'fa-solid fa-key text-amber-400' });
+      } else if (docDom === 'identificacao' || normTag.includes('cnh') || normTag.includes('rg') || normTag.includes('cpf') || normTag.includes('identidad') || normTag.includes('certidao')) {
+        const emissor = safeString(doc.faculdade || doc.orgao_emissor).trim();
+        if (emissor) subtags.push({ label: emissor, title: 'Órgão Emissor', icon: 'fa-solid fa-building-shield text-cyan-400' });
+        const rg = safeString(doc.rg).trim();
+        if (rg) subtags.push({ label: `RG: ${rg}`, title: 'RG', icon: 'fa-regular fa-id-card text-slate-400' });
+        const cpf = safeString(doc.cpf).trim();
+        if (cpf) subtags.push({ label: `CPF: ${cpf}`, title: 'CPF', icon: 'fa-solid fa-fingerprint text-slate-400' });
+      } else if (docDom === 'juridico' || normTag.includes('contrato') || normTag.includes('procuracao') || normTag.includes('termo')) {
+        const obj = safeString(doc.curso || doc.natureza_curso).trim();
+        if (obj) subtags.push({ label: obj, title: 'Objeto / Tipo', icon: 'fa-solid fa-file-signature text-amber-400' });
+        const emissor = safeString(doc.faculdade || doc.cartorio || doc.vara).trim();
+        if (emissor) subtags.push({ label: emissor, title: 'Órgão / Cartório / Empresa', icon: 'fa-solid fa-scale-balanced text-purple-400' });
+      } else {
+        // Acadêmico (Diplomas, Certificados, Cursos)
+        const curso = safeString(doc.curso).trim();
+        if (curso) subtags.push({ label: curso, title: 'Curso', icon: 'fa-solid fa-book-open text-cyan-400' });
+        const nat = safeString(doc.natureza_curso).trim();
+        if (nat) subtags.push({ label: formatShortNature(nat), title: `Nível: ${nat}`, icon: 'fa-solid fa-award text-amber-400' });
+        const fac = safeString(doc.faculdade).trim();
+        if (fac) subtags.push({ label: fac, title: 'Instituição de Ensino', icon: 'fa-solid fa-building-columns text-slate-400' });
+        const ch = safeString(doc.carga_horaria).trim();
+        if (ch) subtags.push({ label: ch, title: 'Carga Horária', icon: 'fa-regular fa-clock text-slate-400' });
+      }
+
+      return subtags;
+    }
+
     // Calcula e atualiza dinamicamente as opções e tags de Tipo de Documento (Multi-seleção)
     function updateTipoFilterOptions() {
       const rawSearch = (document.getElementById('searchInput').value || '').trim();
@@ -4949,19 +5131,30 @@
       } else {
         selectedTipos.add(tipo);
       }
+      if (selectedTipos.size === 0) {
+        selectedInstituicoes.clear();
+        selectedNaturezas.clear();
+      }
       syncActiveFilterVars();
       applyFilter(false);
     }
 
     function setTipoFilter(tipo) {
       selectedTipos.clear();
-      if (tipo) selectedTipos.add(tipo);
+      if (tipo) {
+        selectedTipos.add(tipo);
+      } else {
+        selectedInstituicoes.clear();
+        selectedNaturezas.clear();
+      }
       syncActiveFilterVars();
       applyFilter(false);
     }
 
     function resetTipoFilter() {
       selectedTipos.clear();
+      selectedInstituicoes.clear();
+      selectedNaturezas.clear();
       syncActiveFilterVars();
       ['inputSearchTipo', 'g-inputSearchTipo'].forEach(id => {
         const inp = document.getElementById(id);
@@ -5071,8 +5264,6 @@
       if (inputInst) inputInst.value = '';
       const inputTipo = document.getElementById('inputSearchTipo');
       if (inputTipo) inputTipo.value = '';
-      const contNat = document.getElementById('containerFilterNatureza');
-      if (contNat) contNat.classList.remove('hidden');
 
       closeAllFilterPopovers();
       applyFilter(false);
@@ -5529,7 +5720,7 @@
         } else {
           middleBadge = isUnproc
             ? `<span class="bg-slate-800/80 text-slate-500 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1"><i class="fa-solid fa-hourglass-start text-[9px]"></i>Aguardando</span>`
-            : getNaturezaBadge(doc.natureza_curso);
+            : (doc.natureza_curso ? getNaturezaBadge(doc.natureza_curso) : (doc.curso ? `<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[190px] inline-flex items-center gap-1"><i class="fa-solid fa-graduation-cap text-[9px]"></i>Acadêmico</span>` : ''));
         }
 
         const tipoBadge = isUnproc
@@ -5560,7 +5751,7 @@
         } else if (docDom === 'juridico') {
           subText = safeString(doc.faculdade ? `Órgão: ${doc.faculdade}` : (doc.tipo_documento || 'Documento Jurídico'));
         } else {
-          subText = safeString(doc.curso) || (isUnproc ? (doc.caminho_relativo || 'Clique em Classificar para extrair dados') : 'Curso não informado');
+          subText = safeString(doc.curso) || (isUnproc ? (doc.caminho_relativo || 'Clique em Classificar para extrair dados') : (docDom === 'academico' ? 'Curso não informado' : safeString(doc.nome_arquivo || 'Documento')));
         }
 
         const tiposCount = Array.isArray(doc.todos_tipos) ? doc.todos_tipos.length : 1;
@@ -5684,10 +5875,6 @@
       ['btnClearStatus', 'g-btnClearStatus'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.classList.add('hidden');
-      });
-      ['containerFilterNatureza', 'g-containerFilterNatureza'].forEach(id => {
-        const cont = document.getElementById(id);
-        if (cont) cont.classList.remove('hidden');
       });
 
       closeAllFilterPopovers();
@@ -5896,6 +6083,9 @@
       badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-slate-800 text-slate-400 border-slate-700";
       badge.innerText = "Nenhum documento";
 
+      const cmc = document.getElementById('customMetaContainer');
+      if (cmc) cmc.innerHTML = '';
+
       document.getElementById('jsonViewer').innerText = '{}';
       if (typeof updateClassificationButtonsState === 'function') updateClassificationButtonsState();
       isDirty = false;
@@ -6034,6 +6224,7 @@
       renderMultiTags(doc);
       renderDossierPageShortcuts(doc);
       renderDossierPagesGrid(doc);
+      renderCustomMetaFields(doc);
       updateFichaTecnica(doc);
       if (currentInspectorTab === 'texto') {
         loadDocumentText(doc.md5);
@@ -6041,6 +6232,78 @@
         clearDocTextSearch();
       }
       isDirty = false;
+    }
+
+    // -----------------------------------------------------------------------
+    // Metadados Personalizados / Atributos Flexíveis (Universal Key-Value)
+    // -----------------------------------------------------------------------
+    function renderCustomMetaFields(doc) {
+      const container = document.getElementById('customMetaContainer');
+      if (!container) return;
+      container.innerHTML = '';
+      if (!doc) return;
+
+      const de = doc.dados_extras || {};
+      const internalKeys = new Set([
+        'pix_pagador_nome', 'pix_pagador_cpf_cnpj', 'pix_pagador_banco',
+        'pix_recebedor_nome', 'pix_recebedor_cpf_cnpj', 'pix_recebedor_banco',
+        'pix_chave', 'pix_e2e_id', 'pix_autenticacao', 'dossie_paginas'
+      ]);
+
+      const keys = Object.keys(de).filter(k => !internalKeys.has(k));
+      if (keys.length === 0) {
+        container.innerHTML = '<div class="text-[11px] text-slate-500 italic p-1.5 bg-slate-950/40 rounded border border-slate-900 flex items-center justify-between"><span>Nenhum metadado extra definido.</span><button type="button" onclick="addCustomMetaKey()" class="text-cyan-400 hover:text-cyan-300 font-medium">+ Adicionar</button></div>';
+        return;
+      }
+
+      keys.forEach(key => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-1.5 bg-slate-950/70 p-1.5 rounded border border-slate-800';
+        row.innerHTML = `
+          <span class="text-[10px] font-mono text-cyan-300 w-28 truncate shrink-0" title="${escapeHtml(key)}">${escapeHtml(key)}:</span>
+          <input type="text" value="${escapeHtml(safeString(de[key]))}" oninput="updateCustomMetaVal('${escapeHtml(key)}', this.value)"
+                 class="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-500">
+          <button type="button" onclick="removeCustomMetaKey('${escapeHtml(key)}')" class="text-slate-500 hover:text-rose-400 p-1 text-[11px] transition shrink-0" title="Remover metadado">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function addCustomMetaKey() {
+      const keyName = prompt('Nome do novo atributo (ex: matricula, num_processo, orgao_expedidor, estado_civil):');
+      if (!keyName) return;
+      const cleanKey = keyName.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      if (!cleanKey) return;
+      const doc = filteredDocs[currentIndex];
+      if (!doc) return;
+      if (!doc.dados_extras || typeof doc.dados_extras !== 'object') {
+        doc.dados_extras = {};
+      }
+      if (doc.dados_extras[cleanKey] === undefined) {
+        doc.dados_extras[cleanKey] = '';
+      }
+      renderCustomMetaFields(doc);
+      markDirty();
+    }
+
+    function updateCustomMetaVal(key, val) {
+      const doc = filteredDocs[currentIndex];
+      if (!doc) return;
+      if (!doc.dados_extras || typeof doc.dados_extras !== 'object') {
+        doc.dados_extras = {};
+      }
+      doc.dados_extras[key] = val;
+      markDirty();
+    }
+
+    function removeCustomMetaKey(key) {
+      const doc = filteredDocs[currentIndex];
+      if (!doc || !doc.dados_extras) return;
+      delete doc.dados_extras[key];
+      renderCustomMetaFields(doc);
+      markDirty();
     }
 
     // -----------------------------------------------------------------------
@@ -8688,19 +8951,6 @@
         // Nome / Beneficiário
         const nome = safeString(doc.beneficiario) || (isUnproc ? (doc.nome_arquivo || 'Arquivo não lido') : 'Sem titular');
         
-        // Subtítulo contextual
-        let subTitle = '';
-        if (docDom === 'financeiro') {
-          const de = doc.dados_extras || {};
-          subTitle = doc.valor_monetario ? `Valor: ${doc.valor_monetario}` : (doc.pix_chave || de.pix_chave || 'Comprovante PIX');
-        } else if (docDom === 'identificacao') {
-          subTitle = doc.rg ? `RG: ${doc.rg}` : 'Documento de Identificação';
-        } else {
-          subTitle = safeString(doc.curso) || 'Curso não informado';
-        }
-
-        // Faculdade / Emissor
-        const faculdade = safeString(doc.faculdade) || (docDom === 'financeiro' ? 'Instituição Bancária' : 'Instituição não informada');
         const dataDoc = safeString(doc.data || doc.data_modificacao) || '-';
 
         // Badge de Status
@@ -8719,9 +8969,61 @@
           ? `<span class="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold shrink-0" title="Dossiê com ${pgsCount} páginas">+${pgsCount}p</span>`
           : '';
 
-        // Badge de tipo e natureza
-        const tipoStr = safeString(doc.tipo_documento).trim() || (isImg ? 'Imagem' : 'Documento');
-        const natStr = safeString(doc.natureza_curso).trim();
+        // 1. Obtenção de TODAS as TAGs do documento de forma única e limpa
+        let allDocTags = [];
+        if (Array.isArray(doc.todos_tipos) && doc.todos_tipos.length > 0) {
+          allDocTags = doc.todos_tipos.map(t => safeString(t).trim()).filter(Boolean);
+        } else if (doc.tipo_documento) {
+          allDocTags = [safeString(doc.tipo_documento).trim()];
+        } else {
+          allDocTags = [isImg ? 'Imagem' : 'Documento'];
+        }
+
+        // Desduplicação preservando a ordem
+        const seenDocTags = new Set();
+        allDocTags = allDocTags.filter(t => {
+          const k = t.toLowerCase();
+          if (seenDocTags.has(k)) return false;
+          seenDocTags.add(k);
+          return true;
+        });
+
+        // 2. Tag Principal (Tag-Mestre)
+        const primaryTag = allDocTags.length > 0 ? allDocTags[0] : (isImg ? 'Imagem' : 'Documento');
+        const primaryMeta = getTagMeta(primaryTag);
+
+        // 3. Subtags da Tag Principal (Atributos Filhos: Curso, Nível, Emissor, etc.)
+        const subtags = getPrimaryTagSubtags(doc, primaryTag, docDom);
+        let subtagsHtml = '';
+        subtags.forEach(sub => {
+          subtagsHtml += `<span class="text-[9.5px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700/60 font-medium truncate max-w-[140px] inline-flex items-center gap-1 shadow-sm hover:border-slate-500 transition" title="${escapeHtml(sub.title)}: ${escapeHtml(sub.label)}">
+            ${sub.icon ? `<i class="${sub.icon} text-[8.5px] shrink-0"></i>` : ''}
+            <span class="truncate">${escapeHtml(sub.label)}</span>
+          </span>`;
+        });
+
+        // 4. Anexos (Demais Tags presentes no arquivo)
+        const anexosTags = allDocTags.slice(1);
+        let anexosBlockHtml = '';
+        if (anexosTags.length > 0) {
+          let anexosPills = '';
+          anexosTags.forEach(t => {
+            const meta = getTagMeta(t);
+            anexosPills += `<span class="text-[9px] px-1.5 py-0.2 rounded border font-medium truncate max-w-[125px] inline-flex items-center gap-1 opacity-90 hover:opacity-100 shadow-sm ${meta.bg}" title="Documento Anexo: ${escapeHtml(t)}">
+              <i class="${meta.icon} text-[8px] ${meta.color} shrink-0"></i>
+              <span class="truncate">${escapeHtml(t)}</span>
+            </span>`;
+          });
+
+          anexosBlockHtml = `
+            <div class="flex items-center gap-1 flex-wrap pt-1 border-t border-slate-800/60 mt-auto">
+              <span class="text-[9px] text-slate-400 font-medium uppercase tracking-wider flex items-center gap-1 shrink-0" title="Outros documentos identificados neste arquivo">
+                <i class="fa-solid fa-paperclip text-[8.5px] text-slate-400"></i> Anexos:
+              </span>
+              ${anexosPills}
+            </div>
+          `;
+        }
 
         html += `
           <div id="gcard-${doc.md5}" onclick="openInConference('${doc.md5}')"
@@ -8769,32 +9071,28 @@
               </div>
             </div>
 
-            <!-- Corpo de Metadados -->
-            <div class="flex-1 flex flex-col gap-1 min-w-0">
+            <!-- Corpo de Metadados Hierárquico -->
+            <div class="flex-1 flex flex-col gap-1.5 min-w-0">
               <!-- Nome / Titular -->
               <div class="font-bold text-xs text-slate-100 truncate group-hover:text-amber-300 transition" title="${nome}">
                 ${nome}
               </div>
 
-              <!-- Subtítulo (Curso / Chave) -->
-              <div class="text-[11px] text-slate-400 truncate" title="${subTitle}">
-                ${subTitle}
+              <!-- Tag-Mestre com Subtags Inline -->
+              <div class="flex items-center gap-1 flex-wrap pt-0.5">
+                <span class="text-[10px] px-2 py-0.5 rounded font-semibold border inline-flex items-center gap-1 shadow-sm shrink-0 ${primaryMeta.bg}" title="Documento Principal: ${escapeHtml(primaryTag)}">
+                  <i class="${primaryMeta.icon} text-[9px] ${primaryMeta.color} shrink-0"></i>
+                  <span>${escapeHtml(primaryTag)}</span>
+                </span>
+                ${subtags.length > 0 ? `<i class="fa-solid fa-angle-right text-[8.5px] text-slate-600 shrink-0"></i>` : ''}
+                ${subtagsHtml}
               </div>
 
-              <!-- Faculdade / Emissor -->
-              <div class="text-[10.5px] text-slate-400 flex items-center gap-1 truncate" title="${faculdade}">
-                <i class="fa-solid fa-building-columns text-[9px] text-amber-400/80 shrink-0"></i>
-                <span class="truncate">${faculdade}</span>
-              </div>
-
-              <!-- Tags / Pills -->
-              <div class="flex items-center gap-1 flex-wrap pt-1 mt-auto">
-                <span class="text-[9.5px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 font-medium truncate max-w-[120px]" title="${tipoStr}">${tipoStr}</span>
-                ${natStr ? `<span class="text-[9.5px] px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/20 font-medium truncate max-w-[120px]" title="${natStr}">${formatShortNature(natStr)}</span>` : ''}
-              </div>
+              <!-- Linha de Documentos Anexos (se houver) -->
+              ${anexosBlockHtml}
 
               <!-- Rodapé do Card: Data & Hash MD5 -->
-              <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-800/80 mt-1 font-mono">
+              <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-800/80 mt-auto font-mono">
                 <span class="flex items-center gap-1"><i class="fa-regular fa-calendar text-[9px]"></i>${dataDoc}</span>
                 <span title="${doc.md5}">${md5Short}...</span>
               </div>
@@ -9075,15 +9373,57 @@
       }
 
       if (detailsEl) {
-        detailsEl.innerHTML = `
-          <span><strong>Curso:</strong> ${escapeHtml(safeString(doc.curso) || '-')}</span>
-          <span>•</span>
-          <span><strong>Instituição:</strong> ${escapeHtml(safeString(doc.faculdade) || '-')}</span>
-          <span>•</span>
-          <span><strong>Data:</strong> ${escapeHtml(safeString(doc.data || doc.data_modificacao) || '-')}</span>
-          <span>•</span>
-          <span><strong>Tipo:</strong> ${escapeHtml(safeString(doc.tipo_documento) || '-')}</span>
-        `;
+        const docDom = safeString(doc.dominio || 'academico').toLowerCase();
+        let metaHtml = '';
+        const allTags = Array.isArray(doc.todos_tipos) && doc.todos_tipos.length > 0 
+          ? doc.todos_tipos.join(', ') 
+          : safeString(doc.tipo_documento || 'Documento');
+
+        if (docDom === 'financeiro') {
+          const valor = safeString(doc.valor_monetario || '-');
+          const banco = safeString(doc.faculdade || doc.pix_pagador_banco || '-');
+          metaHtml = `
+            <span><strong>Valor:</strong> ${escapeHtml(valor)}</span>
+            <span>•</span>
+            <span><strong>Instituição / Banco:</strong> ${escapeHtml(banco)}</span>
+            <span>•</span>
+            <span><strong>Data:</strong> ${escapeHtml(safeString(doc.data || doc.data_modificacao) || '-')}</span>
+            <span>•</span>
+            <span><strong>TAGs:</strong> ${escapeHtml(allTags)}</span>
+          `;
+        } else if (docDom === 'identificacao') {
+          const docId = [doc.cpf ? `CPF: ${doc.cpf}` : '', doc.rg ? `RG: ${doc.rg}` : ''].filter(Boolean).join(' • ') || '-';
+          const emissor = safeString(doc.faculdade || 'Órgão Emissor');
+          metaHtml = `
+            <span><strong>Documento:</strong> ${escapeHtml(docId)}</span>
+            <span>•</span>
+            <span><strong>Órgão:</strong> ${escapeHtml(emissor)}</span>
+            <span>•</span>
+            <span><strong>Data:</strong> ${escapeHtml(safeString(doc.data || doc.data_modificacao) || '-')}</span>
+            <span>•</span>
+            <span><strong>TAGs:</strong> ${escapeHtml(allTags)}</span>
+          `;
+        } else if (docDom === 'juridico') {
+          metaHtml = `
+            <span><strong>Emissor / Cartório:</strong> ${escapeHtml(safeString(doc.faculdade) || '-')}</span>
+            <span>•</span>
+            <span><strong>Data:</strong> ${escapeHtml(safeString(doc.data || doc.data_modificacao) || '-')}</span>
+            <span>•</span>
+            <span><strong>TAGs:</strong> ${escapeHtml(allTags)}</span>
+          `;
+        } else {
+          // Acadêmico / Geral
+          const cursoInfo = doc.curso ? `<span><strong>Curso:</strong> ${escapeHtml(doc.curso)}</span><span>•</span>` : '';
+          metaHtml = `
+            ${cursoInfo}
+            <span><strong>Instituição:</strong> ${escapeHtml(safeString(doc.faculdade) || '-')}</span>
+            <span>•</span>
+            <span><strong>Data:</strong> ${escapeHtml(safeString(doc.data || doc.data_modificacao) || '-')}</span>
+            <span>•</span>
+            <span><strong>TAGs:</strong> ${escapeHtml(allTags)}</span>
+          `;
+        }
+        detailsEl.innerHTML = metaHtml;
       }
 
       updateLightboxActionButtons();
