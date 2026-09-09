@@ -50,6 +50,7 @@ try:
     from joakindex import (
         process_single_pdf,
         extract_file_author,
+        extract_file_dublin_core,
         OllamaClient,
         OpenAIClient,
         run_batch_classification,
@@ -69,6 +70,7 @@ except Exception:
     spec.loader.exec_module(joakindex)
     process_single_pdf = joakindex.process_single_pdf
     extract_file_author = getattr(joakindex, "extract_file_author", lambda p: None)
+    extract_file_dublin_core = getattr(joakindex, "extract_file_dublin_core", lambda p: {})
     OllamaClient = joakindex.OllamaClient
     OpenAIClient = joakindex.OpenAIClient
     run_batch_classification = getattr(joakindex, "run_batch_classification", None)
@@ -778,6 +780,7 @@ class ConferenciaServer:
                 ext = pdf_file.suffix.lower()
                 is_non_fin = any(x in pdf_file.name.lower() for x in ["cnpj", "inscricao", "inscrição", "cadastral", "matricula", "matrícula", "residencia", "residência", "votação", "votacao", "rendimento"])
                 is_pix_file = not is_non_fin and any(k in pdf_file.name.lower() for k in ["pix", "comprovante de pagamento", "comprovante pix", "recibo de pagamento", "boleto"])
+                dc_meta = extract_file_dublin_core(pdf_file)
                 unprocessed_doc = {
                     "md5": h,
                     "nome_arquivo": pdf_file.name,
@@ -785,7 +788,11 @@ class ConferenciaServer:
                     "extensao": ext,
                     "dominio": "financeiro" if is_pix_file else "academico",
                     "data_modificacao": dt_mod,
-                    "autor": extract_file_author(pdf_file),
+                    "autor": dc_meta.get("creator") or extract_file_author(pdf_file),
+                    "dublin_core": dc_meta,
+                    "dc_title": dc_meta.get("title"),
+                    "dc_subject": dc_meta.get("subject"),
+                    "dc_creator_tool": dc_meta.get("creator_tool"),
                     "data": None,
                     "beneficiario": None,
                     "cpf": None,
@@ -869,7 +876,11 @@ class ConferenciaServer:
             lines.append(f"  • Domínio                 : {dom.upper()}")
             lines.append(f"  • Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}")
             lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
-            lines.append(f"  • Autor (Metadados)       : {item.get('autor') or 'Não informado'}")
+            lines.append(f"  • dc:creator              : {item.get('autor') or 'Não informado'}")
+            if item.get("dc_title"):
+                lines.append(f"  • dc:title                : {item.get('dc_title')}")
+            if item.get("dc_creator_tool"):
+                lines.append(f"  • dc:tool                 : {item.get('dc_creator_tool')}")
             lines.append(f"  • Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}")
             lines.append(f"  • CPF                     : {item.get('cpf') or 'Não informado'}")
             lines.append(f"  • RG / Identidade         : {item.get('rg') or 'Não informado'}")
@@ -1956,6 +1967,14 @@ def create_handler(server_ctx: ConferenciaServer):
                             novo_doc["observacoes_conferencia"] = prev_doc["observacoes_conferencia"]
                         if not novo_doc.get("autor") and prev_doc.get("autor"):
                             novo_doc["autor"] = prev_doc["autor"]
+                        if not novo_doc.get("dublin_core") and prev_doc.get("dublin_core"):
+                            novo_doc["dublin_core"] = prev_doc["dublin_core"]
+                        if not novo_doc.get("dc_title") and prev_doc.get("dc_title"):
+                            novo_doc["dc_title"] = prev_doc["dc_title"]
+                        if not novo_doc.get("dc_subject") and prev_doc.get("dc_subject"):
+                            novo_doc["dc_subject"] = prev_doc["dc_subject"]
+                        if not novo_doc.get("dc_creator_tool") and prev_doc.get("dc_creator_tool"):
+                            novo_doc["dc_creator_tool"] = prev_doc["dc_creator_tool"]
                     else:
                         novo_doc["status_conferencia"] = "pendente"
 

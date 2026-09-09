@@ -245,9 +245,189 @@ def extract_file_author(file_path: Union[str, Path]) -> Optional[str]:
     return None
 
 
+def extract_file_dublin_core(file_path: Union[str, Path]) -> Dict[str, Any]:
+    """
+    Extrai metadados estruturados do padrão Dublin Core (DCMES ISO 15836) e XMP.
+    Retorna um dicionário higienizado contendo chaves como:
+    title, creator, subject, description, publisher, contributor, date, modified,
+    type, format, identifier, source, language, rights, keywords, creator_tool, producer.
+    """
+    p = Path(file_path)
+    if not p.exists() or not p.is_file():
+        return {}
+
+    ext = p.suffix.lower()
+    res: Dict[str, Any] = {}
+
+    def _clean_str(val: Any) -> Optional[str]:
+        if val is None:
+            return None
+        if isinstance(val, (list, tuple, set)):
+            items = [_clean_str(x) for x in val if x is not None]
+            items = [x for x in items if x]
+            return ", ".join(items) if items else None
+        if isinstance(val, dict):
+            items = [f"{k}: {_clean_str(v)}" for k, v in val.items() if v is not None]
+            return ", ".join(items) if items else None
+        s = "".join(ch for ch in str(val) if ch.isprintable() or ch in " \t\n\r").strip()
+        return s if len(s) >= 1 else None
+
+    # 1. Arquivos PDF (.pdf)
+    if ext == ".pdf":
+        if pypdf is not None:
+            try:
+                reader = pypdf.PdfReader(str(p), strict=False)
+                # Dicionário clássico Info
+                meta = reader.metadata
+                if meta:
+                    if meta.title: res["title"] = _clean_str(meta.title)
+                    if meta.author: res["creator"] = _clean_str(meta.author)
+                    if meta.subject: res["subject"] = _clean_str(meta.subject)
+                    if "/Keywords" in meta and meta["/Keywords"]: res["keywords"] = _clean_str(meta["/Keywords"])
+                    if meta.creator: res["creator_tool"] = _clean_str(meta.creator)
+                    if meta.producer: res["producer"] = _clean_str(meta.producer)
+                    if meta.creation_date: res["date"] = _clean_str(meta.creation_date)
+                    if meta.modification_date: res["modified"] = _clean_str(meta.modification_date)
+                # XMP Metadata estruturado Dublin Core
+                xmp = reader.xmp_metadata
+                if xmp:
+                    dc_attrs = {
+                        "dc_title": "title",
+                        "dc_creator": "creator",
+                        "dc_subject": "subject",
+                        "dc_description": "description",
+                        "dc_publisher": "publisher",
+                        "dc_contributor": "contributor",
+                        "dc_date": "date",
+                        "dc_type": "type",
+                        "dc_format": "format",
+                        "dc_identifier": "identifier",
+                        "dc_source": "source",
+                        "dc_language": "language",
+                        "dc_rights": "rights",
+                        "dc_coverage": "coverage",
+                        "dc_relation": "relation"
+                    }
+                    for xmp_attr, dc_key in dc_attrs.items():
+                        v = getattr(xmp, xmp_attr, None)
+                        if v is not None:
+                            cleaned = _clean_str(v)
+                            if cleaned:
+                                res[dc_key] = cleaned
+                    if xmp.xmp_creator_tool and not res.get("creator_tool"):
+                        res["creator_tool"] = _clean_str(xmp.xmp_creator_tool)
+                    if xmp.pdf_producer and not res.get("producer"):
+                        res["producer"] = _clean_str(xmp.pdf_producer)
+                    if xmp.pdf_keywords and not res.get("keywords"):
+                        res["keywords"] = _clean_str(xmp.pdf_keywords)
+                    if xmp.xmp_create_date and not res.get("date"):
+                        res["date"] = _clean_str(xmp.xmp_create_date)
+                    if xmp.xmp_modify_date and not res.get("modified"):
+                        res["modified"] = _clean_str(xmp.xmp_modify_date)
+            except Exception:
+                pass
+
+        # Fallback pdfinfo
+        if shutil.which("pdfinfo") and (not res or not res.get("creator")):
+            try:
+                proc = subprocess.run(["pdfinfo", str(p)], capture_output=True, text=True, timeout=3)
+                if proc.returncode == 0:
+                    for line in proc.stdout.splitlines():
+                        if ":" in line:
+                            k, v = line.split(":", 1)
+                            k, v = k.strip(), v.strip()
+                            if not v: continue
+                            if k == "Title" and not res.get("title"): res["title"] = v
+                            elif k == "Author" and not res.get("creator"): res["creator"] = v
+                            elif k == "Subject" and not res.get("subject"): res["subject"] = v
+                            elif k == "Keywords" and not res.get("keywords"): res["keywords"] = v
+                            elif k == "Creator" and not res.get("creator_tool"): res["creator_tool"] = v
+                            elif k == "Producer" and not res.get("producer"): res["producer"] = v
+                            elif k == "CreationDate" and not res.get("date"): res["date"] = v
+                            elif k == "ModDate" and not res.get("modified"): res["modified"] = v
+            except Exception:
+                pass
+
+    # 2. Arquivos Word DOCX (.docx)
+    elif ext == ".docx":
+        try:
+            with zipfile.ZipFile(p, "r") as z:
+                if "docProps/core.xml" in z.namelist():
+                    xml_data = z.read("docProps/core.xml")
+                    root = ET.fromstring(xml_data)
+                    for elem in root:
+                        tag_name = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+                        val = _clean_str(elem.text)
+                        if not val: continue
+                        if tag_name == "title": res["title"] = val
+                        elif tag_name == "creator": res["creator"] = val
+                        elif tag_name == "subject": res["subject"] = val
+                        elif tag_name == "description": res["description"] = val
+                        elif tag_name == "keywords": res["keywords"] = val
+                        elif tag_name == "lastModifiedBy":
+                            res["contributor"] = val
+                            if not res.get("creator_tool"): res["creator_tool"] = f"Microsoft Word ({val})"
+                        elif tag_name == "created": res["date"] = val
+                        elif tag_name == "modified": res["modified"] = val
+                        elif tag_name == "category": res["type"] = val
+                        elif tag_name == "language": res["language"] = val
+        except Exception:
+            pass
+
+    # 3. Arquivos Word Legado (.doc 97-2003)
+    elif ext == ".doc":
+        try:
+            with open(p, "rb") as f:
+                d = f.read()
+            # Autor
+            m = re.search(rb"\x1e\x00\x00\x00[\x02-\x80]\x00\x00\x00([A-Za-z\xc0-\xff][A-Za-z0-9\xc0-\xff\s\.\-]{1,60})\x00.*?(?:Normal|Microsoft)", d, re.DOTALL)
+            if m:
+                s = m.group(1).decode("latin1", errors="ignore").strip()
+                if s and s.lower() not in ["normal", "microsoft"]:
+                    res["creator"] = s
+            # Template / Creator Tool
+            if b"Microsoft Word" in d:
+                res["creator_tool"] = "Microsoft Word (97-2003)"
+            elif b"Normal.dot" in d:
+                res["creator_tool"] = "Microsoft Word (Normal.dot)"
+        except Exception:
+            pass
+
+    # 4. Imagens
+    elif ext in IMAGE_EXTENSIONS or ext in [".tiff", ".tif"]:
+        if Image is not None:
+            try:
+                with Image.open(p) as im:
+                    exif = im.getexif()
+                    if exif:
+                        from PIL.ExifTags import TAGS
+                        for tag_id, val in exif.items():
+                            tag = TAGS.get(tag_id, tag_id)
+                            cleaned = _clean_str(val)
+                            if not cleaned: continue
+                            if tag in ["Artist", "XPAuthor", "Author"]: res["creator"] = cleaned
+                            elif tag in ["ImageDescription", "XPComment"]: res["description"] = cleaned
+                            elif tag in ["XPTitle"]: res["title"] = cleaned
+                            elif tag in ["XPSubject"]: res["subject"] = cleaned
+                            elif tag in ["XPKeywords"]: res["keywords"] = cleaned
+                            elif tag in ["Software"]: res["creator_tool"] = cleaned
+                            elif tag in ["DateTime", "DateTimeOriginal"]: res["date"] = cleaned
+                            elif tag in ["Copyright"]: res["rights"] = cleaned
+            except Exception:
+                pass
+
+    # Se creator não foi encontrado e extract_file_author tiver outro detalhe, harmoniza
+    if not res.get("creator"):
+        aut = extract_file_author(p)
+        if aut:
+            res["creator"] = aut
+
+    return {k: v for k, v in res.items() if v}
+
+
 def get_file_metadata(file_path: Path) -> Dict[str, Any]:
     """
-    Calcula o hash MD5, data da última alteração e autor dos metadados internos do arquivo.
+    Calcula o hash MD5, data da última alteração e metadados Dublin Core/Autor do arquivo.
     """
     hasher = hashlib.md5()
     with open(file_path, "rb") as f:
@@ -257,12 +437,17 @@ def get_file_metadata(file_path: Path) -> Dict[str, Any]:
 
     st = file_path.stat()
     dt_mod = datetime.fromtimestamp(st.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
-    autor = extract_file_author(file_path)
+    dc_meta = extract_file_dublin_core(file_path)
+    autor = dc_meta.get("creator") or extract_file_author(file_path)
 
     return {
         "md5": md5_hash,
         "data_modificacao": dt_mod,
-        "autor": autor
+        "autor": autor,
+        "dublin_core": dc_meta,
+        "dc_title": dc_meta.get("title"),
+        "dc_subject": dc_meta.get("subject"),
+        "dc_creator_tool": dc_meta.get("creator_tool")
     }
 
 
@@ -2009,6 +2194,10 @@ def process_single_pdf(
         "dominio": "academico",
         "data_modificacao": meta.get("data_modificacao"),
         "autor": meta.get("autor"),
+        "dublin_core": meta.get("dublin_core"),
+        "dc_title": meta.get("dc_title"),
+        "dc_subject": meta.get("dc_subject"),
+        "dc_creator_tool": meta.get("dc_creator_tool"),
         "data": None,
         "beneficiario": None,
         "cpf": None,
@@ -2569,6 +2758,12 @@ def format_single_txt(item: Dict[str, Any]) -> str:
     dossie_line = f"\nDocumentos no Arquivo  : {', '.join(str(t) for t in todos_tipos)}" if (isinstance(todos_tipos, list) and len(todos_tipos) > 1) else ""
     de = item.get("dados_extras") if isinstance(item.get("dados_extras"), dict) else {}
 
+    dc_extra = ""
+    if item.get('dc_title'):
+        dc_extra += f"dc:title                : {item.get('dc_title')}\n"
+    if item.get('dc_creator_tool'):
+        dc_extra += f"dc:tool                 : {item.get('dc_creator_tool')}\n"
+
     txt = f"""--------------------------------------------------------------------------------
 MD5                     : {item.get('md5')}
 Status                  : {item.get('status', '').upper()}
@@ -2577,8 +2772,8 @@ Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}{do
 Extensão                : {ext.upper() if ext else 'N/A'}
 Método de Leitura       : {metodo}
 Data da Última Alteração: {item.get('data_modificacao')}
-Autor (Metadados)      : {item.get('autor') or 'Não informado'}
-Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}
+dc:creator              : {item.get('autor') or 'Não informado'}
+{dc_extra}Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}
 CPF                     : {item.get('cpf') or 'Não informado'}
 RG / Identidade         : {item.get('rg') or 'Não informado'}
 CNPJ                    : {item.get('cnpj') or 'Não informado'}
@@ -2654,7 +2849,11 @@ def generate_consolidated_txt(
         lines.append(f"  • Domínio                 : {dom.upper()}")
         lines.append(f"  • Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}")
         lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
-        lines.append(f"  • Autor (Metadados)      : {item.get('autor') or 'Não informado'}")
+        lines.append(f"  • dc:creator              : {item.get('autor') or 'Não informado'}")
+        if item.get("dc_title"):
+            lines.append(f"  • dc:title                : {item.get('dc_title')}")
+        if item.get("dc_creator_tool"):
+            lines.append(f"  • dc:tool                 : {item.get('dc_creator_tool')}")
         lines.append(f"  • Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}")
         lines.append(f"  • CPF                     : {item.get('cpf') or 'Não informado'}")
         lines.append(f"  • RG / Identidade         : {item.get('rg') or 'Não informado'}")

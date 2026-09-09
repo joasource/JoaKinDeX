@@ -1040,7 +1040,7 @@
               <span id="field_data_modificacao" class="font-mono text-slate-300">-</span>
             </div>
             <div>
-              <span class="block text-[10px] text-slate-500">Autor (Metadados):</span>
+              <span class="block text-[10px] text-slate-500">dc:creator (Autor):</span>
               <span id="field_autor" class="font-mono text-slate-300 truncate block" title="-">-</span>
             </div>
             <div>
@@ -1768,13 +1768,71 @@
               <span id="audit_data_modificacao" class="font-mono text-slate-200 block">-</span>
             </div>
             <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
-              <span class="text-[10px] text-slate-500 block">Autor (Metadados):</span>
+              <span class="text-[10px] text-slate-500 block">dc:creator:</span>
               <span id="audit_autor" class="font-mono text-slate-200 block truncate" title="-">-</span>
             </div>
             <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80 col-span-2">
               <span class="text-[10px] text-slate-500 block">Status de Conferência:</span>
               <span id="audit_status_conferencia" class="font-semibold block">-</span>
             </div>
+          </div>
+        </div>
+
+        <!-- Card: Metadados Dublin Core & XMP -->
+        <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 space-y-3 shadow-sm">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-tags text-indigo-400"></i> Metadados Dublin Core & XMP
+            </span>
+            <button type="button" onclick="copyDublinCoreJson()" class="text-[10px] text-slate-400 hover:text-indigo-400 flex items-center gap-1" title="Copiar metadados Dublin Core em formato JSON">
+              <i class="fa-regular fa-copy"></i> Copiar Metadados
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-xs" id="dcGridContainer">
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80 col-span-2">
+              <span class="text-[10px] text-slate-500 block">Título (dc:title):</span>
+              <span id="dc_title" class="font-mono text-slate-200 block truncate" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">dc:creator:</span>
+              <span id="dc_creator" class="font-mono text-slate-200 block truncate" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Assunto / Tema (dc:subject):</span>
+              <span id="dc_subject" class="font-mono text-slate-200 block truncate" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Palavras-chave (keywords):</span>
+              <span id="dc_keywords" class="font-mono text-slate-200 block truncate" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Ferramenta Geradora (creator_tool):</span>
+              <span id="dc_creator_tool" class="font-mono text-indigo-300 block truncate" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Produtor / Conversor (producer):</span>
+              <span id="dc_producer" class="font-mono text-slate-200 block truncate" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Data Criação Metadado (dc:date):</span>
+              <span id="dc_date" class="font-mono text-slate-200 block" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Data Modificação DC:</span>
+              <span id="dc_modified" class="font-mono text-slate-200 block" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Formato MIME (dc:format):</span>
+              <span id="dc_format" class="font-mono text-slate-200 block" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80 col-span-2">
+              <span class="text-[10px] text-slate-500 block">Descrição / Resumo (dc:description):</span>
+              <span id="dc_description" class="font-mono text-slate-200 block whitespace-pre-wrap select-all" title="-">-</span>
+            </div>
+          </div>
+          <div id="dcEmptyNotice" class="hidden text-slate-500 text-xs italic py-1">
+            Nenhum metadado Dublin Core ou XMP embutido neste arquivo.
           </div>
         </div>
 
@@ -6178,8 +6236,16 @@
       const todosTipos = Array.isArray(doc.todos_tipos) ? normalizeText(doc.todos_tipos.join(' ')) : '';
       const todosDominios = Array.isArray(doc.todos_dominios) ? normalizeText(doc.todos_dominios.join(' ')) : '';
       const autor = normalizeText(doc.autor);
+      const dcObj = (typeof doc.dublin_core === 'object' && doc.dublin_core !== null) ? doc.dublin_core : {};
+      const dcTitle = normalizeText(doc.dc_title || dcObj.title);
+      const dcSubject = normalizeText(doc.dc_subject || dcObj.subject);
+      const dcTool = normalizeText(doc.dc_creator_tool || dcObj.creator_tool);
+      const dcProducer = normalizeText(dcObj.producer);
+      const dcKeywords = normalizeText(dcObj.keywords);
+      const dcDesc = normalizeText(dcObj.description);
+      const dcPub = normalizeText(dcObj.publisher);
 
-      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${cnpj} ${cnpjDigits} ${cnpjRazao} ${cnpjFantasia} ${cnpjSituacao} ${cnpjCnae} ${cnpjNatJur} ${cnpjEnd} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${todosTipos} ${data} ${carga} ${obs} ${dominio} ${todosDominios} ${extensao} ${valor} ${pixChave} ${pixE2e} ${pixAut} ${pixPag} ${pixPagBanco} ${pixRecBanco} ${autor}`;
+      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${cnpj} ${cnpjDigits} ${cnpjRazao} ${cnpjFantasia} ${cnpjSituacao} ${cnpjCnae} ${cnpjNatJur} ${cnpjEnd} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${todosTipos} ${data} ${carga} ${obs} ${dominio} ${todosDominios} ${extensao} ${valor} ${pixChave} ${pixE2e} ${pixAut} ${pixPag} ${pixPagBanco} ${pixRecBanco} ${autor} ${dcTitle} ${dcSubject} ${dcTool} ${dcProducer} ${dcKeywords} ${dcDesc} ${dcPub}`;
 
       return tokens.every(token => {
         // 1. Busca textual direta na junção de todos os campos
@@ -8783,6 +8849,57 @@
       const auditAutEl = document.getElementById('audit_autor');
       if (auditAutEl) auditAutEl.title = doc.autor || '-';
 
+      // Metadados Dublin Core & XMP
+      let dc = doc.dublin_core;
+      if (typeof dc === 'string') {
+        try { dc = JSON.parse(dc); } catch (e) { dc = null; }
+      }
+      dc = (dc && typeof dc === 'object') ? dc : {};
+
+      const dcTitleVal = dc.title || doc.dc_title || '';
+      const dcCreatorVal = dc.creator || doc.autor || '';
+      const dcSubjectVal = dc.subject || doc.dc_subject || '';
+      const dcKeywordsVal = dc.keywords || '';
+      const dcToolVal = dc.creator_tool || doc.dc_creator_tool || '';
+      const dcProducerVal = dc.producer || '';
+      const dcDateVal = dc.date || '';
+      const dcModifiedVal = dc.modified || '';
+      const dcFormatVal = dc.format || '';
+      const dcDescVal = dc.description || '';
+
+      setEl('dc_title', dcTitleVal || '-');
+      setEl('dc_creator', dcCreatorVal || '-');
+      setEl('dc_subject', dcSubjectVal || '-');
+      setEl('dc_keywords', dcKeywordsVal || '-');
+      setEl('dc_creator_tool', dcToolVal || '-');
+      setEl('dc_producer', dcProducerVal || '-');
+      setEl('dc_date', dcDateVal || '-');
+      setEl('dc_modified', dcModifiedVal || '-');
+      setEl('dc_format', dcFormatVal || '-');
+      setEl('dc_description', dcDescVal || '-');
+
+      const titleEl = document.getElementById('dc_title');
+      if (titleEl) titleEl.title = dcTitleVal || '-';
+      const creatorEl = document.getElementById('dc_creator');
+      if (creatorEl) creatorEl.title = dcCreatorVal || '-';
+      const subjEl = document.getElementById('dc_subject');
+      if (subjEl) subjEl.title = dcSubjectVal || '-';
+      const kwEl = document.getElementById('dc_keywords');
+      if (kwEl) kwEl.title = dcKeywordsVal || '-';
+      const toolEl = document.getElementById('dc_creator_tool');
+      if (toolEl) toolEl.title = dcToolVal || '-';
+      const prodEl = document.getElementById('dc_producer');
+      if (prodEl) prodEl.title = dcProducerVal || '-';
+
+      const hasDc = Boolean(
+        dcTitleVal || dcCreatorVal || dcSubjectVal || dcKeywordsVal ||
+        dcToolVal || dcProducerVal || dcDateVal || dcModifiedVal || dcFormatVal || dcDescVal
+      );
+      const dcGrid = document.getElementById('dcGridContainer');
+      const dcNotice = document.getElementById('dcEmptyNotice');
+      if (dcGrid) dcGrid.classList.toggle('hidden', !hasDc);
+      if (dcNotice) dcNotice.classList.toggle('hidden', hasDc);
+
       const statusEl = document.getElementById('audit_status_conferencia');
       if (statusEl) {
         const st = safeString(doc.status_conferencia || 'pendente').toLowerCase();
@@ -8801,6 +8918,35 @@
         typeBadge.innerText = fmt.label;
         typeBadge.className = `text-[10px] font-mono px-2 py-0.5 rounded border ${fmt.badgeClass || 'bg-slate-800 text-slate-300 border-slate-700'}`;
       }
+    }
+
+    function copyDublinCoreJson() {
+      const curDoc = (filteredDocs && currentIndex >= 0 && currentIndex < filteredDocs.length) ? filteredDocs[currentIndex] : null;
+      if (!curDoc) {
+        showToast('Nenhum documento selecionado.', 'info');
+        return;
+      }
+      let dc = curDoc.dublin_core;
+      if (typeof dc === 'string') {
+        try { dc = JSON.parse(dc); } catch (e) { dc = null; }
+      }
+      if (!dc || typeof dc !== 'object' || Object.keys(dc).length === 0) {
+        const fallback = {};
+        if (curDoc.autor) fallback.creator = curDoc.autor;
+        if (curDoc.dc_title) fallback.title = curDoc.dc_title;
+        if (curDoc.dc_subject) fallback.subject = curDoc.dc_subject;
+        if (curDoc.dc_creator_tool) fallback.creator_tool = curDoc.dc_creator_tool;
+        if (Object.keys(fallback).length > 0) dc = fallback;
+      }
+      if (!dc || Object.keys(dc).length === 0) {
+        showToast('Nenhum metadado Dublin Core disponível para este documento.', 'info');
+        return;
+      }
+      navigator.clipboard.writeText(JSON.stringify(dc, null, 2)).then(() => {
+        showToast('Metadados Dublin Core copiados com sucesso!', 'success');
+      }).catch(() => {
+        showToast('Erro ao copiar metadados.', 'error');
+      });
     }
 
     function copyJsonData() {
@@ -9167,7 +9313,10 @@
         { key: 'caminho_relativo', header: 'Caminho_Relativo' },
         { key: 'md5', header: 'MD5' },
         { key: 'data_modificacao', header: 'Data_Ultima_Alteracao_PDF' },
-        { key: 'autor', header: 'Autor_Metadados' }
+        { key: 'autor', header: 'dc_creator' },
+        { key: 'dc_title', header: 'dc_title' },
+        { key: 'dc_subject', header: 'dc_subject' },
+        { key: 'dc_creator_tool', header: 'dc_creator_tool' }
       ];
 
       // Mapeia chaves extras dinamicamente para garantir que nenhum metadado adicional seja omitido

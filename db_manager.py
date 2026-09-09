@@ -21,7 +21,8 @@ COLUMNS = [
     "faculdade", "tipo_documento", "valor_monetario", "status", "status_conferencia",
     "metodo_leitura", "tentativa_ocr_llm", "erro", "processado_em",
     "conferido_em", "revisado_em", "observacoes_conferencia",
-    "todos_dominios", "todos_tipos", "dossie_paginas"
+    "todos_dominios", "todos_tipos", "dossie_paginas",
+    "dublin_core", "dc_title", "dc_subject", "dc_creator_tool"
 ]
 
 COLUMNS_SET = set(COLUMNS)
@@ -87,6 +88,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
         todos_dominios TEXT,
         todos_tipos TEXT,
         dossie_paginas TEXT,
+        dublin_core TEXT,
+        dc_title TEXT,
+        dc_subject TEXT,
+        dc_creator_tool TEXT,
         dados_extras TEXT
     );
     """)
@@ -112,6 +117,14 @@ def create_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE documentos ADD COLUMN dossie_paginas TEXT;")
     if "autor" not in existing_cols:
         conn.execute("ALTER TABLE documentos ADD COLUMN autor TEXT;")
+    if "dublin_core" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN dublin_core TEXT;")
+    if "dc_title" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN dc_title TEXT;")
+    if "dc_subject" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN dc_subject TEXT;")
+    if "dc_creator_tool" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN dc_creator_tool TEXT;")
 
     # Índices para consultas instantâneas
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_status ON documentos(status);")
@@ -124,6 +137,9 @@ def create_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_dominio ON documentos(dominio);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_extensao ON documentos(extensao);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_autor ON documentos(autor);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_dc_title ON documentos(dc_title);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_dc_subject ON documentos(dc_subject);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_dc_tool ON documentos(dc_creator_tool);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_tipos ON documentos(todos_tipos);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_dominios ON documentos(todos_dominios);")
 
@@ -228,6 +244,18 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
     else:
         dossie_paginas = None
 
+    dublin_core = item.get("dublin_core")
+    if isinstance(dublin_core, (dict, list)):
+        dublin_core = json.dumps(dublin_core, ensure_ascii=False)
+    elif isinstance(dublin_core, str) and dublin_core.strip():
+        dublin_core = dublin_core.strip()
+    else:
+        dublin_core = None
+
+    dc_title = item.get("dc_title")
+    dc_subject = item.get("dc_subject")
+    dc_creator_tool = item.get("dc_creator_tool")
+
     # Campos extras não mapeados nas colunas fixas são serializados em JSON
     extras = {}
     if isinstance(item.get("dados_extras"), dict):
@@ -243,7 +271,9 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr, erro, processado_em,
         conferido_em, revisado_em, obs_conf,
-        todos_dominios, todos_tipos, dossie_paginas, dados_extras
+        todos_dominios, todos_tipos, dossie_paginas,
+        dublin_core, dc_title, dc_subject, dc_creator_tool,
+        dados_extras
     )
 
 
@@ -257,6 +287,15 @@ def row_to_doc(row: sqlite3.Row) -> Dict[str, Any]:
 
     # Converte booleano
     d["tentativa_ocr_llm"] = bool(d.get("tentativa_ocr_llm", False))
+
+    # Desserializa dublin_core JSON se necessário
+    if "dublin_core" in row_keys and d.get("dublin_core"):
+        raw_dc = d["dublin_core"]
+        if isinstance(raw_dc, str):
+            try:
+                d["dublin_core"] = json.loads(raw_dc)
+            except Exception:
+                d["dublin_core"] = {}
 
     # Mescla campos extras caso existam
     if "dados_extras" in row_keys:
@@ -369,8 +408,9 @@ def upsert_document(db_path: Union[str, Path], doc: Dict[str, Any]) -> None:
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
         conferido_em, revisado_em, observacoes_conferencia,
-        todos_dominios, todos_tipos, dossie_paginas, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        todos_dominios, todos_tipos, dossie_paginas,
+        dublin_core, dc_title, dc_subject, dc_creator_tool, dados_extras
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
@@ -401,6 +441,10 @@ def upsert_document(db_path: Union[str, Path], doc: Dict[str, Any]) -> None:
         todos_dominios = excluded.todos_dominios,
         todos_tipos = excluded.todos_tipos,
         dossie_paginas = excluded.dossie_paginas,
+        dublin_core = COALESCE(excluded.dublin_core, documentos.dublin_core),
+        dc_title = COALESCE(excluded.dc_title, documentos.dc_title),
+        dc_subject = COALESCE(excluded.dc_subject, documentos.dc_subject),
+        dc_creator_tool = COALESCE(excluded.dc_creator_tool, documentos.dc_creator_tool),
         dados_extras = excluded.dados_extras;
     """
     with get_connection(db) as conn:
@@ -422,8 +466,9 @@ def upsert_documents_batch(db_path: Union[str, Path], docs: List[Dict[str, Any]]
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
         conferido_em, revisado_em, observacoes_conferencia,
-        todos_dominios, todos_tipos, dossie_paginas, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        todos_dominios, todos_tipos, dossie_paginas,
+        dublin_core, dc_title, dc_subject, dc_creator_tool, dados_extras
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
@@ -454,6 +499,10 @@ def upsert_documents_batch(db_path: Union[str, Path], docs: List[Dict[str, Any]]
         todos_dominios = excluded.todos_dominios,
         todos_tipos = excluded.todos_tipos,
         dossie_paginas = excluded.dossie_paginas,
+        dublin_core = COALESCE(excluded.dublin_core, documentos.dublin_core),
+        dc_title = COALESCE(excluded.dc_title, documentos.dc_title),
+        dc_subject = COALESCE(excluded.dc_subject, documentos.dc_subject),
+        dc_creator_tool = COALESCE(excluded.dc_creator_tool, documentos.dc_creator_tool),
         dados_extras = excluded.dados_extras;
     """
     with get_connection(db) as conn:
