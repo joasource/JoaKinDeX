@@ -53,6 +53,21 @@
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
     .split-pane { flex: 1 1 0%; min-height: 0; }
 
+    /* Garantia estrita de layout para as visões mestras e toolbars contextuais */
+    #viewConferencia.hidden { display: none !important; }
+    #viewConferencia:not(.hidden) { display: flex !important; flex: 1 1 0%; min-height: 0; }
+    #viewGaleria.hidden { display: none !important; }
+    #viewGaleria:not(.hidden) { display: flex !important; flex-direction: column !important; flex: 1 1 0%; min-height: 0; }
+    #viewBI.hidden { display: none !important; }
+    #viewBI:not(.hidden) { display: block !important; flex: 1 1 0%; min-height: 0; }
+
+    #conferenciaToolbar.hidden { display: none !important; }
+    #conferenciaToolbar:not(.hidden) { display: flex !important; }
+    #galeriaToolbar.hidden { display: none !important; }
+    #galeriaToolbar:not(.hidden) { display: flex !important; }
+    #biToolbar.hidden { display: none !important; }
+    #biToolbar:not(.hidden) { display: flex !important; }
+
     /* Estilos de Impressão para o Painel de BI */
     @media print {
       body { overflow: auto !important; background: #ffffff !important; color: #000000 !important; }
@@ -680,7 +695,7 @@
   </header>
 
   <!-- CORPO PRINCIPAL: Lista Lateral + Divisão Lado a Lado (Conferência) -->
-  <main id="viewConferencia" class="hidden flex-1 min-h-0 overflow-hidden split-pane">
+  <main id="viewConferencia" class="hidden flex-1 min-h-0 flex overflow-hidden split-pane">
 
     <!-- 1. BARRA LATERAL ESQUERDA: LISTA DE DOCUMENTOS E FILTROS -->
     <aside id="sidebar" class="w-84 sm:w-96 bg-slate-950/70 border-r border-slate-800 flex flex-col shrink-0">
@@ -9215,25 +9230,31 @@
       if (btnBI) btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
 
       // Esconde todas as visões principais e toolbars
-      if (viewConf) viewConf.classList.add('hidden');
-      if (viewGal) viewGal.classList.add('hidden');
-      if (viewBI) viewBI.classList.add('hidden');
+      if (viewConf) { viewConf.classList.add('hidden'); viewConf.classList.remove('flex'); }
+      if (viewGal) { viewGal.classList.add('hidden'); viewGal.classList.remove('flex'); }
+      if (viewBI) { viewBI.classList.add('hidden'); }
       if (confToolbar) { confToolbar.classList.add('hidden'); confToolbar.classList.remove('flex'); }
       if (galToolbar) { galToolbar.classList.add('hidden'); galToolbar.classList.remove('flex'); }
       if (biToolbar) { biToolbar.classList.add('hidden'); biToolbar.classList.remove('flex'); }
 
       if (tabName === 'conferencia') {
         if (btnConf) btnConf.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-emerald-600 text-white shadow';
-        if (viewConf) viewConf.classList.remove('hidden');
+        if (viewConf) { viewConf.classList.remove('hidden'); viewConf.classList.add('flex'); }
         if (confToolbar) { confToolbar.classList.remove('hidden'); confToolbar.classList.add('flex'); }
+        if (typeof filteredDocs !== 'undefined' && filteredDocs.length > 0 && typeof currentIndex !== 'undefined' && currentIndex >= 0) {
+          const curDoc = filteredDocs[currentIndex];
+          if (curDoc && curDoc.md5) {
+            loadMediaForDocument(curDoc, false);
+          }
+        }
       } else if (tabName === 'galeria') {
         if (btnGal) btnGal.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-amber-600 text-white shadow';
-        if (viewGal) viewGal.classList.remove('hidden');
+        if (viewGal) { viewGal.classList.remove('hidden'); viewGal.classList.add('flex'); }
         if (galToolbar) { galToolbar.classList.remove('hidden'); galToolbar.classList.add('flex'); }
         renderGalleryView();
       } else if (tabName === 'bi') {
         if (btnBI) btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-cyan-600 text-white shadow';
-        if (viewBI) viewBI.classList.remove('hidden');
+        if (viewBI) { viewBI.classList.remove('hidden'); }
         if (biToolbar) { biToolbar.classList.remove('hidden'); biToolbar.classList.add('flex'); }
         renderBIDashboard();
       }
