@@ -1385,8 +1385,8 @@
                   <i class="fa-regular fa-copy"></i> Copiar
                 </button>
               </div>
-              <textarea id="input_cnpj_endereco" rows="2" oninput="markDirty()" placeholder="Logradouro, número, bairro, município, UF, CEP"
-                        class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 resize-none"></textarea>
+              <textarea id="input_cnpj_endereco" rows="2" oninput="syncCardEnderecoToGeneral(this.value); markDirty();" placeholder="Logradouro, número, bairro, município, UF, CEP"
+                        class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 resize-none"></textarea>
             </div>
 
             <!-- Telefone e E-mail de Contato -->
@@ -1469,7 +1469,7 @@
               </div>
               <div>
                 <div class="flex items-center justify-between mb-1">
-                  <label for="input_doc_cnpj" class="text-xs font-medium text-slate-300">CNPJ</label>
+                  <label for="input_doc_cnpj" id="label_doc_cnpj" class="text-xs font-medium text-slate-300">CNPJ</label>
                   <div class="flex items-center gap-1.5">
                     <span class="text-[10px] text-slate-500 font-mono">cnpj</span>
                     <button type="button" onclick="copyFieldValue('input_doc_cnpj', 'CNPJ', this)" title="Copiar CNPJ"
@@ -1481,6 +1481,25 @@
                 <input type="text" id="input_doc_cnpj" oninput="syncGeneralCnpjToCard(this.value); markDirty();" placeholder="00.000.000/0000-00"
                        class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-sky-300 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
               </div>
+            </div>
+
+            <!-- Endereço / Localidade Geral -->
+            <div class="mt-2.5">
+              <div class="flex items-center justify-between mb-1">
+                <label for="input_doc_endereco" id="label_doc_endereco" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                  <i class="fa-solid fa-location-dot text-rose-400 text-[11px]"></i>
+                  <span>Endereço / Localidade</span>
+                </label>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] text-slate-500 font-mono">endereço</span>
+                  <button type="button" onclick="copyFieldValue('input_doc_endereco', 'Endereço', this)" title="Copiar Endereço"
+                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-800 transition">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+              </div>
+              <input type="text" id="input_doc_endereco" oninput="syncGeneralEndereco(this.value); markDirty();" placeholder="Logradouro, número, bairro, município - UF, CEP"
+                     class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
           </div>
 
@@ -4719,14 +4738,22 @@
         }
       }
 
-      // Visibilidade do card PIX e adaptação contextual de rótulos
+      // Visibilidade do card Cadastral da Receita Federal e adaptação contextual de rótulos
       const cnpjCard = document.getElementById('cartaoCnpjCard');
-      const cnpjVal = (document.getElementById('input_doc_cnpj')?.value || document.getElementById('input_cnpj')?.value || '').trim();
       const tipoVal = (document.getElementById('select_tipo_documento')?.value || '').toLowerCase();
-      const isCnpjDoc = dom === 'profissional' || Boolean(cnpjVal) || tipoVal.includes('cnpj') || tipoVal.includes('cadastral');
+      const isActualCadastralDoc = (
+        tipoVal.includes('situação cadastral') ||
+        tipoVal.includes('situacao cadastral') ||
+        tipoVal.includes('cartão cnpj') ||
+        tipoVal.includes('cartao cnpj') ||
+        tipoVal.includes('cartão do cnpj') ||
+        tipoVal.includes('cartao do cnpj') ||
+        tipoVal.includes('cadastro nacional da pessoa') ||
+        (dom === 'profissional' && (tipoVal.includes('cnpj') || tipoVal.includes('cadastral')))
+      );
 
       if (cnpjCard) {
-        if (isCnpjDoc) {
+        if (isActualCadastralDoc) {
           cnpjCard.classList.remove('hidden');
         } else {
           cnpjCard.classList.add('hidden');
@@ -4750,9 +4777,9 @@
         if (labelData) labelData.innerText = "Data do Documento / Assinatura";
       } else if (dom === 'profissional') {
         if (pixCard) pixCard.classList.add('hidden');
-        if (labelBeneficiario) labelBeneficiario.innerText = "Razão Social / Nome da Pessoa / Titular";
-        if (labelFaculdade) labelFaculdade.innerText = "Órgão Emissor / Receita Federal / Entidade";
-        if (labelData) labelData.innerText = "Data de Emissão / Situação / Abertura";
+        if (labelBeneficiario) labelBeneficiario.innerText = isActualCadastralDoc ? "Nome Empresarial (Razão Social)" : "Razão Social / Nome da Pessoa / Titular";
+        if (labelFaculdade) labelFaculdade.innerText = isActualCadastralDoc ? "Receita Federal do Brasil (RFB)" : "Órgão Emissor / Entidade";
+        if (labelData) labelData.innerText = isActualCadastralDoc ? "Data da Situação Cadastral / Abertura" : "Data de Emissão / Expedição";
       } else if (dom === 'outro') {
         if (pixCard) pixCard.classList.add('hidden');
         if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Titular / Beneficiário";
@@ -4761,7 +4788,7 @@
       } else {
         // Acadêmico
         if (pixCard) pixCard.classList.add('hidden');
-        if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Titular / Aluno";
+        if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Aluno / Diplomado";
         if (labelFaculdade) labelFaculdade.innerText = "Faculdade / Instituição Emissora";
         if (labelData) labelData.innerText = "Data de Conclusão / Emissão";
       }
@@ -4772,19 +4799,47 @@
       const inputCpf = document.getElementById('input_cpf');
       const labelRg = document.getElementById('label_rg');
       const inputRg = document.getElementById('input_rg');
+      const labelDocCnpj = document.getElementById('label_doc_cnpj');
+      const labelDocEnd = document.getElementById('label_doc_endereco');
 
-      if (isCnpjDoc) {
-        if (labelCpf) labelCpf.innerText = "CNPJ / CPF";
-        if (badgeCpf) badgeCpf.innerText = "cnpj";
-        if (inputCpf) inputCpf.placeholder = "00.000.000/0000-00";
+      if (isActualCadastralDoc) {
+        if (labelCpf) labelCpf.innerText = "CPF do Responsável (se houver)";
+        if (badgeCpf) badgeCpf.innerText = "cpf";
+        if (inputCpf) inputCpf.placeholder = "000.000.000-00";
         if (labelRg) labelRg.innerText = "Inscrição Estadual / Registro";
         if (inputRg) inputRg.placeholder = "Ex: ISENTO ou Nº de Registro";
       } else {
-        if (labelCpf) labelCpf.innerText = "CPF";
+        if (labelCpf) labelCpf.innerText = dom === 'academico' ? "CPF do Aluno / Titular" : (dom === 'identificacao' ? "CPF do Titular" : "CPF");
         if (badgeCpf) badgeCpf.innerText = "cpf";
         if (inputCpf) inputCpf.placeholder = "000.000.000-00";
         if (labelRg) labelRg.innerText = "RG / Identidade";
         if (inputRg) inputRg.placeholder = "Ex: 2030359 SSP-ES";
+      }
+
+      if (labelDocCnpj) {
+        if (dom === 'academico') {
+          labelDocCnpj.innerText = "CNPJ da Faculdade / Emissor";
+        } else if (isActualCadastralDoc || dom === 'profissional') {
+          labelDocCnpj.innerText = "CNPJ da Empresa / Titular";
+        } else if (dom === 'financeiro') {
+          labelDocCnpj.innerText = "CNPJ do Pagador / Recebedor";
+        } else {
+          labelDocCnpj.innerText = "CNPJ";
+        }
+      }
+
+      if (labelDocEnd) {
+        if (dom === 'academico') {
+          labelDocEnd.innerText = "Cidade / Localidade da Instituição";
+        } else if (isActualCadastralDoc || dom === 'profissional') {
+          labelDocEnd.innerText = "Endereço Cadastral / Comercial";
+        } else if (dom === 'identificacao') {
+          labelDocEnd.innerText = "Endereço Residencial / Domiciliar";
+        } else if (dom === 'juridico') {
+          labelDocEnd.innerText = "Endereço das Partes / Comarca";
+        } else {
+          labelDocEnd.innerText = "Endereço / Localidade";
+        }
       }
     }
 
@@ -4810,7 +4865,7 @@
       if (gEl) gEl.value = val;
       const cpfEl = document.getElementById('input_cpf');
       const selectDom = document.getElementById('select_dominio');
-      if (cpfEl && selectDom && (selectDom.value === 'profissional' || !cpfEl.value || cpfEl.value.includes('/'))) {
+      if (cpfEl && selectDom && selectDom.value === 'profissional') {
         cpfEl.value = val;
       }
     }
@@ -4820,13 +4875,19 @@
       if (cEl) cEl.value = val;
       const cpfEl = document.getElementById('input_cpf');
       const selectDom = document.getElementById('select_dominio');
-      if (cpfEl && selectDom && (selectDom.value === 'profissional' || !cpfEl.value || cpfEl.value.includes('/'))) {
+      if (cpfEl && selectDom && selectDom.value === 'profissional') {
         cpfEl.value = val;
       }
-      const cnpjCard = document.getElementById('cartaoCnpjCard');
-      if (cnpjCard && val && val.trim().length >= 4) {
-        cnpjCard.classList.remove('hidden');
-      }
+    }
+
+    function syncGeneralEndereco(val) {
+      const cEnd = document.getElementById('input_cnpj_endereco');
+      if (cEnd) cEnd.value = val;
+    }
+
+    function syncCardEnderecoToGeneral(val) {
+      const gEnd = document.getElementById('input_doc_endereco');
+      if (gEnd) gEnd.value = val;
     }
 
     function onCpfInput(val) {
@@ -4841,9 +4902,12 @@
     }
 
     function syncRazaoSocialFromCnpjCard(val) {
-      const benEl = document.getElementById('input_beneficiario');
-      if (benEl && (!benEl.value || benEl.value.trim() === '')) {
-        benEl.value = val;
+      const selectDom = document.getElementById('select_dominio');
+      if (selectDom && selectDom.value === 'profissional') {
+        const benEl = document.getElementById('input_beneficiario');
+        if (benEl && (!benEl.value || benEl.value.trim() === '')) {
+          benEl.value = val;
+        }
       }
     }
 
@@ -7054,7 +7118,7 @@
        'input_pix_chave', 'input_pix_e2e_id', 'input_pix_autenticacao',
        'input_doc_cnpj', 'input_cnpj', 'input_cnpj_razao_social', 'input_cnpj_nome_fantasia',
        'input_cnpj_situacao', 'input_cnpj_data_abertura', 'input_cnpj_cnae',
-       'input_cnpj_natureza_juridica', 'input_cnpj_endereco', 'input_cnpj_telefone', 'input_cnpj_email'].forEach(id => {
+       'input_cnpj_natureza_juridica', 'input_cnpj_endereco', 'input_doc_endereco', 'input_cnpj_telefone', 'input_cnpj_email'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
@@ -7064,6 +7128,7 @@
       document.getElementById('input_cpf').value = '';
       document.getElementById('input_rg').value = '';
       document.getElementById('input_doc_cnpj').value = '';
+      document.getElementById('input_doc_endereco').value = '';
       document.getElementById('select_natureza_curso').value = '';
       document.getElementById('input_curso').value = '';
       document.getElementById('input_carga_horaria').value = '';
@@ -7153,13 +7218,15 @@
       const cnpjVal = safeString(doc.cnpj || de.cnpj || (doc.cpf && doc.cpf.includes('/') ? doc.cpf : ''));
       setVal('input_doc_cnpj', cnpjVal);
       setVal('input_cnpj', cnpjVal);
-      setVal('input_cnpj_razao_social', de.razao_social || doc.razao_social || (cnpjVal ? doc.beneficiario : ''));
+      setVal('input_cnpj_razao_social', de.razao_social || doc.razao_social || (docDominio === 'profissional' ? doc.beneficiario : ''));
       setVal('input_cnpj_nome_fantasia', de.nome_fantasia || doc.nome_fantasia);
-      setVal('input_cnpj_situacao', de.situacao_cadastral || doc.situacao_cadastral || (cnpjVal ? 'ATIVA' : ''));
+      setVal('input_cnpj_situacao', de.situacao_cadastral || doc.situacao_cadastral || (docDominio === 'profissional' && cnpjVal ? 'ATIVA' : ''));
       setVal('input_cnpj_data_abertura', de.data_abertura || doc.data_abertura);
       setVal('input_cnpj_cnae', de.cnae_principal || doc.cnae_principal);
       setVal('input_cnpj_natureza_juridica', de.natureza_juridica || doc.natureza_juridica);
-      setVal('input_cnpj_endereco', de.endereco_completo || doc.endereco_completo);
+      const endVal = safeString(de.endereco_completo || doc.endereco_completo || de.endereco || doc.endereco);
+      setVal('input_doc_endereco', endVal);
+      setVal('input_cnpj_endereco', endVal);
       setVal('input_cnpj_telefone', de.telefone || doc.telefone);
       setVal('input_cnpj_email', de.email || doc.email);
       updateCnpjBadge();
@@ -7167,7 +7234,7 @@
       onDominioChange();
 
       document.getElementById('input_beneficiario').value = safeString(doc.beneficiario);
-      document.getElementById('input_cpf').value = safeString(doc.cpf || cnpjVal);
+      document.getElementById('input_cpf').value = safeString(doc.cpf || (docDominio === 'profissional' ? cnpjVal : ''));
       document.getElementById('input_rg').value = safeString(doc.rg);
       
       // Natureza do Curso: seleciona ou insere opção dinamicamente se necessário
@@ -7887,12 +7954,17 @@
       const cnpjDataAbertura = getVal('input_cnpj_data_abertura') || null;
       const cnpjCnae = getVal('input_cnpj_cnae') || null;
       const cnpjNatureza = getVal('input_cnpj_natureza_juridica') || null;
-      const cnpjEndereco = getVal('input_cnpj_endereco') || null;
+      const cnpjEndereco = getVal('input_doc_endereco') || getVal('input_cnpj_endereco') || null;
       const cnpjTelefone = getVal('input_cnpj_telefone') || null;
       const cnpjEmail = getVal('input_cnpj_email') || null;
 
       if (cnpjVal || cnpjRazao || cnpjFantasia || cnpjSituacao || cnpjCnae || cnpjEndereco) {
-        if (cnpjVal) dadosExtras.cnpj = cnpjVal;
+        if (cnpjVal) {
+          dadosExtras.cnpj = cnpjVal;
+          if (dominio === 'academico') {
+            dadosExtras.cnpj_instituicao = cnpjVal;
+          }
+        }
         if (cnpjRazao) dadosExtras.razao_social = cnpjRazao;
         if (cnpjFantasia) dadosExtras.nome_fantasia = cnpjFantasia;
         if (cnpjSituacao) dadosExtras.situacao_cadastral = cnpjSituacao;
@@ -8832,7 +8904,7 @@
         if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
         if (faculdade) items.push({ label: 'Órgão Emissor', val: faculdade });
         if (dataDoc) items.push({ label: 'Data de Emissão', val: dataDoc });
-      } else if (dominio === 'profissional' || (document.getElementById('input_cnpj')?.value || '').trim()) {
+      } else if (dominio === 'profissional' || tipoDoc.toLowerCase().includes('cadastral') || tipoDoc.toLowerCase().includes('cartão cnpj') || tipoDoc.toLowerCase().includes('cartao cnpj')) {
         boxTitle = 'COMPROVANTE DE INSCRIÇÃO E SITUAÇÃO CADASTRAL / PROFISSIONAL';
         themeColor = '#0d9488'; // Teal
         const getVal = (id) => (document.getElementById(id)?.value || '').trim();
@@ -8843,7 +8915,7 @@
         const abertura = getVal('input_cnpj_data_abertura');
         const cnae = getVal('input_cnpj_cnae');
         const naturezaJur = getVal('input_cnpj_natureza_juridica');
-        const endereco = getVal('input_cnpj_endereco');
+        const endereco = getVal('input_doc_endereco') || getVal('input_cnpj_endereco');
         const tel = getVal('input_cnpj_telefone');
         const email = getVal('input_cnpj_email');
 
@@ -8868,7 +8940,11 @@
         if (curso) items.push({ label: 'Curso', val: curso, highlight: true });
         if (natureza) items.push({ label: 'Nível / Natureza', val: natureza });
         if (faculdade) items.push({ label: 'Instituição de Ensino', val: faculdade });
+        const cnpjEmissor = (document.getElementById('input_doc_cnpj')?.value || document.getElementById('input_cnpj')?.value || '').trim();
+        if (cnpjEmissor) items.push({ label: 'CNPJ da Instituição', val: cnpjEmissor, mono: true });
         if (cargaHoraria) items.push({ label: 'Carga Horária', val: cargaHoraria });
+        const endGeral = (document.getElementById('input_doc_endereco')?.value || document.getElementById('input_cnpj_endereco')?.value || '').trim();
+        if (endGeral) items.push({ label: 'Endereço / Localidade', val: endGeral });
         if (dataDoc) items.push({ label: 'Data do Documento', val: dataDoc });
       }
 

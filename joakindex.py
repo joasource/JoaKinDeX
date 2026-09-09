@@ -959,7 +959,12 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
         scores["Livro/Publicação"] = ("academico", 8)
 
     # 3. Domínio: Profissional / Carreira / Cadastral
-    if any(k in t for k in ["comprovante de inscrição e de situação cadastral", "comprovante de inscricao e de situacao cadastral", "cadastro nacional da pessoa jurídica", "cadastro nacional da pessoa juridica", "cartão cnpj", "cartao cnpj"]) or ("receita federal" in t and "cnpj" in t) or ("situação cadastral" in t and "cnpj" in t) or ("situacao cadastral" in t and "cnpj" in t) or ("inscrição" in t and "cnpj" in t and "ministério da fazenda" in t):
+    has_academic_signatures = any(k in t for k in [
+        "diploma", "certificamos que", "concluiu com êxito", "concluiu com exito",
+        "conferimos o presente certificado", "concluiu o curso", "conferiu o grau",
+        "histórico escolar", "historico escolar", "componente curricular", "colação de grau"
+    ])
+    if (any(k in t for k in ["comprovante de inscrição e de situação cadastral", "comprovante de inscricao e de situacao cadastral", "cadastro nacional da pessoa jurídica", "cadastro nacional da pessoa juridica", "cartão cnpj", "cartao cnpj", "cartão do cnpj", "cartao do cnpj"]) or ("situação cadastral" in t and "cnpj" in t) or ("situacao cadastral" in t and "cnpj" in t) or (("receita federal" in t or "ministério da fazenda" in t) and "cnpj" in t and not has_academic_signatures)):
         scores["Cartão CNPJ / Situação Cadastral"] = ("profissional", 10)
     elif any(k in t for k in ["curriculum vitae", "currículo vitae", "curriculo lattes", "currículo lattes", "experiência profissional", "experiencia profissional", "resumo profissional", "histórico profissional", "historico profissional", "trajetória profissional", "trajetoria profissional", "dados profissionais", "formação acadêmica e profissional"]):
         scores["Currículo"] = ("profissional", 9)
@@ -2072,6 +2077,21 @@ def process_single_pdf(
         # Preenchimento e sanitização dos campos gerais
         res_dict["data"] = _clean_str(extracted_data.get("data"))
         res_dict["beneficiario"] = _clean_str(extracted_data.get("beneficiario"))
+        dominio_raw = _clean_str(extracted_data.get("dominio"))
+        tipo_doc_raw = _clean_str(extracted_data.get("tipo_documento"))
+        valor_raw = _clean_str(extracted_data.get("valor_monetario"))
+        tipo_lower = str(tipo_doc_raw or "").lower()
+
+        is_academic_doc = any(k in tipo_lower for k in [
+            "diploma", "certificado", "histórico", "historico", "declaração", "declaracao",
+            "ementa", "dissertação", "dissertacao", "tese", "graduação", "graduacao",
+            "pós-graduação", "pos-graduacao", "especialização", "especializacao"
+        ]) or (dominio_raw == "academico")
+
+        is_actual_cadastral_doc = any(k in tipo_lower for k in [
+            "situação cadastral", "situacao cadastral", "cartão cnpj", "cartao cnpj", "cartão do cnpj", "cartao do cnpj",
+            "cadastro nacional da pessoa"
+        ]) or (dominio_raw == "profissional" and ("cnpj" in tipo_lower or "cadastral" in tipo_lower))
 
         # Tratamento e fallback para CPF
         cpf_val = extracted_data.get("cpf")
@@ -2119,7 +2139,7 @@ def process_single_pdf(
                 if tess_text:
                     formatted_cnpj = extract_cnpj_fallback(tess_text)
         res_dict["cnpj"] = formatted_cnpj
-        if formatted_cnpj and not res_dict.get("cpf"):
+        if formatted_cnpj and not res_dict.get("cpf") and is_actual_cadastral_doc:
             res_dict["cpf"] = formatted_cnpj
 
         # Extração de campos cadastrais (Cartão CNPJ / Receita Federal)
@@ -2142,30 +2162,32 @@ def process_single_pdf(
             "email": _clean_str(extracted_data.get("email")) or cadastral_fallback.get("email"),
         }
 
-        # Se houver dados de CNPJ ou dados cadastrais, consolida em dados_extras
+        # Se houver dados de CNPJ ou dados cadastrais/endereço, consolida em dados_extras
         if formatted_cnpj or any(cnpj_fields.values()):
             if "dados_extras" not in res_dict or not isinstance(res_dict["dados_extras"], dict):
                 res_dict["dados_extras"] = {}
             if formatted_cnpj:
                 res_dict["dados_extras"]["cnpj"] = formatted_cnpj
+                if is_academic_doc:
+                    res_dict["dados_extras"]["cnpj_instituicao"] = formatted_cnpj
             for k_field, v_field in cnpj_fields.items():
                 if v_field:
                     res_dict["dados_extras"][k_field] = v_field
                     res_dict[k_field] = v_field
 
-            # Preenchimento inteligente de beneficiário com razão social se vazio
-            if not res_dict.get("beneficiario"):
+            # Preenchimento inteligente de beneficiário com razão social se vazio (apenas para documentos empresariais/cadastrais)
+            if not res_dict.get("beneficiario") and not is_academic_doc:
                 if cnpj_fields.get("razao_social"):
                     res_dict["beneficiario"] = cnpj_fields["razao_social"]
                 elif cnpj_fields.get("nome_fantasia"):
                     res_dict["beneficiario"] = cnpj_fields["nome_fantasia"]
 
-            # Emissor Receita Federal se não informado
-            if not res_dict.get("faculdade") and (formatted_cnpj or "cnpj" in str(tipo_doc_raw or "").lower() or "cadastral" in str(tipo_doc_raw or "").lower()):
+            # Emissor Receita Federal se não informado (estritamente se for documento cadastral da RFB)
+            if not res_dict.get("faculdade") and is_actual_cadastral_doc:
                 res_dict["faculdade"] = "Receita Federal do Brasil (RFB)"
 
             # Data da situação cadastral ou abertura se data vazia
-            if not res_dict.get("data"):
+            if not res_dict.get("data") and is_actual_cadastral_doc:
                 if cnpj_fields.get("data_situacao"):
                     res_dict["data"] = cnpj_fields["data_situacao"]
                 elif cnpj_fields.get("data_abertura"):
@@ -2245,9 +2267,11 @@ def process_single_pdf(
                 tipo_doc_raw = "Comprovante PIX" if ("pix" in tipo_lower or pix_e2e_id or pix_chave) else "Recibo de Pagamento"
             if not res_dict.get("faculdade") and pix_pagador_banco:
                 res_dict["faculdade"] = pix_pagador_banco
-        elif any(k in tipo_lower for k in ["situação cadastral", "situacao cadastral", "cnpj", "currículo", "curriculo", "experiência profissional", "experiencia profissional", "lattes", "ctps", "carteira de trabalho"]) or formatted_cnpj:
+        elif is_academic_doc:
+            dominio = "academico"
+        elif is_actual_cadastral_doc or any(k in tipo_lower for k in ["currículo", "curriculo", "experiência profissional", "experiencia profissional", "lattes", "ctps", "carteira de trabalho"]):
             dominio = "profissional"
-            if formatted_cnpj and (not tipo_doc_raw or tipo_lower in ["não identificado", "nao identificado", "outro", "não informado", "nao informado"]):
+            if not tipo_doc_raw or tipo_lower in ["não identificado", "nao identificado", "outro", "não informado", "nao informado"]:
                 tipo_doc_raw = "Cartão CNPJ / Situação Cadastral"
         elif any(k in tipo_lower for k in ["rg", "cnh", "identidade", "cpf", "certidão", "certidao", "eleitor", "passaporte"]):
             dominio = "identificacao"
