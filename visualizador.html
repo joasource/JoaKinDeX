@@ -26,6 +26,25 @@
       }
     }
   </script>
+  <!-- Script imediato para evitar Flash of Unstyled Content (FOUC) de tema -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('joakindex_theme') || 'system';
+        var isDark = saved === 'dark' || (saved === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var html = document.documentElement;
+        if (isDark) {
+          html.classList.add('theme-dark', 'dark');
+          html.classList.remove('theme-light', 'light');
+          html.setAttribute('data-theme', 'dark');
+        } else {
+          html.classList.add('theme-light', 'light');
+          html.classList.remove('theme-dark', 'dark');
+          html.setAttribute('data-theme', 'light');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <style>
     /* Custom scrollbars */
     ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -41,6 +60,316 @@
       #viewBI { display: block !important; height: auto !important; overflow: visible !important; padding: 0 !important; background: #ffffff !important; color: #000000 !important; }
       .bi-card { border: 1px solid #cbd5e1 !important; background: #ffffff !important; color: #0f172a !important; break-inside: avoid; box-shadow: none !important; }
       .bi-table-text { color: #0f172a !important; }
+    }
+
+    /* =========================================================
+       TEMA CLARO (LIGHT THEME) - POLIMENTO COMPLETO JOAKINDEX
+       ========================================================= */
+    html.theme-light {
+      color-scheme: light;
+    }
+
+    html.theme-light, 
+    html.theme-light body {
+      background-color: #f8fafc !important; /* slate-50 */
+      color: #0f172a !important;            /* slate-900 */
+    }
+
+    /* Scrollbars no tema claro */
+    html.theme-light ::-webkit-scrollbar-track { background: #f1f5f9; }
+    html.theme-light ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    html.theme-light ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Superfícies principais (slate-950 -> branco puro) */
+    html.theme-light .bg-slate-950,
+    html.theme-light .bg-slate-950\/95,
+    html.theme-light .bg-slate-950\/90,
+    html.theme-light .bg-slate-950\/80,
+    html.theme-light .bg-slate-950\/70,
+    html.theme-light .bg-slate-950\/60,
+    html.theme-light .bg-slate-950\/50,
+    html.theme-light .bg-slate-950\/40 {
+      background-color: #ffffff !important;
+    }
+
+    /* Superfícies secundárias (slate-900 -> slate-50 ou branco suave) */
+    html.theme-light .bg-slate-900,
+    html.theme-light .bg-slate-900\/95,
+    html.theme-light .bg-slate-900\/90,
+    html.theme-light .bg-slate-900\/80,
+    html.theme-light .bg-slate-900\/70,
+    html.theme-light .bg-slate-900\/60,
+    html.theme-light .bg-slate-900\/50,
+    html.theme-light .bg-slate-900\/40 {
+      background-color: #f8fafc !important;
+    }
+
+    /* Superfícies de cards e elementos (slate-800 -> slate-100) */
+    html.theme-light .bg-slate-800,
+    html.theme-light .bg-slate-800\/95,
+    html.theme-light .bg-slate-800\/90,
+    html.theme-light .bg-slate-800\/80,
+    html.theme-light .bg-slate-800\/70,
+    html.theme-light .bg-slate-800\/60,
+    html.theme-light .bg-slate-800\/50,
+    html.theme-light .bg-slate-800\/40 {
+      background-color: #f1f5f9 !important;
+    }
+
+    html.theme-light .bg-slate-700 {
+      background-color: #e2e8f0 !important;
+    }
+
+    /* Bordas no tema claro */
+    html.theme-light .border-slate-950,
+    html.theme-light .border-slate-900,
+    html.theme-light .border-slate-800,
+    html.theme-light .border-slate-800\/90,
+    html.theme-light .border-slate-800\/80,
+    html.theme-light .border-slate-800\/70,
+    html.theme-light .border-slate-800\/60,
+    html.theme-light .border-slate-800\/50 {
+      border-color: #e2e8f0 !important; /* slate-200 */
+    }
+
+    html.theme-light .border-slate-700,
+    html.theme-light .border-slate-700\/90,
+    html.theme-light .border-slate-700\/80,
+    html.theme-light .border-slate-700\/60,
+    html.theme-light .border-slate-600 {
+      border-color: #cbd5e1 !important; /* slate-300 */
+    }
+
+    html.theme-light .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+    html.theme-light .divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+      border-color: #e2e8f0 !important;
+    }
+
+    /* Cores de texto no tema claro */
+    html.theme-light .text-slate-100 { color: #0f172a !important; }
+    html.theme-light .text-slate-200 { color: #1e293b !important; }
+    html.theme-light .text-slate-300 { color: #334155 !important; }
+    html.theme-light .text-slate-400 { color: #64748b !important; }
+    html.theme-light .text-slate-500 { color: #64748b !important; }
+    html.theme-light .text-slate-600 { color: #94a3b8 !important; }
+
+    /* Títulos e cabeçalhos em branco convertidos para preto/grafite elegante */
+    html.theme-light h1,
+    html.theme-light h2,
+    html.theme-light h3,
+    html.theme-light h4,
+    html.theme-light h1.text-white,
+    html.theme-light h2.text-white,
+    html.theme-light h3.text-white,
+    html.theme-light #pdfMd5Title,
+    html.theme-light #kpiTotalDocs,
+    html.theme-light #folderPickerTitle,
+    html.theme-light #batchLiveStatusTitle,
+    html.theme-light .font-semibold.text-slate-100 {
+      color: #0f172a !important;
+    }
+
+    /* Efeitos de Hover no tema claro */
+    html.theme-light .hover\:bg-slate-800:hover,
+    html.theme-light .hover\:bg-slate-800\/80:hover,
+    html.theme-light .hover\:bg-slate-800\/60:hover,
+    html.theme-light .hover\:bg-slate-800\/50:hover {
+      background-color: #e2e8f0 !important;
+    }
+
+    html.theme-light .hover\:bg-slate-700:hover {
+      background-color: #cbd5e1 !important;
+    }
+
+    html.theme-light .hover\:bg-slate-900:hover {
+      background-color: #f1f5f9 !important;
+    }
+
+    html.theme-light .hover\:text-slate-200:hover,
+    html.theme-light .hover\:text-slate-100:hover,
+    html.theme-light .hover\:text-white:hover {
+      color: #0f172a !important;
+    }
+
+    /* Preserva texto branco em botões de ação com fundo sólido colorido */
+    html.theme-light .bg-emerald-600,
+    html.theme-light .bg-emerald-500,
+    html.theme-light .bg-teal-600,
+    html.theme-light .bg-cyan-600,
+    html.theme-light .bg-indigo-600,
+    html.theme-light .bg-rose-600,
+    html.theme-light .bg-blue-600,
+    html.theme-light .bg-purple-600,
+    html.theme-light button.bg-emerald-600 *,
+    html.theme-light button.bg-indigo-600 *,
+    html.theme-light button.bg-rose-600 * {
+      color: #ffffff !important;
+    }
+
+    /* Inputs, selects e textareas no tema claro */
+    html.theme-light input[type="text"],
+    html.theme-light input[type="password"],
+    html.theme-light input[type="number"],
+    html.theme-light select,
+    html.theme-light textarea {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+
+    html.theme-light input[type="text"]::placeholder,
+    html.theme-light textarea::placeholder {
+      color: #94a3b8 !important;
+    }
+
+    html.theme-light input[type="text"]:focus,
+    html.theme-light input[type="password"]:focus,
+    html.theme-light input[type="number"]:focus,
+    html.theme-light select:focus,
+    html.theme-light textarea:focus {
+      border-color: #10b981 !important;
+      box-shadow: 0 0 0 1px #10b981 !important;
+    }
+
+    /* Quick Views ativas e pílulas no tema claro */
+    html.theme-light #qv-todos.bg-emerald-500\/20,
+    html.theme-light button[id^="qv-"].bg-emerald-500\/20 {
+      background-color: #d1fae5 !important;
+      color: #065f46 !important;
+      border-color: #6ee7b7 !important;
+    }
+
+    html.theme-light #pillDominio.bg-cyan-500\/20 {
+      background-color: #cffafe !important;
+      color: #155e75 !important;
+      border-color: #67e8f9 !important;
+    }
+    html.theme-light #pillInstituicao.bg-amber-500\/20 {
+      background-color: #fef3c7 !important;
+      color: #78350f !important;
+      border-color: #fcd34d !important;
+    }
+    html.theme-light #pillTipo.bg-teal-500\/20 {
+      background-color: #ccfbf1 !important;
+      color: #115e59 !important;
+      border-color: #5eead4 !important;
+    }
+    html.theme-light #pillNatureza.bg-indigo-500\/20 {
+      background-color: #e0e7ff !important;
+      color: #3730a3 !important;
+      border-color: #a5b4fc !important;
+    }
+    html.theme-light #pillStatus.bg-emerald-500\/20 {
+      background-color: #d1fae5 !important;
+      color: #065f46 !important;
+      border-color: #6ee7b7 !important;
+    }
+
+    /* Badges de Status e Tipos em tema claro */
+    html.theme-light .bg-emerald-500\/10 {
+      background-color: #ecfdf5 !important;
+      color: #047857 !important;
+      border-color: #a7f3d0 !important;
+    }
+    html.theme-light .bg-amber-500\/10 {
+      background-color: #fffbeb !important;
+      color: #b45309 !important;
+      border-color: #fde68a !important;
+    }
+    html.theme-light .bg-rose-500\/10 {
+      background-color: #fff1f2 !important;
+      color: #be123c !important;
+      border-color: #fecdd3 !important;
+    }
+    html.theme-light .bg-cyan-500\/10 {
+      background-color: #ecfeff !important;
+      color: #0e7490 !important;
+      border-color: #a5f3fc !important;
+    }
+    html.theme-light .bg-purple-500\/10 {
+      background-color: #faf5ff !important;
+      color: #7e22ce !important;
+      border-color: #e9d5ff !important;
+    }
+    html.theme-light .bg-sky-500\/10 {
+      background-color: #f0f9ff !important;
+      color: #0369a1 !important;
+      border-color: #bae6fd !important;
+    }
+
+    /* Popovers, Menus e Dropdowns */
+    html.theme-light #themeDropdownMenu,
+    html.theme-light #popoverDominio,
+    html.theme-light #popoverInstituicao,
+    html.theme-light #popoverTipo,
+    html.theme-light #popoverNatureza,
+    html.theme-light #popoverStatus {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* Cards de Documento na Sidebar */
+    html.theme-light #docList > div {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+    }
+    html.theme-light #docList > div:hover {
+      background-color: #f8fafc !important;
+      border-color: #cbd5e1 !important;
+    }
+    html.theme-light #docList > div.bg-slate-800\/95 {
+      background-color: #f0fdf4 !important; /* emerald-50 */
+      border-color: #34d399 !important;     /* emerald-400 */
+      box-shadow: 0 2px 4px rgba(16, 185, 129, 0.12) !important;
+    }
+    html.theme-light #docList > div.bg-emerald-950\/25 {
+      background-color: #ecfdf5 !important;
+      border-color: #10b981 !important;
+    }
+
+    /* Pre de Texto OCR e JSON */
+    html.theme-light #docTextRawPre,
+    html.theme-light #jsonViewer {
+      background-color: #f8fafc !important;
+      border-color: #e2e8f0 !important;
+      color: #1e293b !important;
+    }
+
+    /* BI Dashboard */
+    html.theme-light .bi-card {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+    html.theme-light #viewBI {
+      background-color: #f8fafc !important;
+    }
+    html.theme-light #viewBI table {
+      background-color: #ffffff !important;
+    }
+    html.theme-light #viewBI th {
+      background-color: #f1f5f9 !important;
+      color: #0f172a !important;
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light #viewBI td {
+      border-color: #e2e8f0 !important;
+      color: #334155 !important;
+    }
+    html.theme-light #viewBI tr:hover td {
+      background-color: #f8fafc !important;
+    }
+
+    /* Modais */
+    html.theme-light #configModal > div:last-child,
+    html.theme-light #folderPickerModal > div:last-child,
+    html.theme-light #modalBulkTag > div:last-child,
+    html.theme-light #modalCustomTag > div:last-child {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
     }
   </style>
 </head>
@@ -100,6 +429,44 @@
           <i class="fa-solid fa-spinner fa-spin text-amber-400"></i>
           <span id="batchHeaderBadgeText">Lote: 0%</span>
         </button>
+
+        <!-- SELETOR DE TEMA (CLARO / ESCURO / SISTEMA) -->
+        <div class="relative" id="themeDropdownContainer">
+          <button type="button" onclick="toggleThemeDropdown(event)" id="themeDropdownBtn" title="Alterar Tema: Claro, Escuro ou Sistema"
+                  class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
+            <i id="themeCurrentIcon" class="fa-solid fa-circle-half-stroke text-sky-400 text-xs"></i>
+            <span id="themeCurrentLabel" class="hidden sm:inline text-[11px]">Sistema</span>
+            <i class="fa-solid fa-chevron-down text-[9px] text-slate-400 ml-0.5"></i>
+          </button>
+          
+          <div id="themeDropdownMenu" class="hidden absolute right-0 mt-1.5 w-48 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl p-1.5 z-50 text-xs space-y-0.5 select-none">
+            <div class="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800/80 mb-1 flex items-center justify-between">
+              <span>Tema Visual</span>
+              <i class="fa-solid fa-palette text-cyan-400"></i>
+            </div>
+            <button type="button" onclick="setTheme('light')" id="themeItem-light" class="w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition">
+              <span class="flex items-center gap-2">
+                <i class="fa-solid fa-sun text-amber-400 text-xs w-4 text-center"></i>
+                <span>Claro</span>
+              </span>
+              <i class="fa-solid fa-check text-emerald-400 text-xs theme-check hidden"></i>
+            </button>
+            <button type="button" onclick="setTheme('dark')" id="themeItem-dark" class="w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition">
+              <span class="flex items-center gap-2">
+                <i class="fa-solid fa-moon text-indigo-400 text-xs w-4 text-center"></i>
+                <span>Escuro</span>
+              </span>
+              <i class="fa-solid fa-check text-emerald-400 text-xs theme-check hidden"></i>
+            </button>
+            <button type="button" onclick="setTheme('system')" id="themeItem-system" class="w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition">
+              <span class="flex items-center gap-2">
+                <i class="fa-solid fa-circle-half-stroke text-sky-400 text-xs w-4 text-center"></i>
+                <span>Sistema</span>
+              </span>
+              <i class="fa-solid fa-check text-emerald-400 text-xs theme-check hidden"></i>
+            </button>
+          </div>
+        </div>
 
         <!-- Botão Painel de Configurações & Lote -->
         <button onclick="openConfigModal()" title="Configurações & Processamento em Lote"
@@ -1764,6 +2131,28 @@
                 <i class="fa-solid fa-arrows-rotate text-emerald-400"></i> Verificar Pastas
               </button>
             </div>
+
+            <!-- Aparência & Tema Visual -->
+            <div class="pt-3 border-t border-slate-800 space-y-2">
+              <label class="block text-[11px] font-medium text-slate-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-palette text-cyan-400"></i> Tema Visual do JoaKinDeX:
+              </label>
+              <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" onclick="setTheme('light')" id="cfgThemeBtn-light"
+                        class="px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800">
+                  <i class="fa-solid fa-sun text-amber-400"></i> Claro
+                </button>
+                <button type="button" onclick="setTheme('dark')" id="cfgThemeBtn-dark"
+                        class="px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800">
+                  <i class="fa-solid fa-moon text-indigo-400"></i> Escuro
+                </button>
+                <button type="button" onclick="setTheme('system')" id="cfgThemeBtn-system"
+                        class="px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800">
+                  <i class="fa-solid fa-circle-half-stroke text-sky-400"></i> Sistema (Automático)
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-400">Escolha entre Claro, Escuro ou deixe em modo Sistema para seguir as cores do seu sistema operacional.</p>
+            </div>
           </div>
         </div>
 
@@ -2277,18 +2666,151 @@
       openFilterPopoverId = null;
     }
 
-    // Fecha popovers ao clicar fora da barra de filtros ou ao pressionar Escape
+    // =========================================================================
+    // GERENCIAMENTO DE TEMA (CLARO / ESCURO / SISTEMA)
+    // =========================================================================
+    let currentThemeSetting = localStorage.getItem('joakindex_theme') || 'system';
+
+    function getSystemTheme() {
+      return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    }
+
+    function getEffectiveTheme(setting = currentThemeSetting) {
+      if (setting === 'system') return getSystemTheme();
+      return setting === 'light' ? 'light' : 'dark';
+    }
+
+    function setTheme(setting, save = true) {
+      if (!['light', 'dark', 'system'].includes(setting)) setting = 'system';
+      currentThemeSetting = setting;
+      if (save) {
+        try {
+          localStorage.setItem('joakindex_theme', setting);
+        } catch (e) {
+          console.warn('Erro ao salvar tema no localStorage:', e);
+        }
+      }
+
+      const effective = getEffectiveTheme(setting);
+      const html = document.documentElement;
+
+      if (effective === 'light') {
+        html.classList.add('theme-light', 'light');
+        html.classList.remove('theme-dark', 'dark');
+        html.setAttribute('data-theme', 'light');
+      } else {
+        html.classList.add('theme-dark', 'dark');
+        html.classList.remove('theme-light', 'light');
+        html.setAttribute('data-theme', 'dark');
+      }
+
+      updateThemeUI();
+      closeThemeDropdown();
+
+      // Se o painel de BI estiver ativo, re-renderiza gráficos para ajustar paletas
+      if (typeof currentMainTab !== 'undefined' && currentMainTab === 'bi') {
+        renderBIDashboard();
+      }
+    }
+
+    function updateThemeUI() {
+      const iconEl = document.getElementById('themeCurrentIcon');
+      const labelEl = document.getElementById('themeCurrentLabel');
+      const effective = getEffectiveTheme(currentThemeSetting);
+
+      if (iconEl && labelEl) {
+        if (currentThemeSetting === 'light') {
+          iconEl.className = 'fa-solid fa-sun text-amber-400 text-xs';
+          labelEl.innerText = 'Claro';
+        } else if (currentThemeSetting === 'dark') {
+          iconEl.className = 'fa-solid fa-moon text-indigo-400 text-xs';
+          labelEl.innerText = 'Escuro';
+        } else {
+          iconEl.className = 'fa-solid fa-circle-half-stroke text-sky-400 text-xs';
+          labelEl.innerText = `Sistema (${effective === 'dark' ? 'Escuro' : 'Claro'})`;
+        }
+      }
+
+      // Sincroniza itens do menu dropdown no header
+      ['light', 'dark', 'system'].forEach(opt => {
+        const item = document.getElementById(`themeItem-${opt}`);
+        if (item) {
+          const check = item.querySelector('.theme-check');
+          if (opt === currentThemeSetting) {
+            item.classList.add('bg-emerald-500/10', 'text-emerald-400', 'font-semibold');
+            if (check) check.classList.remove('hidden');
+          } else {
+            item.classList.remove('bg-emerald-500/10', 'text-emerald-400', 'font-semibold');
+            if (check) check.classList.add('hidden');
+          }
+        }
+
+        // Sincroniza botões de tema no modal de configurações
+        const cfgBtn = document.getElementById(`cfgThemeBtn-${opt}`);
+        if (cfgBtn) {
+          if (opt === currentThemeSetting) {
+            cfgBtn.className = 'px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition bg-emerald-600 text-white border-emerald-500 shadow-sm';
+          } else {
+            cfgBtn.className = 'px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700';
+          }
+        }
+      });
+    }
+
+    function toggleThemeDropdown(event) {
+      if (event) event.stopPropagation();
+      const menu = document.getElementById('themeDropdownMenu');
+      if (!menu) return;
+      const isHidden = menu.classList.contains('hidden');
+      closeAllFilterPopovers();
+      if (isHidden) {
+        menu.classList.remove('hidden');
+      } else {
+        menu.classList.add('hidden');
+      }
+    }
+
+    function closeThemeDropdown() {
+      const menu = document.getElementById('themeDropdownMenu');
+      if (menu && !menu.classList.contains('hidden')) {
+        menu.classList.add('hidden');
+      }
+    }
+
+    function initTheme() {
+      currentThemeSetting = localStorage.getItem('joakindex_theme') || 'system';
+      setTheme(currentThemeSetting, false);
+
+      // Ouvinte para mudanças em tempo real no SO quando em modo "sistema"
+      if (window.matchMedia) {
+        try {
+          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            if (currentThemeSetting === 'system') {
+              setTheme('system', false);
+            }
+          });
+        } catch (e) {}
+      }
+    }
+
+    // Fecha popovers e dropdowns ao clicar fora ou ao pressionar Escape
     document.addEventListener('click', (e) => {
-      if (!openFilterPopoverId) return;
-      const bar = document.getElementById('filterPopoversBar');
-      if (bar && !bar.contains(e.target)) {
-        closeAllFilterPopovers();
+      if (openFilterPopoverId) {
+        const bar = document.getElementById('filterPopoversBar');
+        if (bar && !bar.contains(e.target)) {
+          closeAllFilterPopovers();
+        }
+      }
+      const themeContainer = document.getElementById('themeDropdownContainer');
+      if (themeContainer && !themeContainer.contains(e.target)) {
+        closeThemeDropdown();
       }
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && openFilterPopoverId) {
-        closeAllFilterPopovers();
+      if (e.key === 'Escape') {
+        if (openFilterPopoverId) closeAllFilterPopovers();
+        closeThemeDropdown();
       }
     });
 
@@ -3538,6 +4060,7 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      initTheme();
       loadAccordionsState();
       applyAccordionsState();
       updateThumbnailToggleUI();
@@ -7728,6 +8251,7 @@
     }
 
     function renderBIDashboard() {
+      updateChartThemeConfig();
       const allDocs = documents || [];
       const totalAcervo = allDocs.length;
       const unprocDocs = allDocs.filter(d => isDocumentUnprocessed(d));
@@ -7837,7 +8361,27 @@
       renderMatrixTable(targetDocs, targetTotal);
     }
 
-    // Configurações e temas escuros padrão para Chart.js
+    // Configurações e temas para Chart.js adaptados dinamicamente ao tema Claro/Escuro
+    function isLightThemeActive() {
+      return document.documentElement.classList.contains('theme-light');
+    }
+
+    function getBiChartBorderColor() {
+      return isLightThemeActive() ? '#ffffff' : '#0f172a';
+    }
+
+    function getBiGridColor() {
+      return isLightThemeActive() ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.06)';
+    }
+
+    function getBiTickColor() {
+      return isLightThemeActive() ? '#475569' : '#94a3b8';
+    }
+
+    function getBiLabelColor() {
+      return isLightThemeActive() ? '#1e293b' : '#cbd5e1';
+    }
+
     const biChartDarkOptions = {
       responsive: true,
       maintainAspectRatio: false,
@@ -7862,6 +8406,15 @@
         }
       }
     };
+
+    function updateChartThemeConfig() {
+      const isLight = isLightThemeActive();
+      biChartDarkOptions.plugins.legend.labels.color = isLight ? '#334155' : '#cbd5e1';
+      biChartDarkOptions.plugins.tooltip.backgroundColor = isLight ? 'rgba(255, 255, 255, 0.98)' : 'rgba(15, 23, 42, 0.95)';
+      biChartDarkOptions.plugins.tooltip.borderColor = isLight ? 'rgba(203, 213, 225, 0.9)' : 'rgba(51, 65, 85, 0.8)';
+      biChartDarkOptions.plugins.tooltip.titleColor = isLight ? '#0f172a' : '#f8fafc';
+      biChartDarkOptions.plugins.tooltip.bodyColor = isLight ? '#334155' : '#cbd5e1';
+    }
 
     function renderChartNatureza(docs, total) {
       const counts = {
@@ -7931,7 +8484,7 @@
             datasets: [{
               data: dataPoints,
               backgroundColor: categories.map(c => c.color),
-              borderColor: '#0f172a',
+              borderColor: getBiChartBorderColor(),
               borderWidth: 2,
               hoverOffset: 4
             }]
@@ -8034,7 +8587,7 @@
             datasets: [{
               data: dataPoints,
               backgroundColor: categories.map(c => c.color),
-              borderColor: '#0f172a',
+              borderColor: getBiChartBorderColor(),
               borderWidth: 2,
               hoverOffset: 4
             }]
@@ -8110,12 +8663,12 @@
             },
             scales: {
               x: {
-                grid: { color: 'rgba(255, 255, 255, 0.06)', drawBorder: false },
-                ticks: { color: '#94a3b8', font: { size: 10 } }
+                grid: { color: getBiGridColor(), drawBorder: false },
+                ticks: { color: getBiTickColor(), font: { size: 10 } }
               },
               y: {
                 grid: { display: false },
-                ticks: { color: '#cbd5e1', font: { size: 10.5 } }
+                ticks: { color: getBiLabelColor(), font: { size: 10.5 } }
               }
             },
             plugins: {
@@ -8194,11 +8747,11 @@
             scales: {
               x: {
                 grid: { display: false },
-                ticks: { color: '#cbd5e1', font: { size: 9.5 } }
+                ticks: { color: getBiLabelColor(), font: { size: 9.5 } }
               },
               y: {
-                grid: { color: 'rgba(255, 255, 255, 0.06)', drawBorder: false },
-                ticks: { color: '#94a3b8', font: { size: 10 } }
+                grid: { color: getBiGridColor(), drawBorder: false },
+                ticks: { color: getBiTickColor(), font: { size: 10 } }
               }
             },
             plugins: {
@@ -8257,12 +8810,12 @@
             ...biChartDarkOptions,
             scales: {
               x: {
-                grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
-                ticks: { color: '#94a3b8', font: { size: 10 } }
+                grid: { color: getBiGridColor(), drawBorder: false },
+                ticks: { color: getBiTickColor(), font: { size: 10 } }
               },
               y: {
-                grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
-                ticks: { color: '#94a3b8', font: { size: 10 } }
+                grid: { color: getBiGridColor(), drawBorder: false },
+                ticks: { color: getBiTickColor(), font: { size: 10 } }
               }
             },
             plugins: {
@@ -8323,16 +8876,16 @@
               x: {
                 min: 0,
                 max: 100,
-                grid: { color: 'rgba(255, 255, 255, 0.06)', drawBorder: false },
+                grid: { color: getBiGridColor(), drawBorder: false },
                 ticks: {
-                  color: '#94a3b8',
+                  color: getBiTickColor(),
                   font: { size: 10 },
                   callback: val => `${val}%`
                 }
               },
               y: {
                 grid: { display: false },
-                ticks: { color: '#cbd5e1', font: { size: 10.5 } }
+                ticks: { color: getBiLabelColor(), font: { size: 10.5 } }
               }
             },
             plugins: {
