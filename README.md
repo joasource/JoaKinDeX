@@ -1,12 +1,13 @@
 # JoaKinDeX
 
 <p align="center">
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://www.sqlite.org/"><img src="https://img.shields.io/badge/Database-SQLite%20WAL-003B57.svg?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite WAL"></a>
-  <a href="https://dublincore.org/"><img src="https://img.shields.io/badge/Standard-Dublin%20Core%20%26%20XMP-6366F1.svg?style=for-the-badge" alt="Dublin Core"></a>
-  <a href="https://ollama.com/"><img src="https://img.shields.io/badge/LLM-Ollama%20%7C%20OpenAI-FF6F00.svg?style=for-the-badge" alt="Ollama / OpenAI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-10B981.svg?style=for-the-badge" alt="MIT License"></a>
-  <a href="https://github.com/joasource/JoaKinDeX"><img src="https://img.shields.io/badge/GitHub-joasource-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
+  <a href="https://github.com/joasource/JoaKinDeX/actions/workflows/ci.yml"><img src="https://github.com/joasource/JoaKinDeX/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB.svg?style=flat&logo=python&logoColor=white" alt="Python 3.10+"></a>
+  <a href="https://www.sqlite.org/"><img src="https://img.shields.io/badge/Database-SQLite%20WAL-003B57.svg?style=flat&logo=sqlite&logoColor=white" alt="SQLite WAL"></a>
+  <a href="https://dublincore.org/"><img src="https://img.shields.io/badge/Standard-Dublin%20Core%20%26%20XMP-6366F1.svg?style=flat" alt="Dublin Core"></a>
+  <a href="https://ollama.com/"><img src="https://img.shields.io/badge/LLM-Ollama%20%7C%20OpenAI-FF6F00.svg?style=flat" alt="Ollama / OpenAI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-10B981.svg?style=flat" alt="MIT License"></a>
+  <a href="https://github.com/joasource/JoaKinDeX"><img src="https://img.shields.io/badge/GitHub-joasource-181717?style=flat&logo=github" alt="GitHub"></a>
 </p>
 
 <p align="center">

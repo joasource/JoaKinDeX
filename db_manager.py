@@ -280,6 +280,14 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
     dc_title = item.get("dc_title")
     dc_subject = item.get("dc_subject")
     dc_creator_tool = item.get("dc_creator_tool")
+    if isinstance(item.get("dublin_core"), dict):
+        dc_dict = item["dublin_core"]
+        if not dc_title:
+            dc_title = dc_dict.get("title")
+        if not dc_subject:
+            dc_subject = dc_dict.get("subject")
+        if not dc_creator_tool:
+            dc_creator_tool = dc_dict.get("creator_tool")
 
     # Campos extras não mapeados nas colunas fixas são serializados em JSON
     extras = {}
