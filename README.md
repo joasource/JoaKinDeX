@@ -1,62 +1,57 @@
 # JoaKinDeX
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Ollama](https://img.shields.io/badge/LLM-Ollama%20%7C%20OpenAI-orange.svg)](https://ollama.com/)
-[![GitHub](https://img.shields.io/badge/GitHub-joasource-181717?logo=github)](https://github.com/joasource/JoaKinDeX)
-[![Autor](https://img.shields.io/badge/Autor-Joaquim%20Ferreira%20Silva%20Neto-blue?logo=gmail&logoColor=white)](mailto:joaquimfsneto@gmail.com)
+<p align="center">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
+  <a href="https://www.sqlite.org/"><img src="https://img.shields.io/badge/Database-SQLite%20WAL-003B57.svg?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite WAL"></a>
+  <a href="https://dublincore.org/"><img src="https://img.shields.io/badge/Standard-Dublin%20Core%20%26%20XMP-6366F1.svg?style=for-the-badge" alt="Dublin Core"></a>
+  <a href="https://ollama.com/"><img src="https://img.shields.io/badge/LLM-Ollama%20%7C%20OpenAI-FF6F00.svg?style=for-the-badge" alt="Ollama / OpenAI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-10B981.svg?style=for-the-badge" alt="MIT License"></a>
+  <a href="https://github.com/joasource/JoaKinDeX"><img src="https://img.shields.io/badge/GitHub-joasource-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
+</p>
 
-**JoaKinDeX** é uma ferramenta de linha de comando (CLI) e interface web para **classificação, indexação e extração estruturada de diplomas, certificados e documentos acadêmicos em massa**, utilizando modelos locais (**Ollama**) ou em nuvem (**OpenAI API**).
+<p align="center">
+  <b>Central Universal de Indexação, Extração Multidomínio, Metadados Forenses e Conferência Documental em Massa</b>
+</p>
+
+<p align="center">
+  <img src="docs/assets/interface_preview.png" alt="JoaKinDeX - Central Web de Conferência Humana e Indexação Documental" width="900" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.3);">
+</p>
 
 > **Criado e desenvolvido por:** **Joaquim Ferreira Silva Neto** ([joaquimfsneto@gmail.com](mailto:joaquimfsneto@gmail.com)).
 
-O projeto é focado em privacidade, conformidade e auditoria: identifica os arquivos pelo **Hash MD5** e metadados de sistema, extrai o **CPF do beneficiário**, determina a **natureza acadêmica do curso**, detecta **múltiplos documentos em um mesmo arquivo (dossiê)** e inclui uma interface web interativa com tela dividida (*split-screen*) para **conferência humana lado a lado** com o PDF original.
+**JoaKinDeX** é uma suíte completa em Python composta por uma CLI de alto rendimento (`./joakindex`) e uma Central Web interativa (`./joakindex server`). Projetada para auditar, classificar e extrair dados de grandes acervos documentais multiformato (**PDF, Word DOCX/DOC, ODT, RTF e Imagens**), integrando modelos locais via **Ollama** ou em nuvem via **OpenAI API**, banco relacional embutido com **SQLite WAL mode** e metadados forenses padronizados pelo consórcio **Dublin Core & Adobe XMP**.
 
 ---
 
 ## ✨ Principais Funcionalidades
 
-- **Processamento em Lote**: Processa dezenas ou centenas de documentos PDF com barra de progresso em tempo real (`tqdm`).
-- **Foco em Privacidade**: Anonimiza a referência do arquivo utilizando o **Hash MD5** do documento e metadados de modificação.
-- **Extração Completa de Metadados**:
-  - Nome do Beneficiário / Titular
-  - CPF do Beneficiário (validado e formatado `000.000.000-00`)
-  - Cédula de Identidade / RG / Registro Geral (com órgão emissor e UF)
-  - Nome Oficial do Curso
-  - **Natureza do Curso**: *Graduação / Curso Superior*, *Pós-Graduação Lato Sensu (Especialização/MBA)*, *Pós-Graduação Stricto Sensu (Mestrado/Doutorado)*, *Curso Técnico / Profissionalizante*, *Extensão*, etc.
-  - Carga Horária Total (horas ou h/aulas)
-  - Faculdade ou Universidade Emissora
-  - Data de Emissão / Conclusão do Documento
-  - Tipo do Documento (*Diploma, Certificado, Histórico, Declaração, Currículo*)
-- **Múltiplos Provedores de IA**:
-  - **Ollama**: Suporta execução local ou via Docker (`open-webui` / `ollama`), com modelos como `gemma4:e4b`, `llama3`, `mistral`, etc.
-  - **OpenAI**: Compatível com modelos como `gpt-4o-mini`, `gpt-4o` ou qualquer endpoint compatível.
+- **Classificação Multidomínio Inteligente**:
+  - **Acadêmico**: Diplomas, Certificados, Históricos, Declarações, TCCs, Monografias, Conteúdos Programáticos.
+  - **Financeiro & Bancário**: Comprovantes de Transferência PIX (chave, E2E ID, autenticação, bancos de origem/destino), boletos e recibos.
+  - **Empresarial & Profissional**: Comprovantes de Situação Cadastral (CNPJ), Contratos Sociais, certidões da Receita Federal, CNAE e razão social.
+  - **Dossiês Multipáginas**: Detecção automática de múltiplos documentos agregados em um único arquivo, com navegação por páginas independentes.
+- **Metadados Forenses Dublin Core & XMP Padronizados**:
+  - Extração profunda de metadados embutidos (`dc:creator`, `dc:title`, `dc:subject`, `creator_tool`, `producer`, `date`, `modified`, `keywords`).
+  - Indexação em tempo real para busca inteligente por software gerador (*LibreOffice, Word, Canva, CamScanner*) ou autor original.
+  - Card dedicado na Ficha Técnica com exportação JSON em um clique.
+- **Mosaico de Miniaturas HD (Paperless-style)**:
+  - Visualização em galeria visual de alta resolução (720px) com paginação fluida, ordenação cronológica/alfabética e acesso direto ao card do documento.
+  - Gerador assíncrono multithread em segundo plano com cache local para carregamento instantâneo.
+- **Banco de Dados Relacional SQLite com WAL Mode**:
+  - Alta performance transacional ACID, sem bloqueios de leitura/escrita e tolerante a interrupções forçadas.
+  - Espelhamento atômico automático para arquivos estruturados `joakindex.json` e relatórios legíveis `joakindex.txt`.
 - **OCR Multimodal Híbrido com LLM**:
-  - Leitura automática de PDFs digitalizados (sem camada textual nativa) via renderização visual (`pypdfium2`).
-  - Re-análise inteligente quando detectado CPF com tamanho/sintaxe/dígito inválido ou tipo de documento não identificado.
-  - Botão no visualizador para disparar OCR visual sob demanda com um clique.
-- **Relatórios Duplos (JSON & TXT)**:
-  - Arquivo consolidado `joakindex.json`.
-  - Arquivo consolidado `joakindex.txt` para leitura humana.
-  - Arquivos individuais por MD5 na pasta `saida/individuais/`.
-- **Interface Web de Conferência Humana Lado a Lado**:
-  - Visualização split-screen (PDF original vs Formulário JSON).
-  - Edição direta de qualquer campo e filtros cruzados por Natureza e Tipo.
-  - Re-análise via OCR multimodal diretamente pela interface.
-  - Aprovação rápida com atalho de teclado (`Ctrl + Enter`).
-  - Atualização do JSON e TXT em tempo real.
-- **Exportação e Visual Law Prontos para Word e Petições**:
-  - Botões de cópia rápida em cada campo lido (CPF, Beneficiário, Curso, RG, Instituição, etc.).
-  - **Copiar Ficha Completa (Visual Law)**: Gera um card institucional com borda lateral executiva e tabela limpa em Rich Text (HTML) pronto para colar no Microsoft Word, LibreOffice ou Google Docs, com fallback inteligente para texto puro.
-- **Painel de Business Intelligence (BI) & Estatísticas Interativas**:
-  - Nova aba dedicada no visualizador com gráficos interativos (`Chart.js`) e indicadores executivos (KPIs).
-  - Distribuições de quantidades absolutas (Nº) e relativas (%) por Nível/Natureza do Curso e Tipos de Documento.
-  - Ranking das Top 10 Instituições/Faculdades Emissoras e distribuição por Faixas de Carga Horária.
-  - Linha do tempo histórica de emissão/conclusão e índices de integridade/qualidade dos metadados extraídos.
-  - Matriz cruzada analítica (Natureza vs Tipo de Documento), exportação de relatórios em TXT e planilhas CSV.
-  - Interatividade bidirecional: clique em qualquer categoria do BI para navegar à Conferência com o filtro pré-aplicado!
+  - Renderização vetorial em alta resolução (`pypdfium2`) para documentos digitalizados ou escaneados.
+  - Re-análise pontual sob demanda disparada diretamente pela interface web.
+- **Interface Web Split-Screen de Conferência Humana**:
+  - Tela dividida com documento original (PDF / Imagem / Word) à esquerda e formulário auditável à direita.
+  - Aprovação rápida com teclado (`Ctrl + Enter`), busca inteligente sem acentos e filtros cruzados.
+- **Exportação Analítica Pronta para Word, BI e Petições**:
+  - Cópia instantânea de campos individuais ou Ficha Completa formatada em Rich Text (Visual Law) para petições.
+  - Painel de Business Intelligence (BI) com gráficos dinâmicos (`Chart.js`), rankings e métricas de integridade.
+  - Exportação completa em planilhas CSV com cabeçalhos normalizados.
 - **Acesso Remoto Seguro via Cloudflare Tunnel (Docker)**:
-  - Configuração opcional via `docker-compose.yml` para expor o visualizador com certificado SSL/HTTPS via Cloudflare Zero Trust (ex: `https://documentos.seu-dominio.com.br`), garantindo suporte total às APIs de Área de Transferência em qualquer computador da rede.
+  - Suporte pronto via `docker-compose.yml` para expor o servidor com certificado SSL/HTTPS e acesso remoto protegido.
 
 ---
 
