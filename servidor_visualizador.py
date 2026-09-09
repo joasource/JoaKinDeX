@@ -49,6 +49,7 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
 try:
     from joakindex import (
         process_single_pdf,
+        extract_file_author,
         OllamaClient,
         OpenAIClient,
         run_batch_classification,
@@ -67,6 +68,7 @@ except Exception:
     joakindex = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(joakindex)
     process_single_pdf = joakindex.process_single_pdf
+    extract_file_author = getattr(joakindex, "extract_file_author", lambda p: None)
     OllamaClient = joakindex.OllamaClient
     OpenAIClient = joakindex.OpenAIClient
     run_batch_classification = getattr(joakindex, "run_batch_classification", None)
@@ -783,6 +785,7 @@ class ConferenciaServer:
                     "extensao": ext,
                     "dominio": "financeiro" if is_pix_file else "academico",
                     "data_modificacao": dt_mod,
+                    "autor": extract_file_author(pdf_file),
                     "data": None,
                     "beneficiario": None,
                     "cpf": None,
@@ -866,6 +869,7 @@ class ConferenciaServer:
             lines.append(f"  • Domínio                 : {dom.upper()}")
             lines.append(f"  • Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}")
             lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
+            lines.append(f"  • Autor (Metadados)       : {item.get('autor') or 'Não informado'}")
             lines.append(f"  • Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}")
             lines.append(f"  • CPF                     : {item.get('cpf') or 'Não informado'}")
             lines.append(f"  • RG / Identidade         : {item.get('rg') or 'Não informado'}")
@@ -1950,6 +1954,8 @@ def create_handler(server_ctx: ConferenciaServer):
                             novo_doc["status_conferencia"] = "pendente"
                         if prev_doc.get("observacoes_conferencia"):
                             novo_doc["observacoes_conferencia"] = prev_doc["observacoes_conferencia"]
+                        if not novo_doc.get("autor") and prev_doc.get("autor"):
+                            novo_doc["autor"] = prev_doc["autor"]
                     else:
                         novo_doc["status_conferencia"] = "pendente"
 

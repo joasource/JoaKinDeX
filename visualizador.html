@@ -1034,10 +1034,14 @@
           </div>
           <div class="font-mono text-xs text-slate-200 bg-slate-950 p-2 rounded border border-slate-800 break-all select-all" id="field_md5">-</div>
           
-          <div class="grid grid-cols-3 gap-2 text-[11px] pt-1 text-slate-400 border-t border-slate-800/80">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] pt-1 text-slate-400 border-t border-slate-800/80">
             <div>
               <span class="block text-[10px] text-slate-500">Data da última alteração:</span>
               <span id="field_data_modificacao" class="font-mono text-slate-300">-</span>
+            </div>
+            <div>
+              <span class="block text-[10px] text-slate-500">Autor (Metadados):</span>
+              <span id="field_autor" class="font-mono text-slate-300 truncate block" title="-">-</span>
             </div>
             <div>
               <span class="block text-[10px] text-slate-500">Método de Leitura:</span>
@@ -1764,6 +1768,10 @@
               <span id="audit_data_modificacao" class="font-mono text-slate-200 block">-</span>
             </div>
             <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80">
+              <span class="text-[10px] text-slate-500 block">Autor (Metadados):</span>
+              <span id="audit_autor" class="font-mono text-slate-200 block truncate" title="-">-</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded border border-slate-800/80 col-span-2">
               <span class="text-[10px] text-slate-500 block">Status de Conferência:</span>
               <span id="audit_status_conferencia" class="font-semibold block">-</span>
             </div>
@@ -6169,8 +6177,9 @@
       const cnpjEnd = normalizeText(de.endereco_completo || doc.endereco_completo);
       const todosTipos = Array.isArray(doc.todos_tipos) ? normalizeText(doc.todos_tipos.join(' ')) : '';
       const todosDominios = Array.isArray(doc.todos_dominios) ? normalizeText(doc.todos_dominios.join(' ')) : '';
+      const autor = normalizeText(doc.autor);
 
-      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${cnpj} ${cnpjDigits} ${cnpjRazao} ${cnpjFantasia} ${cnpjSituacao} ${cnpjCnae} ${cnpjNatJur} ${cnpjEnd} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${todosTipos} ${data} ${carga} ${obs} ${dominio} ${todosDominios} ${extensao} ${valor} ${pixChave} ${pixE2e} ${pixAut} ${pixPag} ${pixPagBanco} ${pixRecBanco}`;
+      const fullBlob = `${md5} ${beneficiario} ${cpf} ${cpfDigits} ${rg} ${rgDigits} ${cnpj} ${cnpjDigits} ${cnpjRazao} ${cnpjFantasia} ${cnpjSituacao} ${cnpjCnae} ${cnpjNatJur} ${cnpjEnd} ${curso} ${faculdade} ${faculdadeNorm} ${natureza} ${tipo} ${todosTipos} ${data} ${carga} ${obs} ${dominio} ${todosDominios} ${extensao} ${valor} ${pixChave} ${pixE2e} ${pixAut} ${pixPag} ${pixPagBanco} ${pixRecBanco} ${autor}`;
 
       return tokens.every(token => {
         // 1. Busca textual direta na junção de todos os campos
@@ -7104,6 +7113,8 @@
 
       document.getElementById('field_md5').innerText = '-';
       document.getElementById('field_data_modificacao').innerText = '-';
+      const fAutorClean = document.getElementById('field_autor');
+      if (fAutorClean) { fAutorClean.innerText = '-'; fAutorClean.title = '-'; }
       const fMetodoClean = document.getElementById('field_metodo_leitura');
       if (fMetodoClean) fMetodoClean.innerText = '-';
       const fTentativaClean = document.getElementById('field_tentativa_ocr');
@@ -7186,6 +7197,12 @@
       // Preenche campos do formulário de forma segura
       document.getElementById('field_md5').innerText = safeString(doc.md5);
       document.getElementById('field_data_modificacao').innerText = safeString(doc.data_modificacao) || '-';
+      const fAutor = document.getElementById('field_autor');
+      if (fAutor) {
+        const autVal = safeString(doc.autor) || '-';
+        fAutor.innerText = autVal;
+        fAutor.title = autVal;
+      }
       const fMetodo = document.getElementById('field_metodo_leitura');
       if (fMetodo) fMetodo.innerText = safeString(doc.metodo_leitura) || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital');
       const fTentativa = document.getElementById('field_tentativa_ocr');
@@ -8762,6 +8779,9 @@
       setEl('audit_metodo_leitura', doc.metodo_leitura || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital'));
       setEl('audit_tentativa_ocr', doc.tentativa_ocr_llm ? 'Sim (Executado)' : 'Não');
       setEl('audit_data_modificacao', doc.data_modificacao || '-');
+      setEl('audit_autor', doc.autor || '-');
+      const auditAutEl = document.getElementById('audit_autor');
+      if (auditAutEl) auditAutEl.title = doc.autor || '-';
 
       const statusEl = document.getElementById('audit_status_conferencia');
       if (statusEl) {
@@ -9146,7 +9166,8 @@
         { key: 'nome_arquivo', header: 'Nome_Arquivo_PDF' },
         { key: 'caminho_relativo', header: 'Caminho_Relativo' },
         { key: 'md5', header: 'MD5' },
-        { key: 'data_modificacao', header: 'Data_Ultima_Alteracao_PDF' }
+        { key: 'data_modificacao', header: 'Data_Ultima_Alteracao_PDF' },
+        { key: 'autor', header: 'Autor_Metadados' }
       ];
 
       // Mapeia chaves extras dinamicamente para garantir que nenhum metadado adicional seja omitido

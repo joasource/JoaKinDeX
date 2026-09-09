@@ -16,7 +16,7 @@ from typing import Dict, Any, List, Optional, Union, Tuple
 from datetime import datetime
 
 COLUMNS = [
-    "md5", "nome_arquivo", "caminho_relativo", "extensao", "dominio", "data_modificacao", "data",
+    "md5", "nome_arquivo", "caminho_relativo", "extensao", "dominio", "data_modificacao", "autor", "data",
     "beneficiario", "cpf", "rg", "cnpj", "curso", "natureza_curso", "carga_horaria",
     "faculdade", "tipo_documento", "valor_monetario", "status", "status_conferencia",
     "metodo_leitura", "tentativa_ocr_llm", "erro", "processado_em",
@@ -63,6 +63,7 @@ def create_schema(conn: sqlite3.Connection) -> None:
         extensao TEXT,
         dominio TEXT DEFAULT 'academico',
         data_modificacao TEXT,
+        autor TEXT,
         data TEXT,
         beneficiario TEXT,
         cpf TEXT,
@@ -109,6 +110,8 @@ def create_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE documentos ADD COLUMN todos_tipos TEXT;")
     if "dossie_paginas" not in existing_cols:
         conn.execute("ALTER TABLE documentos ADD COLUMN dossie_paginas TEXT;")
+    if "autor" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN autor TEXT;")
 
     # Índices para consultas instantâneas
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_status ON documentos(status);")
@@ -120,6 +123,7 @@ def create_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_tipo ON documentos(tipo_documento);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_dominio ON documentos(dominio);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_extensao ON documentos(extensao);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_autor ON documentos(autor);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_tipos ON documentos(todos_tipos);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_dominios ON documentos(todos_dominios);")
 
@@ -175,6 +179,7 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
             dominio = "academico"
 
     data_modificacao = item.get("data_modificacao")
+    autor = item.get("autor")
     data = item.get("data")
     beneficiario = item.get("beneficiario")
     cpf = item.get("cpf")
@@ -233,7 +238,7 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
     dados_extras = json.dumps(extras, ensure_ascii=False) if extras else None
 
     return (
-        md5, nome_arquivo, caminho_relativo, extensao, dominio, data_modificacao, data,
+        md5, nome_arquivo, caminho_relativo, extensao, dominio, data_modificacao, autor, data,
         beneficiario, cpf, rg, cnpj, curso, natureza_curso, carga_horaria,
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr, erro, processado_em,
@@ -359,19 +364,20 @@ def upsert_document(db_path: Union[str, Path], doc: Dict[str, Any]) -> None:
     row_data = doc_to_row_data(doc)
     sql = """
     INSERT INTO documentos (
-        md5, nome_arquivo, caminho_relativo, extensao, dominio, data_modificacao, data,
+        md5, nome_arquivo, caminho_relativo, extensao, dominio, data_modificacao, autor, data,
         beneficiario, cpf, rg, cnpj, curso, natureza_curso, carga_horaria,
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
         conferido_em, revisado_em, observacoes_conferencia,
         todos_dominios, todos_tipos, dossie_paginas, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
         extensao = COALESCE(excluded.extensao, documentos.extensao),
         dominio = COALESCE(excluded.dominio, documentos.dominio),
         data_modificacao = COALESCE(excluded.data_modificacao, documentos.data_modificacao),
+        autor = COALESCE(excluded.autor, documentos.autor),
         data = excluded.data,
         beneficiario = excluded.beneficiario,
         cpf = excluded.cpf,
@@ -411,19 +417,20 @@ def upsert_documents_batch(db_path: Union[str, Path], docs: List[Dict[str, Any]]
 
     sql = """
     INSERT INTO documentos (
-        md5, nome_arquivo, caminho_relativo, extensao, dominio, data_modificacao, data,
+        md5, nome_arquivo, caminho_relativo, extensao, dominio, data_modificacao, autor, data,
         beneficiario, cpf, rg, cnpj, curso, natureza_curso, carga_horaria,
         faculdade, tipo_documento, valor_monetario, status, status_conferencia,
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
         conferido_em, revisado_em, observacoes_conferencia,
         todos_dominios, todos_tipos, dossie_paginas, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
         extensao = COALESCE(excluded.extensao, documentos.extensao),
         dominio = COALESCE(excluded.dominio, documentos.dominio),
         data_modificacao = COALESCE(excluded.data_modificacao, documentos.data_modificacao),
+        autor = COALESCE(excluded.autor, documentos.autor),
         data = excluded.data,
         beneficiario = excluded.beneficiario,
         cpf = excluded.cpf,

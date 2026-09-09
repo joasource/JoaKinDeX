@@ -159,11 +159,95 @@ load_dotenv_if_present()
 
 
 # ---------------------------------------------------------------------------
-# Metadados do Arquivo (MD5, Modificação)
+# Metadados do Arquivo (MD5, Modificação, Autor)
 # ---------------------------------------------------------------------------
-def get_file_metadata(file_path: Path) -> Dict[str, str]:
+def extract_file_author(file_path: Union[str, Path]) -> Optional[str]:
     """
-    Calcula o hash MD5 e obtém a data da última alteração do arquivo no sistema.
+    Extrai o autor dos metadados internos de arquivos PDF, DOCX, DOC e imagens.
+    Retorna a string higienizada do autor ou None se não houver metadados de autoria.
+    """
+    p = Path(file_path)
+    if not p.exists() or not p.is_file():
+        return None
+
+    ext = p.suffix.lower()
+
+    # 1. Arquivos PDF (.pdf)
+    if ext == ".pdf":
+        if pypdf is not None:
+            try:
+                reader = pypdf.PdfReader(str(p), strict=False)
+                meta = reader.metadata
+                if meta and meta.author:
+                    author = "".join(ch for ch in str(meta.author) if ch.isprintable()).strip()
+                    if author and len(author) >= 2:
+                        return author
+            except Exception:
+                pass
+        # Fallback via utilitário pdfinfo do sistema
+        if shutil.which("pdfinfo"):
+            try:
+                res = subprocess.run(["pdfinfo", str(p)], capture_output=True, text=True, timeout=3)
+                if res.returncode == 0:
+                    for line in res.stdout.splitlines():
+                        if line.startswith("Author:"):
+                            a = line.split("Author:", 1)[1].strip()
+                            if a and len(a) >= 2:
+                                return a
+            except Exception:
+                pass
+
+    # 2. Arquivos Word DOCX (.docx)
+    elif ext == ".docx":
+        try:
+            with zipfile.ZipFile(p, "r") as z:
+                if "docProps/core.xml" in z.namelist():
+                    xml_data = z.read("docProps/core.xml")
+                    root = ET.fromstring(xml_data)
+                    for elem in root:
+                        if elem.tag.endswith("creator") and elem.text and elem.text.strip():
+                            return elem.text.strip()
+                        if elem.tag.endswith("lastModifiedBy") and elem.text and elem.text.strip():
+                            return elem.text.strip()
+        except Exception:
+            pass
+
+    # 3. Arquivos Word Legado (.doc 97-2003)
+    elif ext == ".doc":
+        try:
+            with open(p, "rb") as f:
+                d = f.read()
+            m = re.search(rb"\x1e\x00\x00\x00[\x02-\x80]\x00\x00\x00([A-Za-z\xc0-\xff][A-Za-z0-9\xc0-\xff\s\.\-]{1,60})\x00.*?(?:Normal|Microsoft)", d, re.DOTALL)
+            if m:
+                s = m.group(1).decode("latin1", errors="ignore").strip()
+                if s and len(s) >= 2 and s.lower() not in ["normal", "microsoft"]:
+                    return s
+        except Exception:
+            pass
+
+    # 4. Imagens (JPEG/PNG/TIFF/WEBP)
+    elif ext in IMAGE_EXTENSIONS or ext in [".tiff", ".tif"]:
+        if Image is not None:
+            try:
+                with Image.open(p) as im:
+                    exif = im.getexif()
+                    if exif:
+                        from PIL.ExifTags import TAGS
+                        for tag_id, val in exif.items():
+                            tag = TAGS.get(tag_id, tag_id)
+                            if tag in ["Artist", "XPAuthor", "Author"]:
+                                s = str(val).strip()
+                                if s and len(s) >= 2:
+                                    return s
+            except Exception:
+                pass
+
+    return None
+
+
+def get_file_metadata(file_path: Path) -> Dict[str, Any]:
+    """
+    Calcula o hash MD5, data da última alteração e autor dos metadados internos do arquivo.
     """
     hasher = hashlib.md5()
     with open(file_path, "rb") as f:
@@ -173,10 +257,12 @@ def get_file_metadata(file_path: Path) -> Dict[str, str]:
 
     st = file_path.stat()
     dt_mod = datetime.fromtimestamp(st.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+    autor = extract_file_author(file_path)
 
     return {
         "md5": md5_hash,
-        "data_modificacao": dt_mod
+        "data_modificacao": dt_mod,
+        "autor": autor
     }
 
 
@@ -1922,6 +2008,7 @@ def process_single_pdf(
         "extensao": ext,
         "dominio": "academico",
         "data_modificacao": meta.get("data_modificacao"),
+        "autor": meta.get("autor"),
         "data": None,
         "beneficiario": None,
         "cpf": None,
@@ -2490,6 +2577,7 @@ Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}{do
 Extensão                : {ext.upper() if ext else 'N/A'}
 Método de Leitura       : {metodo}
 Data da Última Alteração: {item.get('data_modificacao')}
+Autor (Metadados)      : {item.get('autor') or 'Não informado'}
 Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}
 CPF                     : {item.get('cpf') or 'Não informado'}
 RG / Identidade         : {item.get('rg') or 'Não informado'}
@@ -2566,6 +2654,7 @@ def generate_consolidated_txt(
         lines.append(f"  • Domínio                 : {dom.upper()}")
         lines.append(f"  • Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}")
         lines.append(f"  • Data da Última Alteração: {item.get('data_modificacao')}")
+        lines.append(f"  • Autor (Metadados)      : {item.get('autor') or 'Não informado'}")
         lines.append(f"  • Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}")
         lines.append(f"  • CPF                     : {item.get('cpf') or 'Não informado'}")
         lines.append(f"  • RG / Identidade         : {item.get('rg') or 'Não informado'}")
@@ -3249,7 +3338,7 @@ def run_batch_classification(
                 try:
                     pdf_meta_map[p] = fut.result()
                 except Exception:
-                    pdf_meta_map[p] = {"md5": "", "data_modificacao": ""}
+                    pdf_meta_map[p] = {"md5": "", "data_modificacao": "", "autor": None}
                 if idx_i % 25 == 0:
                     notify({"event": "indexing_progress", "indexed": idx_i, "total": len(pdf_files)})
     else:
@@ -3257,7 +3346,7 @@ def run_batch_classification(
             try:
                 pdf_meta_map[p] = get_file_metadata(p)
             except Exception:
-                pdf_meta_map[p] = {"md5": "", "data_modificacao": ""}
+                pdf_meta_map[p] = {"md5": "", "data_modificacao": "", "autor": None}
 
     # 4. Separa os arquivos entre já processados e novos/pendentes
     files_to_process = []
