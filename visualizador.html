@@ -4477,9 +4477,12 @@
       const aprovados = scopeDocs.filter(d => !isDocumentUnprocessed(d) && safeString(d.status_conferencia || 'pendente').toLowerCase() === 'aprovado').length;
       const pendentes = scopeTotal - aprovados - naoProcessados;
 
-      document.getElementById('count-todos').innerText = scopeTotal;
-      document.getElementById('count-pendente').innerText = pendentes;
-      document.getElementById('count-aprovado').innerText = aprovados;
+      const cntTodos = document.getElementById('count-todos');
+      if (cntTodos) cntTodos.innerText = scopeTotal;
+      const cntPend = document.getElementById('count-pendente');
+      if (cntPend) cntPend.innerText = pendentes;
+      const cntAprov = document.getElementById('count-aprovado');
+      if (cntAprov) cntAprov.innerText = aprovados;
       const cntNaoProc = document.getElementById('count-nao_processado');
       if (cntNaoProc) cntNaoProc.innerText = naoProcessados;
 
