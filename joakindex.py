@@ -514,6 +514,15 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
     t = text.lower()
     scores = {}
 
+    # 0. Consulta dinâmica de Regras Aprendidas pelo Usuário
+    try:
+        from db_manager import consultar_regra_para_texto, DEFAULT_DB_PATH
+        regra = consultar_regra_para_texto(DEFAULT_DB_PATH, text)
+        if regra:
+            return regra["valor_atribuido"], regra["dominio"]
+    except Exception:
+        pass
+
     # 1. Domínio: Identificação
     if any(k in t for k in ["carteira nacional de habilita", "driver license", "permiso de conduccion", "senatran", "denatran", "1° habilita", "1ª habilita"]) or ("cnh" in t and "categoria" in t):
         scores["CNH"] = ("identificacao", 10)
@@ -537,7 +546,11 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
         scores["Diploma"] = ("academico", 10)
     elif any(k in t for k in ["histórico escolar", "historico escolar", "rendimento escolar", "componente curricular", "disciplinas cursadas", "coeficiente de rendimento"]):
         scores["Histórico Escolar"] = ("academico", 9)
-    elif any(k in t for k in ["certificado", "certificamos que", "concluiu com êxito", "pós-graduação", "especialização"]):
+    elif any(k in t for k in ["certificamos que", "concluiu com êxito", "concluiu com exito", "conferimos o presente certificado", "concluiu o curso de"]) or (
+        ("certificado" in t or "pós-graduação" in t or "pos-graduacao" in t or "especialização" in t or "especializacao" in t)
+        and not any(cnae in t for cnae in ["código e descrição", "codigo e descricao", "atividade econômica", "atividade economica", "cnae", "cadastro nacional da pessoa jurídica", "cadastro nacional da pessoa juridica", "situação cadastral", "situacao cadastral"])
+        and any(w in t for w in ["curso", "conclusão", "conclusao", "titulação", "titulacao", "certificamos", "outorgado", "aprovação", "aprovacao", "carga horária", "carga horaria"])
+    ):
         scores["Certificado"] = ("academico", 8)
     elif any(k in t for k in ["declaração de matrícula", "atestado de matrícula", "declaração de conclusão", "declaramos para os devidos fins"]):
         scores["Declaração"] = ("academico", 7)
@@ -548,8 +561,10 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
     elif any(k in t for k in ["ficha catalográfica", "ficha catalografica"]) or ("isbn" in t and "editora" in t):
         scores["Livro/Publicação"] = ("academico", 8)
 
-    # 3. Domínio: Profissional / Carreira
-    if any(k in t for k in ["curriculum vitae", "currículo vitae", "curriculo lattes", "currículo lattes", "experiência profissional", "experiencia profissional", "resumo profissional", "histórico profissional", "historico profissional", "trajetória profissional", "trajetoria profissional", "dados profissionais", "formação acadêmica e profissional"]):
+    # 3. Domínio: Profissional / Carreira / Cadastral
+    if any(k in t for k in ["comprovante de inscrição e de situação cadastral", "comprovante de inscricao e de situacao cadastral", "cadastro nacional da pessoa jurídica", "cadastro nacional da pessoa juridica", "cartão cnpj", "cartao cnpj"]):
+        scores["Comprovante de Inscrição e de Situação Cadastral"] = ("profissional", 10)
+    elif any(k in t for k in ["curriculum vitae", "currículo vitae", "curriculo lattes", "currículo lattes", "experiência profissional", "experiencia profissional", "resumo profissional", "histórico profissional", "historico profissional", "trajetória profissional", "trajetoria profissional", "dados profissionais", "formação acadêmica e profissional"]):
         scores["Currículo"] = ("profissional", 9)
     elif any(k in t for k in ["declaração de experiência", "declaracao de experiencia", "atestado de capacidade técnica", "atestado de capacidade tecnica"]):
         scores["Declaração de Experiência Profissional"] = ("profissional", 8)
@@ -836,7 +851,7 @@ def analyze_pdf_dossier(
     tipo_principal = None
     priority_order = [
         "Diploma", "Certificado", "Histórico Escolar", "Declaração", "Ementa", "Dissertação", "Livro/Publicação",
-        "Currículo", "Declaração de Experiência Profissional",
+        "Currículo", "Declaração de Experiência Profissional", "Comprovante de Inscrição e de Situação Cadastral",
         "CNH", "RG", "CPF", "Certidão de Nascimento", "Certidão de Casamento", "Passaporte",
         "Comprovante PIX", "Comprovante de Pagamento", "Boleto", "Recibo"
     ]
@@ -1678,24 +1693,41 @@ def process_single_pdf(
 
         # Heurística inteligente para consolidação do domínio
         tipo_lower = str(tipo_doc_raw or "").lower()
-        has_pix_signal = bool(
-            pix_e2e_id or pix_chave or pix_pagador_nome or
-            "pix" in tipo_lower or "comprovante" in tipo_lower or
-            "recibo" in tipo_lower or "pagamento" in tipo_lower or
-            "transferência" in tipo_lower or "transferencia" in tipo_lower
+        is_non_financial_comprovante = any(k in tipo_lower for k in [
+            "inscrição", "inscricao", "situação cadastral", "situacao cadastral", "cnpj",
+            "residência", "residencia", "matrícula", "matricula", "rendimentos", "votação", "votacao"
+        ])
+
+        has_explicit_financial = bool(
+            "pix" in tipo_lower or
+            "comprovante de pagamento" in tipo_lower or
+            "comprovante de transferência" in tipo_lower or
+            "comprovante de transferencia" in tipo_lower or
+            "comprovante bancário" in tipo_lower or
+            "comprovante bancario" in tipo_lower or
+            "recibo de pagamento" in tipo_lower or
+            "boleto" in tipo_lower or
+            ("recibo" in tipo_lower and not is_non_financial_comprovante)
         )
 
-        if has_pix_signal or valor_raw or dominio_raw == "financeiro":
+        has_pix_signal = bool(
+            (pix_e2e_id or pix_chave or (pix_pagador_nome and pix_pagador_banco) or has_explicit_financial)
+            and not is_non_financial_comprovante
+        )
+
+        if not is_non_financial_comprovante and (has_pix_signal or valor_raw or dominio_raw == "financeiro"):
             dominio = "financeiro"
             if not tipo_doc_raw or tipo_lower in ["não identificado", "nao identificado", "outro", "não informado", "nao informado"]:
                 tipo_doc_raw = "Comprovante PIX" if ("pix" in tipo_lower or pix_e2e_id or pix_chave) else "Recibo de Pagamento"
             if not res_dict.get("faculdade") and pix_pagador_banco:
                 res_dict["faculdade"] = pix_pagador_banco
+        elif any(k in tipo_lower for k in ["situação cadastral", "situacao cadastral", "cnpj", "currículo", "curriculo", "experiência profissional", "experiencia profissional", "lattes", "ctps", "carteira de trabalho"]):
+            dominio = "profissional"
         elif any(k in tipo_lower for k in ["rg", "cnh", "identidade", "cpf", "certidão", "certidao", "eleitor", "passaporte"]):
             dominio = "identificacao"
         elif any(k in tipo_lower for k in ["contrato", "procuração", "procuracao", "posse", "juridico", "petição", "peticao"]):
             dominio = "juridico"
-        elif dominio_raw in ["academico", "financeiro", "identificacao", "juridico", "outro"]:
+        elif dominio_raw in ["academico", "financeiro", "identificacao", "juridico", "profissional", "outro"]:
             dominio = dominio_raw
         else:
             dominio = "academico"

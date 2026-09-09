@@ -764,7 +764,8 @@ class ConferenciaServer:
 
                 rel_path = str(pdf_file.relative_to(self.pdf_dir)) if self.pdf_dir in pdf_file.parents else pdf_file.name
                 ext = pdf_file.suffix.lower()
-                is_pix_file = any(k in pdf_file.name.lower() for k in ["pix", "recibo", "comprovante", "pagamento"])
+                is_non_fin = any(x in pdf_file.name.lower() for x in ["cnpj", "inscricao", "inscrição", "cadastral", "matricula", "matrícula", "residencia", "residência", "votação", "votacao", "rendimento"])
+                is_pix_file = not is_non_fin and any(k in pdf_file.name.lower() for k in ["pix", "comprovante de pagamento", "comprovante pix", "recibo de pagamento", "boleto"])
                 unprocessed_doc = {
                     "md5": h,
                     "nome_arquivo": pdf_file.name,
@@ -1259,6 +1260,21 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.wfile.write(body)
                 return
 
+            # API de Regras Aprendidas pelo Usuário
+            if path == "/api/regras-aprendidas":
+                try:
+                    from db_manager import obter_regras_aprendidas
+                    regras = obter_regras_aprendidas(server_ctx.db_path)
+                except Exception as e:
+                    regras = []
+                body = json.dumps(regras, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             # API de Miniaturas de Páginas (Thumbnail de Alta Definição com Cache)
             if path.startswith("/api/thumbnail/"):
                 query = urllib.parse.parse_qs(parsed.query)
@@ -1582,6 +1598,24 @@ def create_handler(server_ctx: ConferenciaServer):
                     all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
                     server_ctx.update_txt_report(all_processed)
 
+                    # 4. Aprendizado Incremental se solicitado pelo usuário
+                    if payload.get("aprender_regra") and item_editado.get("tipo_documento"):
+                        try:
+                            from db_manager import salvar_regra_aprendida
+                            termo = (item_editado.get("tipo_documento") or "").strip()
+                            if termo:
+                                salvar_regra_aprendida(
+                                    server_ctx.db_path,
+                                    termo_chave=termo,
+                                    valor_atribuido=termo,
+                                    dominio=item_editado.get("dominio", "academico"),
+                                    campo_alvo="tipo_documento",
+                                    remover_pix=(item_editado.get("dominio") != "financeiro"),
+                                    origem_md5=target_md5
+                                )
+                        except Exception as e:
+                            print(f"[Aviso] Falha ao registrar regra aprendida: {e}")
+
                     resp = json.dumps({"status": "sucesso", "mensagem": "Documento salvo com sucesso!"}).encode("utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -1589,6 +1623,34 @@ def create_handler(server_ctx: ConferenciaServer):
                     self.end_headers()
                     self.wfile.write(resp)
                     return
+
+            # Gerenciamento de Regras Aprendidas (Adicionar / Excluir)
+            if path == "/api/regras-aprendidas":
+                action = payload.get("acao", "salvar")
+                if action == "salvar":
+                    from db_manager import salvar_regra_aprendida
+                    rid = salvar_regra_aprendida(
+                        server_ctx.db_path,
+                        termo_chave=payload.get("termo_chave", ""),
+                        valor_atribuido=payload.get("valor_atribuido", ""),
+                        dominio=payload.get("dominio", "academico"),
+                        campo_alvo=payload.get("campo_alvo", "tipo_documento"),
+                        remover_pix=bool(payload.get("remover_pix")),
+                        origem_md5=payload.get("origem_md5")
+                    )
+                    resp = json.dumps({"status": "sucesso", "regra_id": rid}).encode("utf-8")
+                elif action == "remover":
+                    from db_manager import remover_regra_aprendida
+                    ok = remover_regra_aprendida(server_ctx.db_path, payload.get("id"))
+                    resp = json.dumps({"status": "sucesso" if ok else "erro"}).encode("utf-8")
+                else:
+                    resp = json.dumps({"status": "erro", "mensagem": "Ação desconhecida"}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(resp)))
+                self.end_headers()
+                self.wfile.write(resp)
+                return
 
             # Aprovação de conferência
             if path == "/api/aprovar":

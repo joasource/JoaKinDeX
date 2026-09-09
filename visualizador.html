@@ -1061,6 +1061,7 @@
                   <option value="financeiro">Financeiro (PIX/Recibos)</option>
                   <option value="identificacao">Identificação Civil (RG/CNH/CPF)</option>
                   <option value="juridico">Jurídico (Contratos/Posse)</option>
+                  <option value="profissional">Profissional / Cadastral / CNPJ</option>
                   <option value="outro">Outros Documentos</option>
                 </select>
               </div>
@@ -1094,6 +1095,12 @@
                     <option value="Boleto Bancário">Boleto Bancário</option>
                     <option value="Extrato Bancário">Extrato Bancário</option>
                     <option value="Nota Fiscal">Nota Fiscal</option>
+                  </optgroup>
+                  <optgroup label="Profissional & Cadastral">
+                    <option value="Comprovante de Inscrição e de Situação Cadastral">Comprovante de Inscrição e de Situação Cadastral</option>
+                    <option value="Cartão CNPJ">Cartão CNPJ</option>
+                    <option value="Carteira de Trabalho">Carteira de Trabalho</option>
+                    <option value="Registro Profissional">Registro Profissional</option>
                   </optgroup>
                   <optgroup label="Identificação Pessoal">
                     <option value="RG / Identidade">RG / Identidade</option>
@@ -1152,7 +1159,14 @@
                   <span class="text-[10px] text-slate-400">Liquidação Financeira Instantânea BACEN</span>
                 </div>
               </div>
-              <span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-emerald-500/30">PIX OFICIAL</span>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="removePixFromCurrentDoc()"
+                        class="px-2 py-1 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 text-[10px] font-semibold flex items-center gap-1 transition shadow-sm"
+                        title="Remover dados financeiros e desvincular este documento de PIX">
+                  <i class="fa-solid fa-ban text-[9px] text-rose-400"></i> Desvincular PIX
+                </button>
+                <span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-emerald-500/30">PIX OFICIAL</span>
+              </div>
             </div>
 
             <!-- Valor Monetário em Destaque -->
@@ -1586,6 +1600,19 @@
                   class="py-1.5 px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0">
             <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
             <span>Classificar com OCR</span>
+          </button>
+        </div>
+
+        <!-- Barra de Aprendizado Incremental da IA -->
+        <div class="flex items-center justify-between px-2.5 py-1.5 bg-slate-950/60 rounded-lg border border-slate-800/80 text-[11px]">
+          <label class="flex items-center gap-1.5 cursor-pointer select-none" title="Gravar este padrão na memória do JoaKinDeX para que a IA aprenda a classificar documentos semelhantes automaticamente">
+            <input type="checkbox" id="chkAprenderRegra" checked class="rounded border-slate-700 bg-slate-900 text-teal-500 focus:ring-teal-500 h-3.5 w-3.5 cursor-pointer">
+            <span class="flex items-center gap-1.5 text-slate-300 font-medium">
+              <i class="fa-solid fa-brain text-teal-400 text-[10.5px]"></i> Aprender com esta conferência
+            </span>
+          </label>
+          <button type="button" onclick="openLearnedRulesModal()" class="text-[10.5px] text-teal-400 hover:text-teal-300 hover:underline flex items-center gap-1 font-mono transition" title="Ver catálogo de regras aprendidas pela IA">
+            <i class="fa-solid fa-list-check text-[10px]"></i> Regras (<span id="learnedRulesCount">0</span>)
           </button>
         </div>
 
@@ -2989,6 +3016,12 @@
               <option value="Extrato Bancário">Extrato Bancário</option>
               <option value="Nota Fiscal">Nota Fiscal</option>
             </optgroup>
+            <optgroup label="Profissional & Cadastral">
+              <option value="Comprovante de Inscrição e de Situação Cadastral">Comprovante de Inscrição e de Situação Cadastral</option>
+              <option value="Cartão CNPJ">Cartão CNPJ</option>
+              <option value="Carteira de Trabalho">Carteira de Trabalho</option>
+              <option value="Registro Profissional">Registro Profissional</option>
+            </optgroup>
             <optgroup label="Jurídico">
               <option value="Procuração">Procuração</option>
               <option value="Contrato">Contrato</option>
@@ -3012,6 +3045,42 @@
         <button type="button" onclick="confirmAddTag()"
                 class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition">
           <i class="fa-solid fa-check"></i> Adicionar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REGRAS APRENDIDAS PELA IA (APRENDIZADO INCREMENTAL) -->
+  <div id="modalLearnedRules" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 w-full max-w-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-brain text-teal-400"></i> Memória de Regras Aprendidas pela IA
+          </h3>
+          <p class="text-[11px] text-slate-400 mt-0.5">
+            Padrões gravados com base nas suas correções manuais. O classificador automático consulta esta tabela para reconhecer novos documentos.
+          </p>
+        </div>
+        <button type="button" onclick="closeLearnedRulesModal()" class="text-slate-400 hover:text-slate-200 text-sm p-1" title="Fechar">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="max-h-96 overflow-y-auto pr-1">
+        <div id="learnedRulesListContainer" class="space-y-2">
+          <!-- Carregado via JS -->
+          <div class="text-center py-6 text-slate-500 text-xs italic">Carregando regras...</div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-3 border-t border-slate-800 text-xs">
+        <span class="text-slate-400 text-[11px] flex items-center gap-1.5">
+          <i class="fa-solid fa-circle-info text-teal-400"></i> Novas regras são aprendidas automaticamente ao salvar ou aprovar com a opção ativa.
+        </span>
+        <button type="button" onclick="closeLearnedRulesModal()"
+                class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium transition">
+          Fechar
         </button>
       </div>
     </div>
@@ -4336,6 +4405,8 @@
           badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-cyan-500/20 text-cyan-400 border border-cyan-500/30";
         } else if (dom === 'juridico') {
           badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30";
+        } else if (dom === 'profissional') {
+          badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-sky-500/20 text-sky-400 border border-sky-500/30";
         } else if (dom === 'outro') {
           badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30";
         } else {
@@ -4368,6 +4439,11 @@
         if (labelBeneficiario) labelBeneficiario.innerText = "Parte Principal / Titular / Outorgante";
         if (labelFaculdade) labelFaculdade.innerText = "Órgão / Cartório / Empresa / Vara";
         if (labelData) labelData.innerText = "Data do Documento / Assinatura";
+      } else if (dom === 'profissional') {
+        if (pixCard) pixCard.classList.add('hidden');
+        if (labelBeneficiario) labelBeneficiario.innerText = "Razão Social / Nome da Pessoa / Titular";
+        if (labelFaculdade) labelFaculdade.innerText = "Órgão Emissor / Receita Federal / Entidade";
+        if (labelData) labelData.innerText = "Data de Emissão / Situação / Abertura";
       } else if (dom === 'outro') {
         if (pixCard) pixCard.classList.add('hidden');
         if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Titular / Beneficiário";
@@ -4398,6 +4474,10 @@
         'Boleto Bancário': 'financeiro',
         'Extrato Bancário': 'financeiro',
         'Nota Fiscal': 'financeiro',
+        'Comprovante de Inscrição e de Situação Cadastral': 'profissional',
+        'Cartão CNPJ': 'profissional',
+        'Carteira de Trabalho': 'profissional',
+        'Registro Profissional': 'profissional',
         'RG / Identidade': 'identificacao',
         'CNH': 'identificacao',
         'CPF': 'identificacao',
@@ -4812,6 +4892,7 @@
       setupKeyboardShortcuts();
       checkBatchStatusOnLoad();
       loadSystemConfig();
+      loadLearnedRulesCount();
     });
 
     async function loadDocuments() {
@@ -6944,18 +7025,44 @@
       showToast(`Documento principal definido como: ${tipo}`, 'success');
     }
 
+    function recalculateDocDomains(doc) {
+      if (!doc) return [];
+      const doms = new Set();
+      if (doc.dominio) doms.add(doc.dominio);
+      const allTipos = Array.isArray(doc.todos_tipos) ? doc.todos_tipos : [];
+      allTipos.forEach(t => {
+        const tLower = safeString(t).toLowerCase();
+        if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto') || tLower.includes('extrato') || tLower.includes('nota fiscal')) {
+          doms.add('financeiro');
+        } else if (tLower.includes('rg') || tLower.includes('cnh') || tLower.includes('cpf') || tLower.includes('certid') || tLower.includes('passaporte') || tLower.includes('eleitor')) {
+          doms.add('identificacao');
+        } else if (tLower.includes('procur') || tLower.includes('contrato') || tLower.includes('posse')) {
+          doms.add('juridico');
+        } else if (tLower.includes('cnpj') || tLower.includes('cadastral') || tLower.includes('trabalho') || tLower.includes('ctps') || tLower.includes('lattes') || tLower.includes('curriculo') || tLower.includes('registro profissional')) {
+          doms.add('profissional');
+        } else if (tLower.includes('diploma') || tLower.includes('certificado') || tLower.includes('histórico') || tLower.includes('declar') || tLower.includes('ementa')) {
+          doms.add('academico');
+        }
+      });
+      if (doms.size === 0) doms.add(doc.dominio || 'academico');
+      doc.todos_dominios = Array.from(doms);
+      return doc.todos_dominios;
+    }
+
     function removeTag(tipo) {
       if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
       const doc = filteredDocs[currentIndex];
+      const tipoLower = safeString(tipo).toLowerCase().trim();
       let tipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
-      tipos = tipos.filter(t => t.toLowerCase().trim() !== tipo.toLowerCase().trim());
+      tipos = tipos.filter(t => t.toLowerCase().trim() !== tipoLower);
       doc.todos_tipos = tipos;
 
       // Se removeu o tipo principal, define o próximo como principal
-      if (doc.tipo_documento && doc.tipo_documento.toLowerCase().trim() === tipo.toLowerCase().trim()) {
+      if (doc.tipo_documento && doc.tipo_documento.toLowerCase().trim() === tipoLower) {
         if (tipos.length > 0) {
-          setPrimaryTag(tipos[0]);
-          return;
+          doc.tipo_documento = tipos[0];
+          const selectTipo = document.getElementById('select_tipo_documento');
+          if (selectTipo) selectTipo.value = tipos[0];
         } else {
           doc.tipo_documento = 'Outro';
           const selectTipo = document.getElementById('select_tipo_documento');
@@ -6963,10 +7070,165 @@
         }
       }
 
+      // Sanitiza páginas do dossiê para não ressuscitar a tag excluída
+      if (Array.isArray(doc.dossie_paginas)) {
+        const replacementTipo = doc.tipo_documento || (tipos.length > 0 ? tipos[0] : 'Outro');
+        doc.dossie_paginas.forEach(p => {
+          if (p.tipo && p.tipo.toLowerCase().trim() === tipoLower) {
+            p.tipo = replacementTipo;
+          }
+        });
+      }
+
+      // Se removeu tag de PIX, limpa dados PIX se não houver mais tags financeiras
+      if (tipoLower.includes('pix')) {
+        const hasOtherPix = tipos.some(t => t.toLowerCase().includes('pix'));
+        if (!hasOtherPix) {
+          doc.valor_monetario = null;
+          delete doc.pix_pagador_nome;
+          delete doc.pix_pagador_cpf_cnpj;
+          delete doc.pix_pagador_banco;
+          delete doc.pix_recebedor_nome;
+          delete doc.pix_recebedor_cpf_cnpj;
+          delete doc.pix_recebedor_banco;
+          delete doc.pix_chave;
+          delete doc.pix_e2e_id;
+          delete doc.pix_autenticacao;
+          if (doc.dados_extras && typeof doc.dados_extras === 'object') {
+            delete doc.dados_extras.pix_pagador_nome;
+            delete doc.dados_extras.pix_pagador_cpf_cnpj;
+            delete doc.dados_extras.pix_pagador_banco;
+            delete doc.dados_extras.pix_recebedor_nome;
+            delete doc.dados_extras.pix_recebedor_cpf_cnpj;
+            delete doc.dados_extras.pix_recebedor_banco;
+            delete doc.dados_extras.pix_chave;
+            delete doc.dados_extras.pix_e2e_id;
+            delete doc.dados_extras.pix_autenticacao;
+          }
+          const pixCard = document.getElementById('pixReceiptCard');
+          if (pixCard) pixCard.classList.add('hidden');
+        }
+      }
+
+      // Se o domínio atual era financeiro mas não há mais tags financeiras, reajusta domínio
+      const hasFinancialTag = tipos.some(t => {
+        const tl = t.toLowerCase();
+        return tl.includes('pix') || tl.includes('pagamento') || tl.includes('recibo') || tl.includes('boleto') || tl.includes('extrato') || tl.includes('nota fiscal');
+      });
+      if (doc.dominio === 'financeiro' && !hasFinancialTag) {
+        const curTipoLower = (doc.tipo_documento || '').toLowerCase();
+        if (curTipoLower.includes('cnpj') || curTipoLower.includes('cadastral') || curTipoLower.includes('trabalho') || curTipoLower.includes('curriculo')) {
+          doc.dominio = 'profissional';
+        } else if (curTipoLower.includes('rg') || curTipoLower.includes('cnh') || curTipoLower.includes('cpf')) {
+          doc.dominio = 'identificacao';
+        } else {
+          doc.dominio = 'academico';
+        }
+        const selectDom = document.getElementById('select_dominio');
+        if (selectDom) selectDom.value = doc.dominio;
+        onDominioChange();
+      }
+
+      recalculateDocDomains(doc);
       renderMultiTags(doc);
       markDirty();
       saveCurrentDoc();
       showToast(`Classificação "${tipo}" removida.`, 'info');
+    }
+
+    function removePixFromCurrentDoc() {
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      
+      // 1. Limpa campos visuais do formulário
+      const clearVal = (id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      };
+      clearVal('input_pix_pagador_nome');
+      clearVal('input_pix_pagador_cpf_cnpj');
+      clearVal('input_pix_pagador_banco');
+      clearVal('input_pix_recebedor_nome_preview');
+      clearVal('input_pix_recebedor_cpf_preview');
+      clearVal('input_pix_recebedor_banco');
+      clearVal('input_pix_chave');
+      clearVal('input_pix_e2e_id');
+      clearVal('input_pix_autenticacao');
+      clearVal('input_valor_monetario');
+
+      // 2. Limpa dados de PIX no objeto do documento
+      doc.valor_monetario = null;
+      delete doc.pix_pagador_nome;
+      delete doc.pix_pagador_cpf_cnpj;
+      delete doc.pix_pagador_banco;
+      delete doc.pix_recebedor_nome;
+      delete doc.pix_recebedor_cpf_cnpj;
+      delete doc.pix_recebedor_banco;
+      delete doc.pix_chave;
+      delete doc.pix_e2e_id;
+      delete doc.pix_autenticacao;
+
+      if (doc.dados_extras && typeof doc.dados_extras === 'object') {
+        delete doc.dados_extras.pix_pagador_nome;
+        delete doc.dados_extras.pix_pagador_cpf_cnpj;
+        delete doc.dados_extras.pix_pagador_banco;
+        delete doc.dados_extras.pix_recebedor_nome;
+        delete doc.dados_extras.pix_recebedor_cpf_cnpj;
+        delete doc.dados_extras.pix_recebedor_banco;
+        delete doc.dados_extras.pix_chave;
+        delete doc.dados_extras.pix_e2e_id;
+        delete doc.dados_extras.pix_autenticacao;
+      }
+
+      // 3. Remove tags com menção a PIX
+      let tipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
+      tipos = tipos.filter(t => !t.toLowerCase().includes('pix'));
+      doc.todos_tipos = tipos;
+
+      if (doc.tipo_documento && doc.tipo_documento.toLowerCase().includes('pix')) {
+        doc.tipo_documento = tipos.length > 0 ? tipos[0] : 'Outro';
+        const selectTipo = document.getElementById('select_tipo_documento');
+        if (selectTipo) selectTipo.value = doc.tipo_documento;
+      }
+
+      // 4. Limpa dossie_paginas que tinham menção a PIX
+      if (Array.isArray(doc.dossie_paginas)) {
+        doc.dossie_paginas.forEach(p => {
+          if (p.tipo && p.tipo.toLowerCase().includes('pix')) {
+            p.tipo = doc.tipo_documento || 'Outro';
+          }
+          if (p.dominio === 'financeiro') {
+            p.dominio = 'profissional';
+          }
+        });
+      }
+
+      // 5. Se o domínio era financeiro, muda para profissional ou correspondente
+      if (doc.dominio === 'financeiro') {
+        const curTipoLower = (doc.tipo_documento || '').toLowerCase();
+        if (curTipoLower.includes('cnpj') || curTipoLower.includes('cadastral') || curTipoLower.includes('trabalho') || curTipoLower.includes('curriculo')) {
+          doc.dominio = 'profissional';
+        } else if (curTipoLower.includes('rg') || curTipoLower.includes('cnh') || curTipoLower.includes('cpf')) {
+          doc.dominio = 'identificacao';
+        } else {
+          doc.dominio = 'profissional';
+        }
+        const selectDom = document.getElementById('select_dominio');
+        if (selectDom) selectDom.value = doc.dominio;
+      }
+
+      // 6. Recalcula todos_dominios
+      recalculateDocDomains(doc);
+
+      // 7. Esconde o card PIX e atualiza a interface
+      const pixCard = document.getElementById('pixReceiptCard');
+      if (pixCard) pixCard.classList.add('hidden');
+
+      onDominioChange();
+      renderMultiTags(doc);
+      markDirty();
+      saveCurrentDoc();
+      showToast('PIX desvinculado deste documento com sucesso!', 'success');
     }
 
     function openAddTagModal() {
@@ -7013,17 +7275,7 @@
       tipos.push(finalTag);
       doc.todos_tipos = tipos;
 
-      // Atualiza domínios
-      const tLower = finalTag.toLowerCase();
-      let dom = 'academico';
-      if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto')) dom = 'financeiro';
-      else if (tLower.includes('rg') || tLower.includes('cnh') || tLower.includes('cpf') || tLower.includes('certid') || tLower.includes('passaporte') || tLower.includes('eleitor')) dom = 'identificacao';
-      else if (tLower.includes('procur') || tLower.includes('contrato') || tLower.includes('posse')) dom = 'juridico';
-
-      let doms = Array.isArray(doc.todos_dominios) ? [...doc.todos_dominios] : [];
-      if (!doms.includes(dom)) doms.push(dom);
-      doc.todos_dominios = doms;
-
+      recalculateDocDomains(doc);
       renderMultiTags(doc);
       closeAddTagModal();
       markDirty();
@@ -7064,7 +7316,18 @@
       const pixE2eId = getVal('input_pix_e2e_id');
       const pixAutenticacao = getVal('input_pix_autenticacao');
 
-      if (dominio === 'financeiro' || pixChave || pixE2eId || pixPagadorNome) {
+      const primaryTipo = document.getElementById('select_tipo_documento').value || null;
+      let todosTipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
+      if (primaryTipo && !todosTipos.some(t => t.toLowerCase() === primaryTipo.toLowerCase())) {
+        todosTipos.unshift(primaryTipo);
+      }
+
+      const isFinancial = (dominio === 'financeiro') || todosTipos.some(t => {
+        const tl = safeString(t).toLowerCase();
+        return tl.includes('pix') || tl.includes('pagamento') || tl.includes('recibo') || tl.includes('boleto');
+      });
+
+      if (isFinancial) {
         dadosExtras.pix_pagador_nome = pixPagadorNome || null;
         dadosExtras.pix_pagador_cpf_cnpj = pixPagadorCpfCnpj || null;
         dadosExtras.pix_pagador_banco = pixPagadorBanco || null;
@@ -7074,18 +7337,36 @@
         dadosExtras.pix_chave = pixChave || null;
         dadosExtras.pix_e2e_id = pixE2eId || null;
         dadosExtras.pix_autenticacao = pixAutenticacao || null;
+      } else {
+        delete dadosExtras.pix_pagador_nome;
+        delete dadosExtras.pix_pagador_cpf_cnpj;
+        delete dadosExtras.pix_pagador_banco;
+        delete dadosExtras.pix_recebedor_nome;
+        delete dadosExtras.pix_recebedor_cpf_cnpj;
+        delete dadosExtras.pix_recebedor_banco;
+        delete dadosExtras.pix_chave;
+        delete dadosExtras.pix_e2e_id;
+        delete dadosExtras.pix_autenticacao;
       }
 
-      const primaryTipo = document.getElementById('select_tipo_documento').value || null;
-      let todosTipos = Array.isArray(doc.todos_tipos) ? [...doc.todos_tipos] : [];
-      if (primaryTipo && !todosTipos.some(t => t.toLowerCase() === primaryTipo.toLowerCase())) {
-        todosTipos.unshift(primaryTipo);
-      }
-      
-      let todosDominios = Array.isArray(doc.todos_dominios) ? [...doc.todos_dominios] : [];
-      if (dominio && !todosDominios.includes(dominio)) {
-        todosDominios.unshift(dominio);
-      }
+      // Recalcula lista limpa de domínios
+      const domsSet = new Set();
+      if (dominio) domsSet.add(dominio);
+      todosTipos.forEach(t => {
+        const tLower = safeString(t).toLowerCase();
+        if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto') || tLower.includes('extrato') || tLower.includes('nota fiscal')) {
+          domsSet.add('financeiro');
+        } else if (tLower.includes('rg') || tLower.includes('cnh') || tLower.includes('cpf') || tLower.includes('certid') || tLower.includes('passaporte') || tLower.includes('eleitor')) {
+          domsSet.add('identificacao');
+        } else if (tLower.includes('procur') || tLower.includes('contrato') || tLower.includes('posse')) {
+          domsSet.add('juridico');
+        } else if (tLower.includes('cnpj') || tLower.includes('cadastral') || tLower.includes('trabalho') || tLower.includes('ctps') || tLower.includes('lattes') || tLower.includes('curriculo') || tLower.includes('registro profissional')) {
+          domsSet.add('profissional');
+        } else if (tLower.includes('diploma') || tLower.includes('certificado') || tLower.includes('histórico') || tLower.includes('declar') || tLower.includes('ementa')) {
+          domsSet.add('academico');
+        }
+      });
+      const todosDominios = Array.from(domsSet);
 
       const res = {
         ...doc,
@@ -7093,7 +7374,7 @@
         todos_dominios: todosDominios,
         todos_tipos: todosTipos,
         dossie_paginas: doc.dossie_paginas || [],
-        valor_monetario: valorMonetario || null,
+        valor_monetario: isFinancial ? (valorMonetario || null) : null,
         beneficiario: document.getElementById('input_beneficiario').value.trim() || null,
         cpf: document.getElementById('input_cpf').value.trim() || null,
         rg: document.getElementById('input_rg').value.trim() || null,
@@ -7107,7 +7388,7 @@
         dados_extras: dadosExtras
       };
 
-      if (dominio === 'financeiro') {
+      if (isFinancial) {
         res.pix_pagador_nome = pixPagadorNome || null;
         res.pix_pagador_cpf_cnpj = pixPagadorCpfCnpj || null;
         res.pix_pagador_banco = pixPagadorBanco || null;
@@ -7117,6 +7398,16 @@
         res.pix_chave = pixChave || null;
         res.pix_e2e_id = pixE2eId || null;
         res.pix_autenticacao = pixAutenticacao || null;
+      } else {
+        res.pix_pagador_nome = null;
+        res.pix_pagador_cpf_cnpj = null;
+        res.pix_pagador_banco = null;
+        res.pix_recebedor_nome = null;
+        res.pix_recebedor_cpf_cnpj = null;
+        res.pix_recebedor_banco = null;
+        res.pix_chave = null;
+        res.pix_e2e_id = null;
+        res.pix_autenticacao = null;
       }
 
       delete res.data_criacao;
@@ -7134,11 +7425,14 @@
         showToast('Nenhum documento selecionado para salvar.', 'info');
         return;
       }
+      const chkAprender = document.getElementById('chkAprenderRegra');
+      const aprenderRegra = chkAprender ? chkAprender.checked : true;
+
       try {
         const resp = await fetch('/api/salvar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ item: updated })
+          body: JSON.stringify({ item: updated, aprender_regra: aprenderRegra })
         });
         if (!resp.ok) throw new Error('Erro ao salvar no servidor');
 
@@ -7152,6 +7446,7 @@
         updateFacetFilters();
         updateCounters();
         renderSidebar();
+        loadLearnedRulesCount();
       } catch (err) {
         showToast('Falha ao salvar: ' + err.message, 'error');
       }
@@ -7164,12 +7459,14 @@
         return;
       }
       updated.status_conferencia = 'aprovado';
+      const chkAprender = document.getElementById('chkAprenderRegra');
+      const aprenderRegra = chkAprender ? chkAprender.checked : true;
       
       try {
         const resp = await fetch('/api/salvar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ item: updated })
+          body: JSON.stringify({ item: updated, aprender_regra: aprenderRegra })
         });
         if (!resp.ok) throw new Error('Erro ao salvar aprovação');
 
@@ -7179,6 +7476,7 @@
 
         showToast('Documento conferido e aprovado!', 'success');
         updateCounters();
+        loadLearnedRulesCount();
 
         if (currentIndex < filteredDocs.length - 1) {
           selectDocument(currentIndex + 1);
@@ -7188,6 +7486,126 @@
         }
       } catch (err) {
         showToast('Falha ao aprovar: ' + err.message, 'error');
+      }
+    }
+
+    // Gerenciamento do Modal de Regras Aprendidas da IA
+    async function loadLearnedRulesCount() {
+      try {
+        const resp = await fetch('/api/regras-aprendidas');
+        if (!resp.ok) return;
+        const regras = await resp.json();
+        const badge = document.getElementById('learnedRulesCount');
+        if (badge) {
+          badge.innerText = Array.isArray(regras) ? regras.length : 0;
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar contagem de regras:', e);
+      }
+    }
+
+    async function openLearnedRulesModal() {
+      const modal = document.getElementById('modalLearnedRules');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      const container = document.getElementById('learnedRulesListContainer');
+      if (container) {
+        container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs italic"><i class="fa-solid fa-spinner fa-spin text-teal-400 mr-2"></i> Carregando regras aprendidas...</div>';
+      }
+      
+      try {
+        const resp = await fetch('/api/regras-aprendidas');
+        if (!resp.ok) throw new Error('Falha ao obter regras');
+        const regras = await resp.json();
+        renderLearnedRulesList(regras);
+      } catch (err) {
+        if (container) {
+          container.innerHTML = `<div class="p-3 text-center text-rose-400 text-xs">Erro ao carregar regras: ${err.message}</div>`;
+        }
+      }
+    }
+
+    function closeLearnedRulesModal() {
+      const modal = document.getElementById('modalLearnedRules');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function renderLearnedRulesList(regras) {
+      const container = document.getElementById('learnedRulesListContainer');
+      if (!container) return;
+      const countEl = document.getElementById('learnedRulesCount');
+      if (countEl) countEl.innerText = Array.isArray(regras) ? regras.length : 0;
+
+      if (!Array.isArray(regras) || regras.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 px-4 bg-slate-950/40 rounded-lg border border-slate-800/80">
+            <i class="fa-solid fa-brain text-slate-600 text-3xl mb-2"></i>
+            <p class="text-slate-300 font-medium text-xs">Nenhuma regra aprendida no momento</p>
+            <p class="text-slate-500 text-[11px] mt-1 max-w-sm mx-auto">
+              Ao conferir ou aprovar documentos com a opção "Aprender com esta conferência" marcada, os novos padrões identificados serão listados aqui.
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '<div class="divide-y divide-slate-800/80">';
+      regras.forEach(r => {
+        const domBadgeColor = r.dominio === 'financeiro' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                             r.dominio === 'profissional' ? 'bg-sky-500/20 text-sky-300 border-sky-500/30' :
+                             r.dominio === 'identificacao' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
+                             r.dominio === 'juridico' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                             'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+        
+        html += `
+          <div class="py-2.5 flex items-center justify-between gap-3 hover:bg-slate-800/30 px-2 rounded-lg transition">
+            <div class="space-y-0.5 flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-teal-300 font-semibold text-xs truncate" title="${r.termo_chave || ''}">
+                  <i class="fa-solid fa-key text-[10px] text-teal-500 mr-1"></i>"${r.termo_chave || ''}"
+                </span>
+                <i class="fa-solid fa-arrow-right text-[10px] text-slate-500"></i>
+                <span class="text-slate-200 font-medium text-xs truncate">
+                  ${r.valor_atribuido || ''}
+                </span>
+              </div>
+              <div class="flex items-center gap-2 text-[10.5px] text-slate-400">
+                <span class="px-1.5 py-0.2 rounded border font-mono ${domBadgeColor}">${r.dominio || 'academico'}</span>
+                ${r.remover_pix ? '<span class="text-rose-400 flex items-center gap-0.5"><i class="fa-solid fa-ban text-[9px]"></i> Sem PIX</span>' : ''}
+                <span class="text-slate-500">Confiança: ${Math.round((r.confianca || 1.0) * 100)}%</span>
+                <span class="text-slate-600 font-mono text-[9px]">${r.criado_em ? r.criado_em.split('T')[0] : ''}</span>
+              </div>
+            </div>
+            <button type="button" onclick="deleteLearnedRule(${r.id})"
+                    class="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                    title="Excluir regra aprendida">
+              <i class="fa-regular fa-trash-can text-xs"></i>
+            </button>
+          </div>
+        `;
+      });
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    async function deleteLearnedRule(ruleId) {
+      if (!confirm('Deseja realmente remover esta regra aprendida da memória da IA?')) return;
+      try {
+        const resp = await fetch('/api/regras-aprendidas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acao: 'remover', id: ruleId })
+        });
+        const res = await resp.json();
+        if (res.status === 'sucesso') {
+          showToast('Regra removida com sucesso!', 'success');
+          openLearnedRulesModal();
+          loadLearnedRulesCount();
+        } else {
+          showToast('Erro ao remover regra.', 'error');
+        }
+      } catch (err) {
+        showToast('Falha na comunicação: ' + err.message, 'error');
       }
     }
 

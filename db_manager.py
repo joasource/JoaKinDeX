@@ -119,6 +119,21 @@ def create_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_tipos ON documentos(todos_tipos);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_dominios ON documentos(todos_dominios);")
 
+    # Tabela de Regras e Aprendizado Incremental do Usuário
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS regras_aprendidas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        termo_chave TEXT NOT NULL,
+        campo_alvo TEXT NOT NULL DEFAULT 'tipo_documento',
+        valor_atribuido TEXT NOT NULL,
+        dominio TEXT NOT NULL,
+        remover_pix INTEGER DEFAULT 0,
+        origem_md5 TEXT,
+        criado_em TEXT NOT NULL
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_regra_termo ON regras_aprendidas(termo_chave);")
+
     # Garante preenchimento de domínio retroativo nos registros antigos
     conn.execute("UPDATE documentos SET dominio = 'academico' WHERE dominio IS NULL OR dominio = '';")
     conn.commit()
@@ -143,8 +158,11 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
     dominio = item.get("dominio")
     if not dominio:
         tipo_lower = str(tipo_documento or "").lower()
-        if "pix" in tipo_lower or "comprovante" in tipo_lower or "recibo" in tipo_lower or "boleto" in tipo_lower or valor_monetario:
+        is_non_fin = any(k in tipo_lower for k in ["inscrição", "inscricao", "situação", "situacao", "cnpj", "residência", "residencia", "matrícula", "matricula", "rendimentos", "votação", "votacao"])
+        if not is_non_fin and ("pix" in tipo_lower or "comprovante de pagamento" in tipo_lower or "comprovante pix" in tipo_lower or "recibo de pagamento" in tipo_lower or "boleto" in tipo_lower or valor_monetario):
             dominio = "financeiro"
+        elif any(k in tipo_lower for k in ["situação cadastral", "situacao cadastral", "cnpj", "currículo", "curriculo", "experiência profissional", "experiencia profissional"]):
+            dominio = "profissional"
         elif any(k in tipo_lower for k in ["rg", "cnh", "identidade", "cpf", "certidão", "certidao"]):
             dominio = "identificacao"
         elif any(k in tipo_lower for k in ["contrato", "procuração", "procuracao", "posse", "juridico"]):
@@ -612,3 +630,73 @@ def sync_to_json(
     with open(tmp_json, "w", encoding="utf-8") as f:
         json.dump(docs, f, ensure_ascii=False, indent=2)
     tmp_json.replace(target_json)
+
+
+def salvar_regra_aprendida(
+    db_path: Union[str, Path],
+    termo_chave: str,
+    valor_atribuido: str,
+    dominio: str,
+    campo_alvo: str = "tipo_documento",
+    remover_pix: bool = False,
+    origem_md5: Optional[str] = None
+) -> int:
+    """Registra uma regra aprendida a partir de conferência ou correção manual do usuário."""
+    db = Path(db_path).expanduser().resolve()
+    with get_connection(db) as conn:
+        create_schema(conn)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM regras_aprendidas WHERE LOWER(termo_chave) = LOWER(?) AND LOWER(campo_alvo) = LOWER(?)",
+            (termo_chave.strip(), campo_alvo.strip())
+        )
+        row = cur.fetchone()
+        now_str = datetime.now().isoformat()
+        if row:
+            cur.execute("""
+                UPDATE regras_aprendidas
+                SET valor_atribuido = ?, dominio = ?, remover_pix = ?, origem_md5 = ?, criado_em = ?
+                WHERE id = ?
+            """, (valor_atribuido.strip(), dominio.strip(), 1 if remover_pix else 0, origem_md5, now_str, row["id"]))
+            conn.commit()
+            return row["id"]
+        else:
+            cur.execute("""
+                INSERT INTO regras_aprendidas (termo_chave, campo_alvo, valor_atribuido, dominio, remover_pix, origem_md5, criado_em)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (termo_chave.strip(), campo_alvo.strip(), valor_atribuido.strip(), dominio.strip(), 1 if remover_pix else 0, origem_md5, now_str))
+            conn.commit()
+            return cur.lastrowid
+
+
+def obter_regras_aprendidas(db_path: Union[str, Path]) -> List[Dict[str, Any]]:
+    """Retorna todas as regras aprendidas cadastradas pelo usuário."""
+    db = Path(db_path).expanduser().resolve()
+    with get_connection(db) as conn:
+        create_schema(conn)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM regras_aprendidas ORDER BY id DESC")
+        return [dict(r) for r in cur.fetchall()]
+
+
+def remover_regra_aprendida(db_path: Union[str, Path], regra_id: int) -> bool:
+    """Exclui uma regra aprendida pelo seu ID."""
+    db = Path(db_path).expanduser().resolve()
+    with get_connection(db) as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM regras_aprendidas WHERE id = ?", (regra_id,))
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def consultar_regra_para_texto(db_path: Union[str, Path], texto: str) -> Optional[Dict[str, Any]]:
+    """Verifica se algum termo-chave de regra aprendida ocorre no texto."""
+    if not texto:
+        return None
+    t_lower = texto.lower()
+    regras = obter_regras_aprendidas(db_path)
+    for r in regras:
+        termo = (r.get("termo_chave") or "").strip().lower()
+        if termo and termo in t_lower:
+            return r
+    return None
