@@ -810,15 +810,29 @@
                 <button type="button" onclick="closeAllFilterPopovers()" class="text-slate-400 hover:text-white p-0.5"><i class="fa-solid fa-xmark"></i></button>
               </div>
             </div>
-            <div class="relative mb-2">
+            <div class="relative mb-2.5">
               <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-[10px] text-slate-500"></i>
-              <input type="text" id="inputSearchTipo" oninput="onTipoSearchInput()" placeholder="Filtrar tipos..."
+              <input type="text" id="inputSearchTipo" oninput="onTipoSearchInput()" placeholder="Buscar TAGs (ex: Currículo, Diploma, PIX, RG...)"
                      class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-7 pr-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
             </div>
             <select id="selectTipoFilter" class="hidden">
               <option value="">Todos os Tipos</option>
             </select>
-            <div id="tipoChips" class="flex flex-wrap gap-1.5 max-h-60 overflow-y-auto pr-0.5 no-scrollbar"></div>
+            <!-- 1. Macro-TAGs (Guarda-Chuva) -->
+            <div class="mb-2.5">
+              <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span class="flex items-center gap-1"><i class="fa-solid fa-layer-group text-[9.5px] text-teal-400"></i> Visões Agrupadas (Macro-TAGs)</span>
+              </div>
+              <div id="macroTipoChips" class="flex flex-wrap gap-1.5"></div>
+            </div>
+            <!-- 2. Todas as TAGs Detalhadas Mapeadas -->
+            <div class="pt-2 border-t border-slate-800/80">
+              <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span class="flex items-center gap-1"><i class="fa-solid fa-tags text-[9.5px] text-teal-400"></i> TAGs Específicas Mapeadas</span>
+                <span id="tipoCountBadge" class="text-[9.5px] text-slate-500 font-mono"></span>
+              </div>
+              <div id="tipoChips" class="space-y-2 max-h-72 overflow-y-auto pr-0.5 no-scrollbar"></div>
+            </div>
           </div>
 
           <!-- POPOVER 4: NÍVEL / NATUREZA (HIERARQUIA 4) -->
@@ -1719,12 +1733,26 @@
               <button type="button" onclick="closeAllFilterPopovers()" class="text-slate-400 hover:text-white p-0.5"><i class="fa-solid fa-xmark"></i></button>
             </div>
           </div>
-          <div class="relative mb-2">
+          <div class="relative mb-2.5">
             <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-[10px] text-slate-500"></i>
-            <input type="text" id="g-inputSearchTipo" oninput="onTipoSearchInput()" placeholder="Filtrar tipos..."
+            <input type="text" id="g-inputSearchTipo" oninput="onTipoSearchInput()" placeholder="Buscar TAGs (ex: Currículo, Diploma, PIX, RG...)"
                    class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-7 pr-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
           </div>
-          <div id="g-tipoChips" class="flex flex-wrap gap-1.5 max-h-60 overflow-y-auto pr-0.5 no-scrollbar"></div>
+          <!-- 1. Macro-TAGs (Guarda-Chuva) -->
+          <div class="mb-2.5">
+            <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span class="flex items-center gap-1"><i class="fa-solid fa-layer-group text-[9.5px] text-teal-400"></i> Visões Agrupadas (Macro-TAGs)</span>
+            </div>
+            <div id="g-macroTipoChips" class="flex flex-wrap gap-1.5"></div>
+          </div>
+          <!-- 2. Todas as TAGs Detalhadas Mapeadas -->
+          <div class="pt-2 border-t border-slate-800/80">
+            <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span class="flex items-center gap-1"><i class="fa-solid fa-tags text-[9.5px] text-teal-400"></i> TAGs Específicas Mapeadas</span>
+              <span id="g-tipoCountBadge" class="text-[9.5px] text-slate-500 font-mono"></span>
+            </div>
+            <div id="g-tipoChips" class="space-y-2 max-h-72 overflow-y-auto pr-0.5 no-scrollbar"></div>
+          </div>
         </div>
 
         <!-- POPOVER 4: NÍVEL / NATUREZA -->
@@ -3025,6 +3053,175 @@
       activeStatusFilter = selectedStatus.size === 1 ? Array.from(selectedStatus)[0] : (selectedStatus.size === 0 ? 'todos' : 'multiplo');
     }
 
+    // =========================================================================
+    // DEFINIÇÃO DE MACRO-TAGS E CATEGORIZAÇÃO UNIVERSAL DE TAGS
+    // =========================================================================
+    function getDocAllTiposSet(doc) {
+      const s = new Set();
+      if (!doc) return s;
+      const main = safeString(doc.tipo_documento).trim();
+      if (main) s.add(main);
+      if (Array.isArray(doc.todos_tipos)) {
+        doc.todos_tipos.forEach(t => {
+          const clean = safeString(t).trim();
+          if (clean) s.add(clean);
+        });
+      }
+      if (Array.isArray(doc.dossie_paginas)) {
+        doc.dossie_paginas.forEach(p => {
+          const clean = safeString(p.tipo).trim();
+          if (clean) s.add(clean);
+        });
+      }
+      if (s.size === 0) s.add('Não identificado');
+      return s;
+    }
+
+    function getTagCategory(tipo) {
+      const t = normalizeText(tipo || '');
+      if (!t || t === 'nao identificado' || t === 'outro' || t === 'documento diverso') {
+        return 'Outros';
+      }
+      // Carreira & Profissional
+      if (t.includes('curriculo') || t.includes('experiencia profissional') || t.includes('lattes') || t.includes('carteira de trabalho') || t.includes('ctps') || t.includes('situacao cadastral') || t.includes('registro profissional')) {
+        return 'Carreira & Profissional';
+      }
+      // Identificação & Pessoal
+      if (t === 'rg' || t === 'cpf' || t === 'cnh' || t.includes('rg') || t.includes('cnh') || t.includes('cpf') || t.includes('identidade') || t.includes('habilitacao') || t.includes('certidao') || t.includes('eleitoral') || t.includes('passaporte') || t.includes('nascimento') || t.includes('casamento') || t.includes('reservista')) {
+        return 'Identificação & Pessoal';
+      }
+      // Financeiro
+      if (t.includes('pix') || t.includes('pagamento') || t.includes('extrato') || t.includes('banco') || t.includes('bancario') || t.includes('nota fiscal') || t.includes('fatura') || t.includes('recibo') || t.includes('boleto')) {
+        return 'Financeiro';
+      }
+      // Jurídico & Normativo
+      if (t.includes('contrat') || t.includes('convenio') || t.includes('responsabilidade') || t.includes('portaria') || t.includes('resolucao') || t.includes('diario oficial') || t.includes('termo') || t.includes('procuracao') || t.includes('estatuto')) {
+        return 'Jurídico & Normativo';
+      }
+      // Processual & Administrativo
+      if (t.includes('recurso') || t.includes('relatorio') || t.includes('cadastro') || t.includes('preparatorio') || t.includes('promocional') || t.includes('processual') || t.includes('oficio') || t.includes('memorando')) {
+        return 'Processual & Administrativo';
+      }
+      // Acadêmico
+      if (t.includes('diploma') || t.includes('certificado') || t.includes('historico') || t.includes('declaracao') || t.includes('ementa') || t.includes('dissertacao') || t.includes('livro') || t.includes('publicacao') || t.includes('didatico') || t.includes('instrucional') || t.includes('biblioteca') || t.includes('aluno') || t.includes('ensino') || t.includes('academico') || t.includes('curso') || t.includes('graduacao') || t.includes('pos-graduacao') || t.includes('modulo') || t.includes('desenvolvimento institucional')) {
+        return 'Produtos Acadêmicos';
+      }
+      return 'Outros';
+    }
+
+    const MACRO_TAGS = [
+      {
+        id: 'macro:produtos_academicos',
+        label: 'Produtos Acadêmicos',
+        shortLabel: 'Acadêmicos',
+        icon: 'fa-solid fa-graduation-cap',
+        color: 'amber',
+        bg: 'bg-amber-950/40 border-amber-800/70 text-amber-200 hover:bg-amber-900/50 hover:border-amber-500',
+        activeBg: 'bg-amber-600 border-amber-400 text-white',
+        category: 'Produtos Acadêmicos',
+        description: 'Diplomas, Certificados, Históricos, Declarações, Ementas, Dissertações, etc.',
+        matchDoc: (doc, tiposSet) => {
+          const dom = safeString(doc.dominio_documento).trim().toLowerCase();
+          if (dom === 'academico') return true;
+          const academicKeywords = [
+            'diploma', 'certificado', 'historico escolar', 'declaracao', 'ementa',
+            'conteudo programatico', 'dissertacao', 'livro', 'publicacao', 'didatico',
+            'instrucional', 'biblioteca', 'aluno', 'ensino', 'academico', 'curso',
+            'graduacao', 'pos-graduacao', 'modulo', 'plano de desenvolvimento'
+          ];
+          for (const t of tiposSet) {
+            const tl = normalizeText(t);
+            if (academicKeywords.some(kw => tl.includes(kw))) return true;
+          }
+          return false;
+        }
+      },
+      {
+        id: 'macro:carreira_profissional',
+        label: 'Carreira & Profissional',
+        shortLabel: 'Profissional',
+        icon: 'fa-solid fa-briefcase',
+        color: 'sky',
+        bg: 'bg-sky-950/40 border-sky-800/70 text-sky-200 hover:bg-sky-900/50 hover:border-sky-500',
+        activeBg: 'bg-sky-600 border-sky-400 text-white',
+        category: 'Carreira & Profissional',
+        description: 'Currículos, Lattes, Experiência Profissional, Registros de Classe',
+        matchDoc: (doc, tiposSet) => {
+          const dom = safeString(doc.dominio_documento).trim().toLowerCase();
+          if (dom === 'profissional') return true;
+          const profKeywords = ['curriculo', 'experiencia profissional', 'lattes', 'carteira de trabalho', 'ctps', 'situacao cadastral', 'registro profissional', 'crf', 'crm', 'oab', 'crea'];
+          for (const t of tiposSet) {
+            const tl = normalizeText(t);
+            if (profKeywords.some(kw => tl.includes(kw))) return true;
+          }
+          return false;
+        }
+      },
+      {
+        id: 'macro:identificacao_pessoal',
+        label: 'Identificação & Pessoal',
+        shortLabel: 'Identificação',
+        icon: 'fa-solid fa-id-card',
+        color: 'purple',
+        bg: 'bg-purple-950/40 border-purple-800/70 text-purple-200 hover:bg-purple-900/50 hover:border-purple-500',
+        activeBg: 'bg-purple-600 border-purple-400 text-white',
+        category: 'Identificação & Pessoal',
+        description: 'RG, CPF, CNH, Certidões, Título de Eleitor, Passaporte',
+        matchDoc: (doc, tiposSet) => {
+          const dom = safeString(doc.dominio_documento).trim().toLowerCase();
+          if (dom === 'identificacao' || dom === 'pessoal') return true;
+          const idKeywords = ['rg', 'cpf', 'cnh', 'identidade', 'habilitacao', 'certidao', 'eleitoral', 'passaporte', 'nascimento', 'casamento', 'reservista', 'residencia'];
+          for (const t of tiposSet) {
+            const tl = normalizeText(t);
+            if (idKeywords.some(kw => tl === kw || tl.includes(kw))) return true;
+          }
+          return false;
+        }
+      },
+      {
+        id: 'macro:financeiro',
+        label: 'Financeiro',
+        shortLabel: 'Financeiro',
+        icon: 'fa-solid fa-receipt',
+        color: 'emerald',
+        bg: 'bg-emerald-950/40 border-emerald-800/70 text-emerald-200 hover:bg-emerald-900/50 hover:border-emerald-500',
+        activeBg: 'bg-emerald-600 border-emerald-400 text-white',
+        category: 'Financeiro',
+        description: 'PIX, Comprovantes de Pagamento, Boletos, Recibos, Extratos',
+        matchDoc: (doc, tiposSet) => {
+          const dom = safeString(doc.dominio_documento).trim().toLowerCase();
+          if (dom === 'financeiro') return true;
+          const finKeywords = ['pix', 'pagamento', 'extrato', 'banco', 'bancario', 'nota fiscal', 'fatura', 'recibo', 'boleto'];
+          for (const t of tiposSet) {
+            const tl = normalizeText(t);
+            if (finKeywords.some(kw => tl.includes(kw))) return true;
+          }
+          return false;
+        }
+      },
+      {
+        id: 'macro:juridico_normativo',
+        label: 'Jurídico & Normativo',
+        shortLabel: 'Jurídico',
+        icon: 'fa-solid fa-scale-balanced',
+        color: 'rose',
+        bg: 'bg-rose-950/40 border-rose-800/70 text-rose-200 hover:bg-rose-900/50 hover:border-rose-500',
+        activeBg: 'bg-rose-600 border-rose-400 text-white',
+        category: 'Jurídico & Normativo',
+        description: 'Contratos, Portarias, Resoluções, Diário Oficial, Termos',
+        matchDoc: (doc, tiposSet) => {
+          const dom = safeString(doc.dominio_documento).trim().toLowerCase();
+          if (dom === 'juridico' || dom === 'normativo' || dom === 'legal') return true;
+          const jurKeywords = ['contrat', 'convenio', 'responsabilidade', 'portaria', 'resolucao', 'diario oficial', 'termo', 'procuracao', 'estatuto', 'parecer'];
+          for (const t of tiposSet) {
+            const tl = normalizeText(t);
+            if (jurKeywords.some(kw => tl.includes(kw))) return true;
+          }
+          return false;
+        }
+      }
+    ];
+
     // Gerenciamento de Menus Flutuantes (Filter Popovers)
     function toggleFilterPopover(id) {
       if (openFilterPopoverId === id) {
@@ -3215,40 +3412,55 @@
     function getSelectedTagsCategoryContext() {
       const hasTags = selectedTipos.size > 0;
       if (!hasTags) {
-        return { hasTags: false, isAcademic: false, isFinancial: false, isIdentity: false };
+        return { hasTags: false, isAcademic: false, isFinancial: false, isIdentity: false, isProfessional: false, isJuridico: false, isProcessual: false };
       }
 
       let isAcademic = false;
       let isFinancial = false;
       let isIdentity = false;
+      let isProfessional = false;
+      let isJuridico = false;
+      let isProcessual = false;
 
       selectedTipos.forEach(tipo => {
-        const meta = getTagMeta(tipo);
-        const cat = meta && meta.category ? meta.category : '';
-        const t = normalizeText(tipo || '');
-
-        if (['Diploma', 'Certificado', 'Histórico', 'Declaração', 'Conteúdo', 'Acadêmico'].includes(cat) ||
-            t.includes('diploma') || t.includes('certificado') || t.includes('historico') || 
-            t.includes('declaracao') || t.includes('ementa') || t.includes('conteudo') || 
-            t.includes('graduacao') || t.includes('academico') || t.includes('curso') || t.includes('escolar')) {
+        if (tipo === 'macro:produtos_academicos') {
           isAcademic = true;
-        } else if (['PIX / Fin', 'Financeiro'].includes(cat) ||
-                   t.includes('pix') || t.includes('recibo') || t.includes('comprovante') || 
-                   t.includes('boleto') || t.includes('pagamento') || t.includes('financeir') || 
-                   t.includes('banc') || t.includes('extrato')) {
-          isFinancial = true;
-        } else if (['Identificação'].includes(cat) ||
-                   t.includes('rg') || t.includes('cnh') || t.includes('cpf') || 
-                   t.includes('identidad') || t.includes('passaporte') || t.includes('certidao') || t.includes('titulo')) {
-          isIdentity = true;
+          return;
         }
+        if (tipo === 'macro:carreira_profissional') {
+          isProfessional = true;
+          return;
+        }
+        if (tipo === 'macro:identificacao_pessoal') {
+          isIdentity = true;
+          return;
+        }
+        if (tipo === 'macro:financeiro') {
+          isFinancial = true;
+          return;
+        }
+        if (tipo === 'macro:juridico_normativo') {
+          isJuridico = true;
+          return;
+        }
+
+        const cat = getTagCategory(tipo);
+        if (cat === 'Produtos Acadêmicos') isAcademic = true;
+        else if (cat === 'Carreira & Profissional') isProfessional = true;
+        else if (cat === 'Identificação & Pessoal') isIdentity = true;
+        else if (cat === 'Financeiro') isFinancial = true;
+        else if (cat === 'Jurídico & Normativo') isJuridico = true;
+        else if (cat === 'Processual & Administrativo') isProcessual = true;
       });
 
       return {
         hasTags: true,
-        isAcademic: isAcademic,
-        isFinancial: isFinancial,
-        isIdentity: isIdentity
+        isAcademic,
+        isFinancial,
+        isIdentity,
+        isProfessional,
+        isJuridico,
+        isProcessual
       };
     }
 
@@ -3287,19 +3499,31 @@
       let instHeaderTitle = 'Instituição / Emissor';
       let instSearchPlaceholder = 'Filtrar instituições...';
 
-      if (tagCtx.isFinancial && !tagCtx.isAcademic && !tagCtx.isIdentity) {
+      if (tagCtx.isProfessional && !tagCtx.isAcademic && !tagCtx.isFinancial && !tagCtx.isIdentity && !tagCtx.isJuridico) {
+        instLabelDefault = 'Empresa / Órgão';
+        instIconClass = 'fa-solid fa-briefcase text-sky-400 text-[10.5px]';
+        instTitleDefault = 'Filtrar por empresa, empregador ou órgão emissor';
+        instHeaderTitle = 'Empresa / Empregador / Órgão';
+        instSearchPlaceholder = 'Filtrar empresas...';
+      } else if (tagCtx.isFinancial && !tagCtx.isAcademic && !tagCtx.isIdentity && !tagCtx.isProfessional && !tagCtx.isJuridico) {
         instLabelDefault = 'Banco';
         instIconClass = 'fa-solid fa-building-columns text-emerald-400 text-[10.5px]';
         instTitleDefault = 'Filtrar por banco ou emissor financeiro';
         instHeaderTitle = 'Banco / Emissor';
         instSearchPlaceholder = 'Filtrar bancos...';
-      } else if (tagCtx.isIdentity && !tagCtx.isAcademic && !tagCtx.isFinancial) {
+      } else if (tagCtx.isIdentity && !tagCtx.isAcademic && !tagCtx.isFinancial && !tagCtx.isProfessional && !tagCtx.isJuridico) {
         instLabelDefault = 'Órgão / UF';
         instIconClass = 'fa-solid fa-id-card text-purple-400 text-[10.5px]';
         instTitleDefault = 'Filtrar por órgão emissor ou estado';
         instHeaderTitle = 'Órgão Emissor / UF';
         instSearchPlaceholder = 'Filtrar órgãos ou UFs...';
-      } else if (tagCtx.isAcademic && !tagCtx.isFinancial && !tagCtx.isIdentity) {
+      } else if (tagCtx.isJuridico && !tagCtx.isAcademic && !tagCtx.isFinancial && !tagCtx.isIdentity && !tagCtx.isProfessional) {
+        instLabelDefault = 'Cartório / Órgão';
+        instIconClass = 'fa-solid fa-scale-balanced text-rose-400 text-[10.5px]';
+        instTitleDefault = 'Filtrar por cartório, tribunal ou órgão';
+        instHeaderTitle = 'Cartório / Tribunal / Órgão';
+        instSearchPlaceholder = 'Filtrar cartórios ou órgãos...';
+      } else if (tagCtx.isAcademic && !tagCtx.isFinancial && !tagCtx.isIdentity && !tagCtx.isProfessional && !tagCtx.isJuridico) {
         instLabelDefault = 'Faculdade';
         instIconClass = 'fa-solid fa-building-columns text-amber-400 text-[10.5px]';
         instTitleDefault = 'Filtrar por faculdade ou instituição de ensino';
@@ -3333,12 +3557,17 @@
             pillTipo.className = "px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition shrink-0 bg-teal-500/20 text-teal-300 border-teal-500/40 shadow-sm";
             if (selectedTipos.size === 1) {
               const tipoVal = Array.from(selectedTipos)[0];
-              const shortTipo = tipoVal.length > 14 ? tipoVal.substring(0, 12) + '...' : tipoVal;
+              const macro = MACRO_TAGS.find(m => m.id === tipoVal || m.label === tipoVal);
+              const displayLabel = macro ? (macro.shortLabel || macro.label) : tipoVal;
+              const shortTipo = displayLabel.length > 15 ? displayLabel.substring(0, 13) + '...' : displayLabel;
               lblTipo.innerText = shortTipo;
-              lblTipo.title = tipoVal;
+              lblTipo.title = macro ? macro.label : tipoVal;
             } else {
               lblTipo.innerText = `TAGs (${selectedTipos.size})`;
-              lblTipo.title = Array.from(selectedTipos).join(', ');
+              lblTipo.title = Array.from(selectedTipos).map(t => {
+                const m = MACRO_TAGS.find(x => x.id === t || x.label === t);
+                return m ? m.label : t;
+              }).join(', ');
             }
             if (chevTipo) chevTipo.classList.add('hidden');
             if (clrTipo) clrTipo.classList.remove('hidden');
@@ -3566,23 +3795,18 @@
       }
 
       if (exclude !== 'tipo' && selectedTipos.size > 0) {
-        const docTipo = safeString(doc.tipo_documento).trim().toLowerCase();
-        const tipos = new Set();
-        if (docTipo) tipos.add(docTipo);
-        if (Array.isArray(doc.todos_tipos)) {
-          doc.todos_tipos.forEach(t => {
-            const s = safeString(t).trim().toLowerCase();
-            if (s) tipos.add(s);
-          });
-        }
-        if (Array.isArray(doc.dossie_paginas)) {
-          doc.dossie_paginas.forEach(p => {
-            const s = safeString(p.tipo).trim().toLowerCase();
-            if (s) tipos.add(s);
-          });
-        }
-        if (tipos.size === 0) tipos.add('não identificado');
-        if (!Array.from(selectedTipos).some(st => tipos.has(st.toLowerCase()))) return false;
+        const tipos = getDocAllTiposSet(doc);
+        const tiposLower = new Set(Array.from(tipos).map(t => t.toLowerCase()));
+
+        const matchesAnyTag = Array.from(selectedTipos).some(st => {
+          const macro = MACRO_TAGS.find(m => m.id === st || m.label.toLowerCase() === st.toLowerCase());
+          if (macro) {
+            return macro.matchDoc(doc, tipos);
+          }
+          return tiposLower.has(st.toLowerCase());
+        });
+
+        if (!matchesAnyTag) return false;
       }
 
       if (exclude !== 'natureza' && selectedNaturezas.size > 0) {
@@ -4678,19 +4902,25 @@
         const fac = safeString(d.faculdade).trim();
         if (fac) instSet.add(fac);
 
+        if (!Array.isArray(d.todos_tipos)) d.todos_tipos = [];
         const mainTipo = safeString(d.tipo_documento).trim();
-        if (mainTipo) tipoSet.add(mainTipo);
-
-        if (Array.isArray(d.todos_tipos)) {
-          d.todos_tipos.forEach(t => {
-            const cleanT = safeString(t).trim();
-            if (cleanT) tipoSet.add(cleanT);
-          });
+        if (mainTipo) {
+          tipoSet.add(mainTipo);
+          if (!d.todos_tipos.includes(mainTipo)) d.todos_tipos.push(mainTipo);
         }
+
+        d.todos_tipos.forEach(t => {
+          const cleanT = safeString(t).trim();
+          if (cleanT) tipoSet.add(cleanT);
+        });
+
         if (Array.isArray(d.dossie_paginas)) {
           d.dossie_paginas.forEach(p => {
             const cleanT = safeString(p.tipo).trim();
-            if (cleanT) tipoSet.add(cleanT);
+            if (cleanT) {
+              tipoSet.add(cleanT);
+              if (!d.todos_tipos.includes(cleanT)) d.todos_tipos.push(cleanT);
+            }
           });
         }
       });
@@ -4853,19 +5083,54 @@
 
     // Helper para metadados visuais das TAGs (Ícones, Cores semânticas e Categorias unificadas)
     function getTagMeta(tipo) {
+      if (!tipo) {
+        return { 
+          icon: 'fa-solid fa-tag', 
+          color: 'text-slate-400', 
+          bg: 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:border-slate-700', 
+          activeBg: 'bg-teal-600 border-teal-400 text-white', 
+          category: 'Outros' 
+        };
+      }
+
+      // 1. Verificação de Macro-TAGs
+      const macro = MACRO_TAGS.find(m => m.id === tipo || m.label.toLowerCase() === tipo.toLowerCase());
+      if (macro) {
+        return {
+          icon: macro.icon,
+          color: `text-${macro.color}-400`,
+          bg: macro.bg,
+          activeBg: macro.activeBg,
+          category: macro.category
+        };
+      }
+
       const t = normalizeText(tipo || '');
-      // PIX
+
+      // 2. Carreira & Profissional (Currículo, Lattes, Experiência, Carteira de Trabalho)
+      if (t.includes('curriculo') || t.includes('experiencia profissional') || t.includes('lattes') || t.includes('carteira de trabalho') || t.includes('ctps') || t.includes('situacao cadastral') || t.includes('registro profissional')) {
+        return {
+          icon: 'fa-solid fa-briefcase',
+          color: 'text-sky-400',
+          bg: 'bg-sky-950/40 border-sky-800/70 text-sky-200 hover:bg-sky-900/50 hover:border-sky-500',
+          activeBg: 'bg-sky-600 border-sky-400 text-white',
+          category: 'Carreira & Profissional'
+        };
+      }
+
+      // 3. PIX
       if (t.includes('pix')) {
         return { 
           icon: 'fa-brands fa-pix', 
           color: 'text-emerald-400', 
           bg: 'bg-emerald-950/40 border-emerald-800/70 text-emerald-200 hover:bg-emerald-900/50 hover:border-emerald-500', 
           activeBg: 'bg-emerald-600 border-emerald-400 text-white', 
-          category: 'PIX / Fin' 
+          category: 'Financeiro' 
         };
       }
-      // Financeiro (Recibo, Comprovante, Boleto, Pagamento, Transferência)
-      if (t.includes('recibo') || t.includes('comprovante') || t.includes('boleto') || t.includes('pagamento') || t.includes('financeir') || t.includes('banc') || t.includes('extrato')) {
+
+      // 4. Financeiro (Recibo, Comprovante, Boleto, Pagamento, Transferência, Extrato, Nota Fiscal)
+      if (t.includes('recibo') || t.includes('comprovante') || t.includes('boleto') || t.includes('pagamento') || t.includes('financeir') || t.includes('banc') || t.includes('extrato') || t.includes('nota fiscal') || t.includes('fatura')) {
         return { 
           icon: 'fa-solid fa-receipt', 
           color: 'text-emerald-400', 
@@ -4874,77 +5139,107 @@
           category: 'Financeiro' 
         };
       }
-      // Identidade / Pessoal (RG, CNH, CPF, Certidão, Título, Passaporte, Carteira)
-      if (t.includes('rg') || t.includes('cnh') || t.includes('cpf') || t.includes('identidad') || t.includes('certidao') || t.includes('passaporte') || t.includes('titulo') || t.includes('eleitor') || t.includes('civis') || t.includes('reservista')) {
+
+      // 5. Identidade / Pessoal (RG, CNH, CPF, Certidão, Título, Passaporte, Carteira)
+      if (t === 'rg' || t === 'cpf' || t === 'cnh' || t.includes('rg') || t.includes('cnh') || t.includes('cpf') || t.includes('identidad') || t.includes('certidao') || t.includes('passaporte') || t.includes('titulo') || t.includes('eleitor') || t.includes('civis') || t.includes('reservista') || t.includes('habilitacao') || t.includes('nascimento')) {
         return { 
           icon: 'fa-solid fa-id-card', 
           color: 'text-purple-400', 
           bg: 'bg-purple-950/40 border-purple-800/70 text-purple-200 hover:bg-purple-900/50 hover:border-purple-500', 
           activeBg: 'bg-purple-600 border-purple-400 text-white', 
-          category: 'Identificação' 
+          category: 'Identificação & Pessoal' 
         };
       }
-      // Diploma
+
+      // 6. Diploma
       if (t.includes('diploma')) {
         return { 
           icon: 'fa-solid fa-graduation-cap', 
           color: 'text-cyan-400', 
           bg: 'bg-cyan-950/40 border-cyan-800/70 text-cyan-200 hover:bg-cyan-900/50 hover:border-cyan-500', 
           activeBg: 'bg-cyan-600 border-cyan-400 text-white', 
-          category: 'Diploma' 
+          category: 'Produtos Acadêmicos' 
         };
       }
-      // Certificado
+
+      // 7. Certificado
       if (t.includes('certificado')) {
         return { 
           icon: 'fa-solid fa-award', 
           color: 'text-teal-400', 
           bg: 'bg-teal-950/40 border-teal-800/70 text-teal-200 hover:bg-teal-900/50 hover:border-teal-500', 
           activeBg: 'bg-teal-600 border-teal-400 text-white', 
-          category: 'Certificado' 
+          category: 'Produtos Acadêmicos' 
         };
       }
-      // Histórico escolar / universitário
+
+      // 8. Histórico escolar / universitário
       if (t.includes('historico')) {
         return { 
           icon: 'fa-solid fa-book-open', 
           color: 'text-blue-400', 
           bg: 'bg-blue-950/40 border-blue-800/70 text-blue-200 hover:bg-blue-900/50 hover:border-blue-500', 
           activeBg: 'bg-blue-600 border-blue-400 text-white', 
-          category: 'Histórico' 
+          category: 'Produtos Acadêmicos' 
         };
       }
-      // Declaração / Atestado / Matrícula
+
+      // 9. Declaração / Atestado / Matrícula
       if (t.includes('declaracao') || t.includes('atestado') || t.includes('matricula') || t.includes('frequencia') || t.includes('conclusao')) {
         return { 
           icon: 'fa-solid fa-file-lines', 
           color: 'text-sky-400', 
           bg: 'bg-sky-950/40 border-sky-800/70 text-sky-200 hover:bg-sky-900/50 hover:border-sky-500', 
           activeBg: 'bg-sky-600 border-sky-400 text-white', 
-          category: 'Declaração' 
+          category: 'Produtos Acadêmicos' 
         };
       }
-      // Ementa / Conteúdo
-      if (t.includes('ementa') || t.includes('conteudo') || t.includes('grade') || t.includes('plano')) {
+
+      // 10. Dissertação / Livro / Publicação
+      if (t.includes('dissertacao') || t.includes('livro') || t.includes('publicacao') || t.includes('artigo') || t.includes('tcc') || t.includes('tese')) {
+        return {
+          icon: 'fa-solid fa-book-bookmark',
+          color: 'text-amber-400',
+          bg: 'bg-amber-950/40 border-amber-800/70 text-amber-200 hover:bg-amber-900/50 hover:border-amber-500',
+          activeBg: 'bg-amber-600 border-amber-400 text-white',
+          category: 'Produtos Acadêmicos'
+        };
+      }
+
+      // 11. Ementa / Conteúdo / Material Didático / Módulo Instrucional
+      if (t.includes('ementa') || t.includes('conteudo') || t.includes('grade') || t.includes('plano') || t.includes('didatico') || t.includes('instrucional') || t.includes('modulo')) {
         return { 
           icon: 'fa-solid fa-list-check', 
           color: 'text-indigo-400', 
           bg: 'bg-indigo-950/40 border-indigo-800/70 text-indigo-200 hover:bg-indigo-900/50 hover:border-indigo-500', 
           activeBg: 'bg-indigo-600 border-indigo-400 text-white', 
-          category: 'Conteúdo' 
+          category: 'Produtos Acadêmicos' 
         };
       }
-      // Jurídico / Contrato / Portaria / Procuração
-      if (t.includes('contrato') || t.includes('procuracao') || t.includes('termo') || t.includes('portaria') || t.includes('requerimento') || t.includes('notificacao') || t.includes('juramentada')) {
+
+      // 12. Jurídico / Contrato / Portaria / Procuração / Resolução
+      if (t.includes('contrat') || t.includes('convenio') || t.includes('responsabilidade') || t.includes('portaria') || t.includes('resolucao') || t.includes('diario oficial') || t.includes('procuracao') || t.includes('termo') || t.includes('estatuto')) {
         return { 
           icon: 'fa-solid fa-file-signature', 
-          color: 'text-amber-400', 
-          bg: 'bg-amber-950/40 border-amber-800/70 text-amber-200 hover:bg-amber-900/50 hover:border-amber-500', 
-          activeBg: 'bg-amber-600 border-amber-400 text-white', 
-          category: 'Jurídico' 
+          color: 'text-rose-400', 
+          bg: 'bg-rose-950/40 border-rose-800/70 text-rose-200 hover:bg-rose-900/50 hover:border-rose-500', 
+          activeBg: 'bg-rose-600 border-rose-400 text-white', 
+          category: 'Jurídico & Normativo' 
         };
       }
-      // Dossiê / Multi-página
+
+      // 13. Processual / Administrativo (Recurso, Relatório, Cadastro)
+      if (t.includes('recurso') || t.includes('relatorio') || t.includes('cadastro') || t.includes('preparatorio') || t.includes('promocional') || t.includes('processual') || t.includes('oficio') || t.includes('memorando')) {
+        return { 
+          icon: 'fa-solid fa-file-invoice', 
+          color: 'text-indigo-400', 
+          bg: 'bg-indigo-950/40 border-indigo-800/70 text-indigo-200 hover:bg-indigo-900/50 hover:border-indigo-500', 
+          activeBg: 'bg-indigo-600 border-indigo-400 text-white', 
+          category: 'Processual & Administrativo' 
+        };
+      }
+
+      // 14. Dossiê / Multi-página
       if (t.includes('dossie') || t.includes('multi')) {
         return { 
           icon: 'fa-solid fa-folder-open', 
@@ -4954,13 +5249,14 @@
           category: 'Dossiê' 
         };
       }
+
       // Geral / Outros
       return { 
         icon: 'fa-solid fa-tag', 
         color: 'text-slate-400', 
         bg: 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:border-slate-700', 
         activeBg: 'bg-teal-600 border-teal-400 text-white', 
-        category: 'Geral' 
+        category: getTagCategory(tipo) 
       };
     }
 
@@ -4971,7 +5267,12 @@
       const subtags = [];
       const de = doc.dados_extras || {};
 
-      if (docDom === 'financeiro' || normTag.includes('pix') || normTag.includes('recibo') || normTag.includes('pagamento') || normTag.includes('boleto')) {
+      if (docDom === 'profissional' || normTag.includes('curriculo') || normTag.includes('experiencia profissional')) {
+        const cargo = safeString(doc.curso || doc.cargo || de.cargo || de.funcao).trim();
+        if (cargo) subtags.push({ label: cargo, title: 'Cargo / Especialidade', icon: 'fa-solid fa-briefcase text-sky-400' });
+        const empresa = safeString(doc.faculdade || doc.empresa || de.empresa).trim();
+        if (empresa) subtags.push({ label: empresa, title: 'Empresa / Órgão', icon: 'fa-solid fa-building-user text-slate-400' });
+      } else if (docDom === 'financeiro' || normTag.includes('pix') || normTag.includes('recibo') || normTag.includes('pagamento') || normTag.includes('boleto')) {
         const val = safeString(doc.valor_monetario).trim();
         if (val) subtags.push({ label: val, title: 'Valor', icon: 'fa-solid fa-money-bill-wave text-emerald-400' });
         const banco = safeString(doc.faculdade || doc.pix_pagador_banco || de.pix_pagador_banco).trim();
@@ -5005,35 +5306,58 @@
       return subtags;
     }
 
-    // Calcula e atualiza dinamicamente as opções e tags de Tipo de Documento (Multi-seleção)
+    // Calcula e atualiza dinamicamente as opções e tags de Tipo de Documento (Multi-seleção e Macro-TAGs)
     function updateTipoFilterOptions() {
       const rawSearch = (document.getElementById('searchInput').value || '').trim();
-      const tipoSearch = (document.getElementById('inputSearchTipo') ? document.getElementById('inputSearchTipo').value : '').trim().toLowerCase();
-
       const baseDocs = documents.filter(doc => docMatchesFilters(doc, rawSearch, 'tipo'));
 
+      // 1. Contagem para cada TAG específica mapeada
       const counts = {};
       baseDocs.forEach(d => {
-        const seenInDoc = new Set();
-        const mainTipo = safeString(d.tipo_documento).trim();
-        if (mainTipo) seenInDoc.add(mainTipo);
-
-        if (Array.isArray(d.todos_tipos)) {
-          d.todos_tipos.forEach(t => {
-            const cleanT = safeString(t).trim();
-            if (cleanT) seenInDoc.add(cleanT);
-          });
-        }
-        if (Array.isArray(d.dossie_paginas)) {
-          d.dossie_paginas.forEach(p => {
-            const cleanT = safeString(p.tipo).trim();
-            if (cleanT) seenInDoc.add(cleanT);
-          });
-        }
-        if (seenInDoc.size === 0) seenInDoc.add('Não identificado');
-
+        const seenInDoc = getDocAllTiposSet(d);
         seenInDoc.forEach(t => {
           counts[t] = (counts[t] || 0) + 1;
+        });
+      });
+
+      // 2. Contagem para cada Macro-TAG
+      const macroCounts = {};
+      MACRO_TAGS.forEach(m => {
+        macroCounts[m.id] = baseDocs.filter(d => {
+          const tipos = getDocAllTiposSet(d);
+          return m.matchDoc(d, tipos);
+        }).length;
+      });
+
+      // 3. Renderizar Macro-TAGs (Guarda-Chuva)
+      ['macroTipoChips', 'g-macroTipoChips'].forEach(cid => {
+        const container = document.getElementById(cid);
+        if (!container) return;
+        container.innerHTML = '';
+        MACRO_TAGS.forEach(m => {
+          const count = macroCounts[m.id] || 0;
+          const isSelected = selectedTipos.has(m.id) || selectedTipos.has(m.label);
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition flex items-center gap-1.5 shrink-0 ${
+            isSelected
+              ? `${m.activeBg} ring-2 ring-${m.color}-400/50 shadow-md`
+              : (count === 0
+                  ? 'bg-slate-950/40 text-slate-500 border-slate-900/60 opacity-60 hover:opacity-90'
+                  : `${m.bg} shadow-sm`)
+          }`;
+          btn.title = `${m.label}: ${m.description} (${count} documentos)`;
+          btn.innerHTML = `
+            <i class="${m.icon} ${isSelected ? 'text-white' : 'text-' + m.color + '-400'} text-[11px]"></i>
+            <span>${escapeHtml(m.label)}</span>
+            <span class="text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${
+              isSelected ? 'bg-black/30 text-white font-bold' : 'bg-slate-800/90 text-slate-300'
+            }">${count}</span>
+          `;
+          btn.onclick = () => {
+            toggleTipoFilter(m.id);
+          };
+          container.appendChild(btn);
         });
       });
 
@@ -5063,55 +5387,111 @@
       const tipoSearch1 = inpTipo1 ? inpTipo1.value.trim().toLowerCase() : '';
       const tipoSearch2 = inpTipo2 ? inpTipo2.value.trim().toLowerCase() : '';
 
-      // Nuvem de tags/chips no Popover de Tipo com visual enriquecido (ícone, categoria, badge)
+      const CATEGORY_ORDER = [
+        { name: 'Produtos Acadêmicos', icon: 'fa-solid fa-graduation-cap', color: 'text-amber-400' },
+        { name: 'Carreira & Profissional', icon: 'fa-solid fa-briefcase', color: 'text-sky-400' },
+        { name: 'Identificação & Pessoal', icon: 'fa-solid fa-id-card', color: 'text-purple-400' },
+        { name: 'Financeiro', icon: 'fa-solid fa-receipt', color: 'text-emerald-400' },
+        { name: 'Jurídico & Normativo', icon: 'fa-solid fa-scale-balanced', color: 'text-rose-400' },
+        { name: 'Processual & Administrativo', icon: 'fa-solid fa-file-invoice', color: 'text-indigo-400' },
+        { name: 'Outros', icon: 'fa-solid fa-tags', color: 'text-slate-400' }
+      ];
+
+      // 4. Renderizar Nuvem de TAGs agrupadas por categoria
       ['tipoChips', 'g-tipoChips'].forEach(cid => {
         const chipsContainer = document.getElementById(cid);
         if (!chipsContainer) return;
         chipsContainer.innerHTML = '';
+
+        const isGallery = cid === 'g-tipoChips';
+        const localSearch = isGallery ? (tipoSearch2 || tipoSearch1) : (tipoSearch1 || tipoSearch2);
+
         const sortedTipos = [...allUniqueTipos].sort((a, b) => {
           const diff = (counts[b] || 0) - (counts[a] || 0);
           if (diff !== 0) return diff;
           return a.localeCompare(b);
         });
 
+        // Garantir que selecionados estejam presentes
         selectedTipos.forEach(selTipo => {
-          if (!sortedTipos.includes(selTipo)) sortedTipos.push(selTipo);
+          if (!selTipo.startsWith('macro:') && !sortedTipos.includes(selTipo)) {
+            sortedTipos.push(selTipo);
+          }
         });
 
-        const localSearch = cid === 'g-tipoChips' ? (tipoSearch2 || tipoSearch1) : (tipoSearch1 || tipoSearch2);
-        let filteredTipos = sortedTipos;
-        if (localSearch) {
-          filteredTipos = sortedTipos.filter(t => t.toLowerCase().includes(localSearch));
+        const grouped = {};
+        CATEGORY_ORDER.forEach(c => { grouped[c.name] = []; });
+
+        let totalMatchingTags = 0;
+        sortedTipos.forEach(tipo => {
+          if (tipo.startsWith('macro:')) return;
+          if (localSearch && !tipo.toLowerCase().includes(localSearch)) return;
+
+          const cat = getTagCategory(tipo);
+          if (!grouped[cat]) grouped[cat] = [];
+          grouped[cat].push(tipo);
+          totalMatchingTags++;
+        });
+
+        const badgeId = isGallery ? 'g-tipoCountBadge' : 'tipoCountBadge';
+        const badgeEl = document.getElementById(badgeId);
+        if (badgeEl) {
+          badgeEl.innerText = `${totalMatchingTags} TAGs`;
         }
 
-        if (filteredTipos.length === 0) {
-          chipsContainer.innerHTML = '<span class="text-[11px] text-slate-500 italic p-2">Nenhuma TAG encontrada com este termo</span>';
+        if (totalMatchingTags === 0) {
+          chipsContainer.innerHTML = '<span class="text-[11px] text-slate-500 italic p-2 block text-center">Nenhuma TAG encontrada com este termo</span>';
         } else {
-          filteredTipos.forEach(tipo => {
-            const count = counts[tipo] || 0;
-            const isSelected = selectedTipos.has(tipo);
-            const meta = getTagMeta(tipo);
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = `px-2.5 py-1 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 truncate max-w-[220px] ${
-              isSelected
-                ? `${meta.activeBg} font-semibold ring-1 ring-teal-400/50 shadow-sm`
-                : (count === 0 
-                    ? 'bg-slate-950/40 text-slate-500 border-slate-900/60 opacity-60 hover:opacity-90 hover:text-slate-300' 
-                    : `${meta.bg} shadow-sm`)
-            }`;
-            chip.title = `${tipo} (${count} documento${count === 1 ? '' : 's'}) - ${meta.category}`;
-            chip.innerHTML = `
-              <i class="${meta.icon} ${isSelected ? 'text-white' : meta.color} text-[11px] shrink-0"></i>
-              <span class="truncate">${escapeHtml(tipo)}</span>
-              <span class="text-[9.5px] px-1.5 py-0.2 rounded-full font-mono shrink-0 ${
-                isSelected ? 'bg-black/30 text-white font-bold' : 'bg-slate-800 text-slate-400'
-              }">${count}</span>
+          CATEGORY_ORDER.forEach(catDef => {
+            const catTags = grouped[catDef.name] || [];
+            if (catTags.length === 0) return;
+
+            const groupWrapper = document.createElement('div');
+            groupWrapper.className = 'bg-slate-950/40 rounded-lg p-2 border border-slate-800/60';
+
+            const header = document.createElement('div');
+            header.className = 'text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between select-none';
+            header.innerHTML = `
+              <span class="flex items-center gap-1.5">
+                <i class="${catDef.icon} ${catDef.color} text-[10px]"></i>
+                <span>${catDef.name}</span>
+              </span>
+              <span class="text-[9px] text-slate-500 font-mono">${catTags.length}</span>
             `;
-            chip.onclick = () => {
-              toggleTipoFilter(tipo);
-            };
-            chipsContainer.appendChild(chip);
+            groupWrapper.appendChild(header);
+
+            const tagsGrid = document.createElement('div');
+            tagsGrid.className = 'flex flex-wrap gap-1.5';
+
+            catTags.forEach(tipo => {
+              const count = counts[tipo] || 0;
+              const isSelected = selectedTipos.has(tipo);
+              const meta = getTagMeta(tipo);
+              const chip = document.createElement('button');
+              chip.type = 'button';
+              chip.className = `px-2.5 py-1 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 truncate max-w-[240px] ${
+                isSelected
+                  ? `${meta.activeBg} font-semibold ring-1 ring-teal-400/50 shadow-sm`
+                  : (count === 0 
+                      ? 'bg-slate-950/40 text-slate-500 border-slate-900/60 opacity-60 hover:opacity-90 hover:text-slate-300' 
+                      : `${meta.bg} shadow-sm`)
+              }`;
+              chip.title = `${tipo} (${count} documento${count === 1 ? '' : 's'}) - ${catDef.name}`;
+              chip.innerHTML = `
+                <i class="${meta.icon} ${isSelected ? 'text-white' : meta.color} text-[11px] shrink-0"></i>
+                <span class="truncate">${escapeHtml(tipo)}</span>
+                <span class="text-[9.5px] px-1.5 py-0.2 rounded-full font-mono shrink-0 ${
+                  isSelected ? 'bg-black/30 text-white font-bold' : 'bg-slate-800 text-slate-400'
+                }">${count}</span>
+              `;
+              chip.onclick = () => {
+                toggleTipoFilter(tipo);
+              };
+              tagsGrid.appendChild(chip);
+            });
+
+            groupWrapper.appendChild(tagsGrid);
+            chipsContainer.appendChild(groupWrapper);
           });
         }
       });
@@ -9009,7 +9389,9 @@
           let anexosPills = '';
           anexosTags.forEach(t => {
             const meta = getTagMeta(t);
-            anexosPills += `<span class="text-[9px] px-1.5 py-0.2 rounded border font-medium truncate max-w-[125px] inline-flex items-center gap-1 opacity-90 hover:opacity-100 shadow-sm ${meta.bg}" title="Documento Anexo: ${escapeHtml(t)}">
+            anexosPills += `<span onclick="event.stopPropagation(); setTipoFilter('${escapeHtml(t)}');"
+              class="text-[9px] px-1.5 py-0.2 rounded border font-medium truncate max-w-[125px] inline-flex items-center gap-1 opacity-90 hover:opacity-100 hover:brightness-125 cursor-pointer shadow-sm transition ${meta.bg}"
+              title="Filtrar por: ${escapeHtml(t)}">
               <i class="${meta.icon} text-[8px] ${meta.color} shrink-0"></i>
               <span class="truncate">${escapeHtml(t)}</span>
             </span>`;
@@ -9080,7 +9462,9 @@
 
               <!-- Tag-Mestre com Subtags Inline -->
               <div class="flex items-center gap-1 flex-wrap pt-0.5">
-                <span class="text-[10px] px-2 py-0.5 rounded font-semibold border inline-flex items-center gap-1 shadow-sm shrink-0 ${primaryMeta.bg}" title="Documento Principal: ${escapeHtml(primaryTag)}">
+                <span onclick="event.stopPropagation(); setTipoFilter('${escapeHtml(primaryTag)}');"
+                      class="text-[10px] px-2 py-0.5 rounded font-semibold border inline-flex items-center gap-1 shadow-sm shrink-0 cursor-pointer hover:brightness-125 transition ${primaryMeta.bg}"
+                      title="Filtrar por: ${escapeHtml(primaryTag)}">
                   <i class="${primaryMeta.icon} text-[9px] ${primaryMeta.color} shrink-0"></i>
                   <span>${escapeHtml(primaryTag)}</span>
                 </span>

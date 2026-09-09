@@ -277,6 +277,23 @@ def row_to_doc(row: sqlite3.Row) -> Dict[str, Any]:
     else:
         d["dossie_paginas"] = []
 
+    # Assegura que todos os tipos mapeados (inclusive em páginas de dossiê) constem em todos_tipos
+    cur_tipos = list(d.get("todos_tipos") or [])
+    seen_k = {t.strip().lower() for t in cur_tipos if t and t.strip()}
+    if d.get("tipo_documento"):
+        mt = d["tipo_documento"].strip()
+        if mt and mt.lower() not in seen_k:
+            cur_tipos.insert(0, mt)
+            seen_k.add(mt.lower())
+    if isinstance(d.get("dossie_paginas"), list):
+        for p in d["dossie_paginas"]:
+            if isinstance(p, dict) and p.get("tipo"):
+                pt = str(p["tipo"]).strip()
+                if pt and pt.lower() not in seen_k and pt not in ["Documento", "Não identificado"]:
+                    cur_tipos.append(pt)
+                    seen_k.add(pt.lower())
+    d["todos_tipos"] = cur_tipos
+
     # Garante ausência estrita de data_criacao
     d.pop("data_criacao", None)
     return d

@@ -543,8 +543,18 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
         scores["Declaração"] = ("academico", 7)
     elif any(k in t for k in ["ementa", "conteúdo programático", "plano de ensino"]):
         scores["Ementa"] = ("academico", 7)
+    elif any(k in t for k in ["dissertação de mestrado", "dissertacao de mestrado", "tese de doutorado", "trabalho de conclusão de curso"]):
+        scores["Dissertação"] = ("academico", 8)
+    elif any(k in t for k in ["ficha catalográfica", "ficha catalografica"]) or ("isbn" in t and "editora" in t):
+        scores["Livro/Publicação"] = ("academico", 8)
 
-    # 3. Domínio: Financeiro
+    # 3. Domínio: Profissional / Carreira
+    if any(k in t for k in ["curriculum vitae", "currículo vitae", "curriculo lattes", "currículo lattes", "experiência profissional", "experiencia profissional", "resumo profissional", "histórico profissional", "historico profissional", "trajetória profissional", "trajetoria profissional", "dados profissionais", "formação acadêmica e profissional"]):
+        scores["Currículo"] = ("profissional", 9)
+    elif any(k in t for k in ["declaração de experiência", "declaracao de experiencia", "atestado de capacidade técnica", "atestado de capacidade tecnica"]):
+        scores["Declaração de Experiência Profissional"] = ("profissional", 8)
+
+    # 4. Domínio: Financeiro
     if any(k in t for k in ["comprovante pix", "transferência pix", "transferencia pix", "pagamento pix", "chave pix", "fim-a-fim", "end-to-end", "e2eid"]):
         scores["Comprovante PIX"] = ("financeiro", 10)
     elif any(k in t for k in ["comprovante de pagamento", "comprovante de transferência", "comprovante de transferencia", "autenticação bancária", "autenticação mecânica", "ted", "doc"]):
@@ -554,7 +564,7 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
     elif any(k in t for k in ["recibo de pagamento", "recebemos de"]):
         scores["Recibo"] = ("financeiro", 7)
 
-    # 4. Domínio: Jurídico / Outros
+    # 5. Domínio: Jurídico / Outros
     if any(k in t for k in ["procuração", "procuracao", "outorgante", "outorgado"]):
         scores["Procuração"] = ("juridico", 8)
     elif any(k in t for k in ["termo de posse", "posse no cargo"]):
@@ -825,7 +835,8 @@ def analyze_pdf_dossier(
     dominio_principal = "academico" if "academico" in seen_dominios else (seen_dominios[0] if seen_dominios else "academico")
     tipo_principal = None
     priority_order = [
-        "Diploma", "Certificado", "Histórico Escolar", "Declaração", "Ementa",
+        "Diploma", "Certificado", "Histórico Escolar", "Declaração", "Ementa", "Dissertação", "Livro/Publicação",
+        "Currículo", "Declaração de Experiência Profissional",
         "CNH", "RG", "CPF", "Certidão de Nascimento", "Certidão de Casamento", "Passaporte",
         "Comprovante PIX", "Comprovante de Pagamento", "Boleto", "Recibo"
     ]
