@@ -36,8 +36,8 @@ O projeto é focado em privacidade, conformidade e auditoria: identifica os arqu
   - Re-análise inteligente quando detectado CPF com tamanho/sintaxe/dígito inválido ou tipo de documento não identificado.
   - Botão no visualizador para disparar OCR visual sob demanda com um clique.
 - **Relatórios Duplos (JSON & TXT)**:
-  - Arquivo consolidado `classificacao_diplomas.json`.
-  - Arquivo consolidado `classificacao_diplomas.txt` para leitura humana.
+  - Arquivo consolidado `joakindex.json`.
+  - Arquivo consolidado `joakindex.txt` para leitura humana.
   - Arquivos individuais por MD5 na pasta `saida/individuais/`.
 - **Interface Web de Conferência Humana Lado a Lado**:
   - Visualização split-screen (PDF original vs Formulário JSON).
@@ -222,7 +222,7 @@ A chave da OpenAI pode ser fornecida de **4 formas simples**:
 
 ## 📄 Exemplo de Saída JSON (Dados Fictícios)
 
-Salvo em `saida/classificacao_diplomas.json`:
+Salvo em `saida/joakindex.json`:
 
 ```json
 [
@@ -246,7 +246,7 @@ Salvo em `saida/classificacao_diplomas.json`:
 
 ## 📄 Exemplo do Relatório TXT Consolidado
 
-Salvo em `saida/classificacao_diplomas.txt`:
+Salvo em `saida/joakindex.txt`:
 
 ```text
 ================================================================================
@@ -291,7 +291,7 @@ Para revisar visualmente o PDF original contra os dados extraídos pelo modelo:
 1. **Modo Interativo (Console)**:
    Ao executar `./iniciar_visualizador.sh` no terminal sem parâmetros, o console solicita interativamente:
    - **Pasta dos PDFs**: pressione `ENTER` para aceitar a pasta padrão sugerida (ex: `./pdf` ou o caminho salvo) ou digite o caminho desejado.
-   - **Pasta de saída ou arquivo JSON**: pressione `ENTER` para manter a saída padrão (`./saida/classificacao_diplomas.json`) ou informe outro arquivo/pasta.
+   - **Pasta de saída ou arquivo JSON**: pressione `ENTER` para manter a saída padrão (`./saida/joakindex.json`) ou informe outro arquivo/pasta.
    - **Porta HTTP**: pressione `ENTER` para manter a porta padrão (`8088`) ou informe outra porta.
 
 2. **Direto por Linha de Comando (CLI)**:

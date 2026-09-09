@@ -2894,8 +2894,8 @@ def save_consolidated_reports(
     corrupção de dados em caso de parada forçada (Ctrl+C, kill ou reinicialização).
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    consolidated_json_path = out_dir / "classificacao_diplomas.json"
-    consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
+    consolidated_json_path = out_dir / "joakindex.json"
+    consolidated_txt_path = out_dir / "joakindex.txt"
     consolidated_db_path = get_db_path(out_dir)
     results = sorted(list(items_dict.values()), key=lambda x: str(x.get("md5", "")))
     for r in results:
@@ -3411,8 +3411,10 @@ def run_batch_classification(
     if not no_individual:
         indiv_dir.mkdir(parents=True, exist_ok=True)
 
-    consolidated_json_path = out_dir / "classificacao_diplomas.json"
-    consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
+    consolidated_json_path = get_json_path(out_dir)
+    consolidated_txt_path = out_dir / "joakindex.txt"
+    if not consolidated_txt_path.exists() and (out_dir / "classificacao_diplomas.txt").exists():
+        consolidated_txt_path = out_dir / "classificacao_diplomas.txt"
     consolidated_db_path = get_db_path(out_dir)
     existing_by_md5 = {}
 

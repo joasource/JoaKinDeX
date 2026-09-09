@@ -5,7 +5,7 @@ Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 
 Fornece armazenamento relacional embutido (SQLite WAL), transações ACID,
 índices para consultas instantâneas, migração transparente a partir de JSON
-e sincronização contínua com os arquivos classificacao_diplomas.json e .txt.
+e sincronização contínua com os arquivos joakindex.json e .txt.
 """
 
 import sqlite3
@@ -22,26 +22,51 @@ COLUMNS = [
     "metodo_leitura", "tentativa_ocr_llm", "erro", "processado_em",
     "conferido_em", "revisado_em", "observacoes_conferencia",
     "todos_dominios", "todos_tipos", "dossie_paginas",
-    "dublin_core", "dc_title", "dc_subject", "dc_creator_tool"
+    "dublin_core", "dc_title", "dc_subject", "dc_creator_tool",
+    "dados_extras"
 ]
 
 COLUMNS_SET = set(COLUMNS)
 
 
 def get_db_path(target_path: Union[str, Path]) -> Path:
-    """Retorna o caminho correspondente do banco SQLite classificacao_diplomas.db."""
+    """Retorna o caminho correspondente do banco SQLite joakindex.db (com fallback para legados)."""
     p = Path(target_path).expanduser().resolve()
-    if p.is_file() or p.suffix.lower() == ".json":
-        return p.parent / "classificacao_diplomas.db"
-    return p / "classificacao_diplomas.db"
+    parent_dir = p.parent if (p.is_file() or p.suffix.lower() in [".json", ".db"]) else p
+    
+    # Se um arquivo .db explícito e existente foi passado, respeita
+    if p.suffix.lower() == ".db" and p.exists():
+        return p
+
+    target_db = parent_dir / "joakindex.db"
+    if target_db.exists():
+        return target_db
+
+    legacy_db = parent_dir / "classificacao_diplomas.db"
+    if legacy_db.exists():
+        return legacy_db
+
+    return target_db
 
 
 def get_json_path(target_path: Union[str, Path]) -> Path:
-    """Retorna o caminho correspondente do arquivo consolidado classificacao_diplomas.json."""
+    """Retorna o caminho correspondente do arquivo consolidado joakindex.json (com fallback para legados)."""
     p = Path(target_path).expanduser().resolve()
-    if p.is_file():
-        return p.parent / "classificacao_diplomas.json"
-    return p / "classificacao_diplomas.json"
+    parent_dir = p.parent if (p.is_file() or p.suffix.lower() in [".json", ".db"]) else p
+
+    # Se um arquivo .json explícito e existente foi passado, respeita
+    if p.suffix.lower() == ".json" and p.exists():
+        return p
+
+    target_json = parent_dir / "joakindex.json"
+    if target_json.exists():
+        return target_json
+
+    legacy_json = parent_dir / "classificacao_diplomas.json"
+    if legacy_json.exists():
+        return legacy_json
+
+    return target_json
 
 
 def get_connection(db_path: Union[str, Path], timeout: float = 30.0) -> sqlite3.Connection:

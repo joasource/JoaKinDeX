@@ -2836,7 +2836,7 @@
             <div class="space-y-1">
               <label class="block text-[11px] font-medium text-slate-300">Pasta de Saída / Arquivo JSON e Banco SQLite:</label>
               <div class="flex gap-2">
-                <input type="text" id="cfgInputJsonPath" placeholder="./saida/classificacao_diplomas.json"
+                <input type="text" id="cfgInputJsonPath" placeholder="./saida/joakindex.json"
                        class="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
                 <button type="button" onclick="openFolderPicker('json')" title="Selecionar pasta navegando pelo computador / servidor"
                         class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded text-xs flex items-center gap-1.5 transition font-medium shrink-0">
@@ -9271,7 +9271,7 @@
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       const downloadAnchor = document.createElement('a');
       downloadAnchor.href = url;
-      downloadAnchor.download = `classificacao_diplomas_revisado_${timestamp}.json`;
+      downloadAnchor.download = `joakindex_revisado_${timestamp}.json`;
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       document.body.removeChild(downloadAnchor);
@@ -9359,7 +9359,7 @@
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       const downloadAnchor = document.createElement('a');
       downloadAnchor.href = url;
-      downloadAnchor.download = `classificacao_diplomas_completo_${timestamp}.csv`;
+      downloadAnchor.download = `joakindex_completo_${timestamp}.csv`;
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       document.body.removeChild(downloadAnchor);
@@ -9585,7 +9585,7 @@
         if (inPdf) inPdf.value = classif.input || vis.pdf_dir || './pdf';
 
         const inJson = document.getElementById('cfgInputJsonPath');
-        if (inJson) inJson.value = vis.json_path || classif.output_dir || './saida/classificacao_diplomas.json';
+        if (inJson) inJson.value = vis.json_path || classif.output_dir || './saida/joakindex.json';
 
         const countP = document.getElementById('cfgCountPdfs');
         if (countP) countP.innerText = data.pdf_count ?? (data.current_pdf_count ?? 0);
@@ -10452,7 +10452,7 @@
             inJson.value = chosen;
           } else {
             const trimmed = chosen.replace(/\/+$/, '');
-            inJson.value = `${trimmed}/classificacao_diplomas.json`;
+            inJson.value = `${trimmed}/joakindex.json`;
           }
         }
       }

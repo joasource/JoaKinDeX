@@ -246,7 +246,7 @@ def uniformizar_base_dados(
     atualizar_individuais: bool = True
 ) -> Dict[str, Any]:
     """
-    Lê o banco de dados consolidado (classificacao_diplomas.json) e
+    Lê o banco de dados consolidado (joakindex.json / classificacao_diplomas.json) e
     as fichas individuais correspondentes, aplicando a normalização
     inteligente de nomes de instituições de ensino sem reprocessar PDFs.
 
@@ -254,7 +254,12 @@ def uniformizar_base_dados(
     """
     p_json = Path(json_path).expanduser().resolve()
     if p_json.is_dir():
-        p_json = p_json / "classificacao_diplomas.json"
+        if (p_json / "joakindex.json").exists():
+            p_json = p_json / "joakindex.json"
+        elif (p_json / "classificacao_diplomas.json").exists():
+            p_json = p_json / "classificacao_diplomas.json"
+        else:
+            p_json = p_json / "joakindex.json"
 
     if not p_json.exists():
         return {
@@ -380,7 +385,7 @@ def uniformizar_base_dados(
 
 
 if __name__ == "__main__":
-    caminho = sys.argv[1] if len(sys.argv) > 1 else "./saida/classificacao_diplomas.json"
+    caminho = sys.argv[1] if len(sys.argv) > 1 else "./saida/joakindex.json"
     print(f"🚀 Iniciando uniformização de instituições em: {caminho}")
     resultado = uniformizar_base_dados(caminho)
     print(json.dumps(resultado, indent=2, ensure_ascii=False))

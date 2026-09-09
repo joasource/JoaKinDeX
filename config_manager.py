@@ -47,7 +47,7 @@ def get_factory_defaults() -> Dict[str, Any]:
         },
         "visualizador": {
             "pdf_dir": "./pdf",
-            "json_path": "./saida/classificacao_diplomas.json",
+            "json_path": "./saida/joakindex.json",
             "port": 8088,
             "html": "./visualizador.html",
             "provider": "ollama",
@@ -83,13 +83,30 @@ def resolve_classifier_output_dir(raw: Any) -> str:
 
 
 def resolve_visualizer_json_path(raw: Any) -> str:
-    """Garante que json_path do visualizador seja SEMPRE um arquivo .json válido."""
+    """Garante que json_path do visualizador seja SEMPRE um arquivo .json válido (preferência por joakindex.json)."""
     s = clean_path_string(raw)
-    if not s or s in ["./saida/classificacao_diplomas.json", "saida/classificacao_diplomas.json", "./saida", "saida"]:
-        return "./saida/classificacao_diplomas.json"
+    if not s or s in [
+        "./saida/joakindex.json", "saida/joakindex.json",
+        "./saida/classificacao_diplomas.json", "saida/classificacao_diplomas.json",
+        "./saida", "saida"
+    ]:
+        p_saida = Path("./saida").resolve()
+        if (p_saida / "joakindex.json").exists():
+            return str((p_saida / "joakindex.json").resolve())
+        if (p_saida / "classificacao_diplomas.json").exists():
+            return str((p_saida / "classificacao_diplomas.json").resolve())
+        return "./saida/joakindex.json"
     p = Path(s).expanduser()
     if p.is_dir() or p.suffix.lower() != ".json":
-        p = p / "classificacao_diplomas.json"
+        if (p / "joakindex.json").exists():
+            p = p / "joakindex.json"
+        elif (p / "classificacao_diplomas.json").exists():
+            p = p / "classificacao_diplomas.json"
+        else:
+            p = p / "joakindex.json"
+    else:
+        if p.name == "classificacao_diplomas.json" and (p.parent / "joakindex.json").exists():
+            p = p.parent / "joakindex.json"
     return str(p.resolve())
 
 

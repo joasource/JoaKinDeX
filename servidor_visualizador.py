@@ -171,19 +171,34 @@ def resolve_pdf_dir(specified_dir: str = None) -> str:
 def resolve_json_path(specified_json: str = None) -> str:
     """
     Resolve o caminho do arquivo JSON. Se for informado um diretório ou pasta de saída,
-    retorna o caminho completo para classificacao_diplomas.json.
+    retorna o caminho completo para joakindex.json (com fallback para legados).
     """
     if not specified_json:
-        return "./saida/classificacao_diplomas.json"
+        return "./saida/joakindex.json"
     clean = clean_path_input(specified_json)
-    if clean in ["./saida/classificacao_diplomas.json", "saida/classificacao_diplomas.json", "./saida", "saida", ""]:
-        return "./saida/classificacao_diplomas.json"
+    if clean in [
+        "./saida/joakindex.json", "saida/joakindex.json",
+        "./saida/classificacao_diplomas.json", "saida/classificacao_diplomas.json",
+        "./saida", "saida", ""
+    ]:
+        p_saida = Path("./saida").resolve()
+        if (p_saida / "joakindex.json").exists():
+            return str((p_saida / "joakindex.json").resolve())
+        if (p_saida / "classificacao_diplomas.json").exists():
+            return str((p_saida / "classificacao_diplomas.json").resolve())
+        return "./saida/joakindex.json"
     p = Path(clean).expanduser()
     if p.is_dir():
-        return str((p / "classificacao_diplomas.json").resolve())
+        if (p / "joakindex.json").exists():
+            return str((p / "joakindex.json").resolve())
+        if (p / "classificacao_diplomas.json").exists():
+            return str((p / "classificacao_diplomas.json").resolve())
+        return str((p / "joakindex.json").resolve())
     if p.suffix.lower() == ".json":
+        if p.name == "classificacao_diplomas.json" and (p.parent / "joakindex.json").exists():
+            return str((p.parent / "joakindex.json").resolve())
         return str(p.resolve())
-    return str((p / "classificacao_diplomas.json").resolve())
+    return str((p / "joakindex.json").resolve())
 
 
 def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
@@ -615,7 +630,10 @@ class ConferenciaServer:
         self.json_path = Path(resolve_json_path(json_path)).resolve()
         self.pdf_dir = Path(resolve_pdf_dir(pdf_dir)).resolve()
         if self.json_path.is_dir():
-            self.json_path = (self.json_path / "classificacao_diplomas.json").resolve()
+            target_j = self.json_path / "joakindex.json"
+            if not target_j.exists() and (self.json_path / "classificacao_diplomas.json").exists():
+                target_j = self.json_path / "classificacao_diplomas.json"
+            self.json_path = target_j.resolve()
         if self.pdf_dir.is_file():
             self.pdf_dir = self.pdf_dir.parent.resolve()
         self.db_path = get_db_path(self.json_path)
@@ -701,7 +719,10 @@ class ConferenciaServer:
         data = []
         existing_by_md5 = {}
         if self.json_path.is_dir():
-            self.json_path = (self.json_path / "classificacao_diplomas.json").resolve()
+            target_j = self.json_path / "joakindex.json"
+            if not target_j.exists() and (self.json_path / "classificacao_diplomas.json").exists():
+                target_j = self.json_path / "classificacao_diplomas.json"
+            self.json_path = target_j.resolve()
         self.db_path = get_db_path(self.json_path)
         init_database(self.db_path, initial_json_path=self.json_path)
 
@@ -828,7 +849,10 @@ class ConferenciaServer:
 
     def save_data(self, data):
         if self.json_path.is_dir():
-            self.json_path = (self.json_path / "classificacao_diplomas.json").resolve()
+            target_j = self.json_path / "joakindex.json"
+            if not target_j.exists() and (self.json_path / "classificacao_diplomas.json").exists():
+                target_j = self.json_path / "classificacao_diplomas.json"
+            self.json_path = target_j.resolve()
         self.db_path = get_db_path(self.json_path)
         init_database(self.db_path)
 
@@ -2320,7 +2344,7 @@ def main():
         "-j", "--json", "-o", "--output", "--output-dir", "--saida",
         dest="json_path",
         type=str,
-        default="./saida/classificacao_diplomas.json",
+        default="./saida/joakindex.json",
         help="Pasta de saída ou arquivo JSON de classificação (padrão: %(default)s)."
     )
     parser.add_argument(
@@ -2400,7 +2424,7 @@ def main():
 
     parser.set_defaults(
         pdf_dir=saved_cfg.get("pdf_dir", "./pdf"),
-        json_path=saved_cfg.get("json_path", "./saida/classificacao_diplomas.json"),
+        json_path=saved_cfg.get("json_path", "./saida/joakindex.json"),
         port=saved_cfg.get("port", 8088),
         html=saved_cfg.get("html", "./visualizador.html"),
         provider=saved_cfg.get("provider", "ollama"),
