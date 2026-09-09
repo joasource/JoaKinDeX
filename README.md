@@ -104,13 +104,14 @@ conda create -n pdf-classifier python=3.10 -y
 # Ativa o ambiente
 conda activate pdf-classifier
 
-# Instala todas as dependências requeridas
-pip install -r requirements.txt
+# Instala todas as dependências requeridas ou pacote em modo editável (PEP 517/621):
+pip install -e .
+# (ou alternativamente: pip install -r requirements.txt)
 ```
 
 **3. Instalação direta em linha única (sem dependência de arquivos locais):**
 ```bash
-conda create -n pdf-classifier python=3.10 -y && conda run -n pdf-classifier pip install "pypdf>=4.0.0" "pdfplumber>=0.10.0" "pypdfium2>=4.30.0" "pillow>=10.0.0" "requests>=2.31.0" "tqdm>=4.66.0" "openai>=1.0.0" "fonttools>=4.50.0"
+conda create -n pdf-classifier python=3.10 -y && conda run -n pdf-classifier pip install -e .
 ```
 
 #### Opção B: Utilizando Python venv padrão
@@ -118,10 +119,11 @@ conda create -n pdf-classifier python=3.10 -y && conda run -n pdf-classifier pip
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ---
+
 
 ## 💻 Como Usar
 

@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "joakindex"
+version = "1.0.0"
+description = "Central Universal de Indexação, Extração Multidomínio, Metadados Forenses e Conferência Documental em Massa"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Joaquim Ferreira Silva Neto", email = "joaquimfsneto@gmail.com"}
+]
+keywords = [
+    "pdf",
+    "classification",
+    "indexing",
+    "forensics",
+    "dublin-core",
+    "xmp",
+    "ocr",
+    "llm",
+    "ollama",
+    "openai"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Legal Industry",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Text Processing :: Indexing",
+]
+dependencies = [
+    "pypdf>=4.0.0",
+    "pdfplumber>=0.10.0",
+    "pypdfium2>=4.30.0",
+    "pillow>=10.0.0",
+    "requests>=2.31.0",
+    "tqdm>=4.66.0",
+    "openai>=1.0.0",
+    "fonttools>=4.50.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/joasource/JoaKinDeX"
+Repository = "https://github.com/joasource/JoaKinDeX"
+"Bug Tracker" = "https://github.com/joasource/JoaKinDeX/issues"
+
+[project.scripts]
+joakindex = "joakindex:main"
+joakindex-server = "joakindex_server:main"
+
+[tool.setuptools]
+py-modules = [
+    "joakindex",
+    "joakindex_server",
+    "db_manager",
+    "config_manager",
+    "normalizador_instituicoes"
+]
