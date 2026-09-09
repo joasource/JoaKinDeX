@@ -69,8 +69,8 @@ JoaKinDeX/
 ├── db_manager.py           # Gerenciador de Banco de Dados SQLite WAL
 ├── config_manager.py       # Gerenciador de configurações persistentes
 ├── normalizador_instituicoes.py # Normalizador inteligente de instituições
-├── servidor_visualizador.py # Servidor HTTP leve para conferência e BI
-├── iniciar_visualizador.sh # Script para iniciar a interface web
+├── joakindex_server.py     # Servidor HTTP / Central Web de conferência e lote
+├── iniciar_servidor.sh     # Script para iniciar o servidor web
 ├── visualizador.html       # Interface web com PDF, formulário e BI
 ├── docker-compose.yml      # Container Cloudflare Tunnel (acesso remoto HTTPS)
 ├── .env.example            # Exemplo de configuração do token da Cloudflare
@@ -278,36 +278,43 @@ FIM DO RELATÓRIO
 
 ---
 
-## 🖥️ Interface de Conferência Humana Lado a Lado
+## 🖥️ Central Web de Indexação e Conferência Documental
 
-Para revisar visualmente o PDF original contra os dados extraídos pelo modelo:
+Para iniciar o servidor web e revisar visualmente os documentos originais contra os dados extraídos:
 
 ```bash
-./iniciar_visualizador.sh
+# Pelo comando integrado JoaKinDeX:
+./joakindex server
+
+# Ou pelo script shell:
+./iniciar_servidor.sh
+
+# Ou diretamente via Python:
+python3 joakindex_server.py
 ```
 
 ### 📁 Escolha de Pastas no Ato da Execução:
 
 1. **Modo Interativo (Console)**:
-   Ao executar `./iniciar_visualizador.sh` no terminal sem parâmetros, o console solicita interativamente:
-   - **Pasta dos PDFs**: pressione `ENTER` para aceitar a pasta padrão sugerida (ex: `./pdf` ou o caminho salvo) ou digite o caminho desejado.
-   - **Pasta de saída ou arquivo JSON**: pressione `ENTER` para manter a saída padrão (`./saida/joakindex.json`) ou informe outro arquivo/pasta.
+   Ao executar `./joakindex server` (ou `./iniciar_servidor.sh`) no terminal sem parâmetros, o console solicita interativamente:
+   - **Pasta de Documentos**: pressione `ENTER` para aceitar a pasta padrão sugerida (ex: `./pdf` ou o caminho salvo) ou digite o caminho desejado.
+   - **Pasta de saída / Base de Dados**: pressione `ENTER` para manter a saída padrão (`./saida/joakindex.json`) ou informe outro arquivo/pasta.
    - **Porta HTTP**: pressione `ENTER` para manter a porta padrão (`8088`) ou informe outra porta.
 
 2. **Direto por Linha de Comando (CLI)**:
    Você também pode definir as pastas diretamente por parâmetros:
    ```bash
-   # Indicando pasta de PDFs e pasta/arquivo de saída JSON:
-   ./iniciar_visualizador.sh -i /caminho/meus_pdfs -o /caminho/minha_saida
+   # Indicando pasta de documentos (-i) e pasta/base de dados (-d):
+   ./joakindex server -i /caminho/meus_documentos -d /caminho/minha_saida
 
-   # Ou com os aliases completos:
-   ./iniciar_visualizador.sh --pdf-dir /caminho/meus_pdfs --json ./saida/outro_lote.json --port 8089
+   # Com aliases e opções avançadas:
+   ./joakindex server --docs-dir /caminho/meus_documentos --db ./saida/joakindex.db --port 8089
 
    # Para forçar o menu interativo mesmo com parâmetros:
-   ./iniciar_visualizador.sh --prompt
+   ./joakindex server --prompt
 
    # Para execução direta sem perguntas (batch):
-   ./iniciar_visualizador.sh -y
+   ./joakindex server -y
    ```
 
 Acesse no seu navegador:

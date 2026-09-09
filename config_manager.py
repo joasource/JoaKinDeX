@@ -3,7 +3,7 @@
 JoaKinDeX - Gerenciador de Configurações Persistentes
 Criado por: Joaquim Ferreira Silva Neto <joaquimfsneto@gmail.com>
 
-Módulo de gerenciamento de configurações persistentes para o JoaKinDeX e servidor_visualizador.
+Módulo de gerenciamento de configurações persistentes para o JoaKinDeX e joakindex_server.
 Permite salvar opções alteradas pelos usuários, manter padrões de fábrica neutros
 e restaurar configurações tanto interativamente quanto via CLI (--reset-config).
 """

@@ -11,4 +11,4 @@ elif [ -f "$DIR/.venv/bin/python" ]; then
     PYTHON_EXEC="$DIR/.venv/bin/python"
 fi
 
-exec "$PYTHON_EXEC" "$DIR/servidor_visualizador.py" "$@"
+exec "$PYTHON_EXEC" "$DIR/joakindex_server.py" "$@"

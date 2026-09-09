@@ -2076,8 +2076,17 @@ def create_handler(server_ctx: ConferenciaServer):
                 if updates_visualizador:
                     save_visualizer_config(updates_visualizador)
 
-                new_pdf = updates_visualizador.get("pdf_dir") or updates_classificador.get("input")
-                new_json = updates_visualizador.get("json_path") or updates_classificador.get("output_dir")
+                new_pdf = (
+                    updates_visualizador.get("docs_dir")
+                    or updates_visualizador.get("input_dir")
+                    or updates_visualizador.get("pdf_dir")
+                    or updates_classificador.get("input")
+                )
+                new_json = (
+                    updates_visualizador.get("data_path")
+                    or updates_visualizador.get("json_path")
+                    or updates_classificador.get("output_dir")
+                )
 
                 if new_pdf:
                     p_pdf = Path(resolve_pdf_dir(new_pdf)).expanduser().resolve()
@@ -2173,13 +2182,13 @@ def create_handler(server_ctx: ConferenciaServer):
             # Iniciar processamento em lote
             if path == "/api/batch/start":
                 if payload:
-                    new_pdf = payload.get("pdf_dir") or payload.get("input")
+                    new_pdf = payload.get("docs_dir") or payload.get("input_dir") or payload.get("pdf_dir") or payload.get("input")
                     if new_pdf:
                         p_pdf = Path(resolve_pdf_dir(new_pdf)).expanduser().resolve()
                         if p_pdf != server_ctx.pdf_dir:
                             server_ctx.pdf_dir = p_pdf
                             server_ctx.build_pdf_index()
-                    new_json = payload.get("json_path") or payload.get("output_dir")
+                    new_json = payload.get("data_path") or payload.get("json_path") or payload.get("output_dir")
                     if new_json:
                         p_json = Path(resolve_json_path(new_json)).expanduser().resolve()
                         if p_json != server_ctx.json_path:
@@ -2329,26 +2338,27 @@ def create_handler(server_ctx: ConferenciaServer):
     return RequestHandler
 
 
-def main():
+def main(argv: Optional[List[str]] = None):
     parser = argparse.ArgumentParser(
-        description="Servidor Web da Central de Indexação & Conferência Documental (JoaKinDeX)."
+        prog="joakindex server",
+        description="JoaKinDeX Server - Central Web de Indexação, Governança e Conferência Documental."
     )
     parser.add_argument(
-        "-p", "--pdf-dir", "-i", "--input",
-        dest="pdf_dir",
+        "-i", "--input", "--docs-dir", "--input-dir", "-p", "--pdf-dir",
+        dest="docs_dir",
         type=str,
         default="./pdf",
-        help="Pasta contendo os arquivos PDFs a serem visualizados (padrão: %(default)s)."
+        help="Diretório contendo os documentos a serem indexados e auditados (PDF, Word, Imagens) (padrão: %(default)s)."
     )
     parser.add_argument(
-        "-j", "--json", "-o", "--output", "--output-dir", "--saida",
-        dest="json_path",
+        "-d", "--data", "--db", "--database", "-o", "--output", "--output-dir", "-j", "--json", "--json-path", "--saida",
+        dest="data_path",
         type=str,
         default="./saida/joakindex.json",
-        help="Pasta de saída ou arquivo JSON de classificação (padrão: %(default)s)."
+        help="Diretório de dados, banco SQLite (joakindex.db) ou arquivo consolidado (.json) (padrão: %(default)s)."
     )
     parser.add_argument(
-        "--port",
+        "--port", "-P",
         type=int,
         default=8088,
         help="Porta HTTP do servidor (padrão: %(default)s)."
@@ -2423,8 +2433,8 @@ def main():
     saved_base_url = saved_cfg.get("openai_base_url") or classif_cfg.get("openai_base_url") or os.environ.get("OPENAI_BASE_URL")
 
     parser.set_defaults(
-        pdf_dir=saved_cfg.get("pdf_dir", "./pdf"),
-        json_path=saved_cfg.get("json_path", "./saida/joakindex.json"),
+        docs_dir=saved_cfg.get("pdf_dir", "./pdf"),
+        data_path=saved_cfg.get("json_path", "./saida/joakindex.json"),
         port=saved_cfg.get("port", 8088),
         html=saved_cfg.get("html", "./visualizador.html"),
         provider=saved_cfg.get("provider", "ollama"),
@@ -2434,17 +2444,24 @@ def main():
         openai_base_url=saved_base_url,
     )
 
-    args = parser.parse_args()
+    raw_args = argv if argv is not None else sys.argv[1:]
+    args = parser.parse_args(raw_args)
+
+    # Aliases de compatibilidade interna
+    args.pdf_dir = args.docs_dir
+    args.json_path = args.data_path
 
     if args.reset_config:
         reset_visualizer_config()
-        print("[✓] Configurações do visualizador restauradas para os padrões de fábrica neutros com sucesso.")
-        other_flags = [a for a in sys.argv[1:] if a not in ["--reset-config", "--reset", "--factory-reset"]]
+        print("[✓] Configurações do servidor restauradas para os padrões de fábrica neutros com sucesso.")
+        other_flags = [a for a in raw_args if a not in ["--reset-config", "--reset", "--factory-reset"]]
         if not other_flags:
             sys.exit(0)
         defaults = get_factory_defaults()["visualizador"]
         for k, v in defaults.items():
             setattr(args, k, v)
+        args.pdf_dir = args.docs_dir
+        args.json_path = args.data_path
 
     if getattr(args, "uniformizar_instituicoes", False):
         target_json = resolve_json_path(args.json_path)
@@ -2471,13 +2488,13 @@ def main():
             sys.exit(1)
         sys.exit(0)
 
-    default_pdf = resolve_pdf_dir(args.pdf_dir)
-    default_json = resolve_json_path(args.json_path)
+    default_pdf = resolve_pdf_dir(args.docs_dir)
+    default_json = resolve_json_path(args.data_path)
     default_port = args.port
 
     is_interactive = sys.stdin.isatty()
     explicit_cli_args = [
-        arg for arg in sys.argv[1:]
+        arg for arg in raw_args
         if arg not in ["--prompt", "--interativo", "-interactive", "-y", "--no-prompt", "--batch", "--reset-config", "--reset", "--factory-reset", "--uniformizar-instituicoes", "--normalizar-instituicoes"]
     ]
     should_prompt = args.force_prompt or (

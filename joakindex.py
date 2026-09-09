@@ -3849,6 +3849,16 @@ def run_batch_classification(
 # Execução Principal (CLI)
 # ---------------------------------------------------------------------------
 def main():
+    # Subcomando 'server' ou 'web' para iniciar a interface gráfica
+    if len(sys.argv) > 1 and sys.argv[1].lower() in ["server", "web", "servidor"]:
+        server_args = sys.argv[2:]
+        try:
+            import joakindex_server
+        except ImportError:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            import joakindex_server
+        sys.exit(joakindex_server.main(server_args))
+
     parser = argparse.ArgumentParser(
         description="JoaKinDeX - Central de Indexação e Classificação Documental Multidomínio (Acadêmico, Civil e Financeiro)."
     )
