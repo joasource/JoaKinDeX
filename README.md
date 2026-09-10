@@ -106,16 +106,16 @@ Você pode configurar o ambiente completo com **Python 3.10** e todas as depend�
 **1. Comando único via arquivo `environment.yml`:**
 ```bash
 conda env create -f environment.yml
-conda activate pdf-classifier
+conda activate joakindex
 ```
 
 **2. Passo a passo manual no terminal:**
 ```bash
 # Cria o ambiente com a versão inicial recomendada do Python (3.10)
-conda create -n pdf-classifier python=3.10 -y
+conda create -n joakindex python=3.10 -y
 
 # Ativa o ambiente
-conda activate pdf-classifier
+conda activate joakindex
 
 # Instala todas as dependências requeridas ou pacote em modo editável (PEP 517/621):
 pip install -e .
@@ -124,7 +124,7 @@ pip install -e .
 
 **3. Instalação direta em linha única (sem dependência de arquivos locais):**
 ```bash
-conda create -n pdf-classifier python=3.10 -y && conda run -n pdf-classifier pip install -e .
+conda create -n joakindex python=3.10 -y && conda run -n joakindex pip install -e .
 ```
 
 #### Opção B: Utilizando Python venv padrão
