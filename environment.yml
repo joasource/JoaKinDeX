@@ -1,4 +1,4 @@
-name: pdf-classifier
+name: joakindex
 channels:
   - conda-forge
   - defaults
