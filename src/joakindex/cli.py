@@ -67,6 +67,7 @@ TEXT_EXTENSIONS: Set[str] = {".txt"}
 DOCUMENT_EXTENSIONS: Set[str] = {".pdf"} | WORD_EXTENSIONS | TEXT_EXTENSIONS
 SUPPORTED_EXTENSIONS: Set[str] = DOCUMENT_EXTENSIONS | IMAGE_EXTENSIONS
 _OFFICE_CONVERT_LOCK = threading.Lock()
+_PDFIUM_LOCK = threading.RLock()
 
 try:
     from openai import OpenAI
@@ -1168,21 +1169,36 @@ def render_pdf_pages_to_base64(
     """
     images_b64: List[str] = []
 
-    # Tentativa 1: pypdfium2 (rápido e alta fidelidade)
+    # Tentativa 1: pypdfium2 (rápido e alta fidelidade com lock thread-safe)
     if pdfium is not None:
-        try:
-            pdf = pdfium.PdfDocument(str(pdf_path))
-            num_pages = min(len(pdf), max_pages)
-            for i in range(num_pages):
-                page = pdf[i]
-                img = page.render(scale=scale).to_pil()
-                buf = io.BytesIO()
-                img.save(buf, format="JPEG", quality=quality)
-                images_b64.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
-            if images_b64:
-                return images_b64
-        except Exception:
-            images_b64 = []
+        with _PDFIUM_LOCK:
+            pdf = None
+            try:
+                pdf = pdfium.PdfDocument(str(pdf_path))
+                num_pages = min(len(pdf), max_pages)
+                for i in range(num_pages):
+                    page = pdf.get_page(i)
+                    try:
+                        bitmap = page.render(scale=scale)
+                        try:
+                            img = bitmap.to_pil()
+                            buf = io.BytesIO()
+                            img.save(buf, format="JPEG", quality=quality)
+                            images_b64.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+                        finally:
+                            bitmap.close()
+                    finally:
+                        page.close()
+                if images_b64:
+                    return images_b64
+            except Exception:
+                images_b64 = []
+            finally:
+                if pdf is not None:
+                    try:
+                        pdf.close()
+                    except Exception:
+                        pass
 
     # Tentativa 2: pdfplumber (fallback)
     if pdfplumber is not None:
@@ -1386,37 +1402,68 @@ def extract_tesseract_text_from_pdf(
 
     # 1. Analisa imagens embutidas em alta resolução (fotos de CNH, RG, CPF inseridas no PDF)
     if pdfium is not None:
-        try:
-            pdf = pdfium.PdfDocument(str(pdf_path))
-            num_pages = min(len(pdf), max_pages)
-            for i in range(num_pages):
-                page = pdf[i]
-                for obj in page.get_objects():
-                    if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE:
-                        bm = obj.get_bitmap()
-                        pil_img = bm.to_pil()
-                        if pil_img.width >= 200 and pil_img.height >= 200:
-                            t = run_tesseract_ocr_on_image(pil_img, try_rotation=True)
-                            if t and len(t) >= 15:
-                                extracted_parts.append(t)
-        except Exception:
-            pass
+        with _PDFIUM_LOCK:
+            pdf = None
+            try:
+                pdf = pdfium.PdfDocument(str(pdf_path))
+                num_pages = min(len(pdf), max_pages)
+                for i in range(num_pages):
+                    page = pdf.get_page(i)
+                    try:
+                        for obj in page.get_objects():
+                            if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE:
+                                bm = None
+                                try:
+                                    bm = obj.get_bitmap()
+                                    pil_img = bm.to_pil()
+                                    if pil_img.width >= 200 and pil_img.height >= 200:
+                                        t = run_tesseract_ocr_on_image(pil_img, try_rotation=True)
+                                        if t and len(t) >= 15:
+                                            extracted_parts.append(t)
+                                finally:
+                                    if bm is not None:
+                                        bm.close()
+                    finally:
+                        page.close()
+            except Exception:
+                pass
+            finally:
+                if pdf is not None:
+                    try:
+                        pdf.close()
+                    except Exception:
+                        pass
 
     # 2. Se nenhuma imagem embutida foi encontrada ou se ainda não achou CPF, renderiza as páginas
     combined = "\n\n".join(extracted_parts)
     if not re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", combined):
         if pdfium is not None:
-            try:
-                pdf = pdfium.PdfDocument(str(pdf_path))
-                num_pages = min(len(pdf), max_pages)
-                for i in range(num_pages):
-                    page = pdf[i]
-                    p_img = page.render(scale=2.0).to_pil()
-                    t = run_tesseract_ocr_on_image(p_img, try_rotation=True)
-                    if t and len(t) >= 15:
-                        extracted_parts.append(t)
-            except Exception:
-                pass
+            with _PDFIUM_LOCK:
+                pdf = None
+                try:
+                    pdf = pdfium.PdfDocument(str(pdf_path))
+                    num_pages = min(len(pdf), max_pages)
+                    for i in range(num_pages):
+                        page = pdf.get_page(i)
+                        try:
+                            bitmap = page.render(scale=2.0)
+                            try:
+                                p_img = bitmap.to_pil()
+                                t = run_tesseract_ocr_on_image(p_img, try_rotation=True)
+                                if t and len(t) >= 15:
+                                    extracted_parts.append(t)
+                            finally:
+                                bitmap.close()
+                        finally:
+                            page.close()
+                except Exception:
+                    pass
+                finally:
+                    if pdf is not None:
+                        try:
+                            pdf.close()
+                        except Exception:
+                            pass
 
     return "\n\n".join(extracted_parts).strip()
 
@@ -1455,77 +1502,106 @@ def analyze_pdf_dossier(
     if not p.exists() or pdfium is None:
         return result
 
-    try:
-        pdf = pdfium.PdfDocument(str(p))
-        total_pages = len(pdf)
-    except Exception:
-        return result
-
     pages_info = []
     seen_tipos = []
     seen_dominios = []
 
-    for i in range(total_pages):
-        page = pdf[i]
-        page_num = i + 1
-
-        # 1. Leitura de texto digital da página
+    with _PDFIUM_LOCK:
+        pdf = None
         try:
-            p_text = page.get_textpage().get_text_range().strip()
+            pdf = pdfium.PdfDocument(str(p))
+            total_pages = len(pdf)
+
+            for i in range(total_pages):
+                page = None
+                p_text = ""
+                embedded_texts = []
+                ocr_rendered_text = ""
+                page_num = i + 1
+
+                try:
+                    page = pdf.get_page(i)
+
+                    # 1. Leitura de texto digital da página
+                    try:
+                        textpage = page.get_textpage()
+                        try:
+                            p_text = textpage.get_text_range().strip()
+                        finally:
+                            textpage.close()
+                    except Exception:
+                        p_text = ""
+
+                    # 2. Se houver imagens embutidas em alta resolução (ex: recortes CDT/SENATRAN)
+                    try:
+                        for obj in page.get_objects():
+                            if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE:
+                                bm = None
+                                try:
+                                    bm = obj.get_bitmap()
+                                    pil_img = bm.to_pil()
+                                    if pil_img.width >= 200 and pil_img.height >= 200:
+                                        t = run_tesseract_ocr_on_image(pil_img, try_rotation=True)
+                                        if t and len(t) >= 15:
+                                            embedded_texts.append(t)
+                                finally:
+                                    if bm is not None:
+                                        bm.close()
+                    except Exception:
+                        pass
+
+                    # 3. Se a página for imagem pura sem texto digital e não achou imagens embutidas, roda OCR se dentro do limite
+                    if len(p_text) < 40 and not embedded_texts and i < max_ocr_pages:
+                        try:
+                            bitmap = page.render(scale=1.5)
+                            try:
+                                p_img = bitmap.to_pil()
+                                ocr_rendered_text = run_tesseract_ocr_on_image(p_img, try_rotation=True)
+                            finally:
+                                bitmap.close()
+                        except Exception:
+                            pass
+                finally:
+                    if page is not None:
+                        page.close()
+
+                combined_page_text = "\n".join(
+                    x for x in [p_text, "\n".join(embedded_texts), ocr_rendered_text] if x.strip()
+                ).strip()
+
+                if not combined_page_text:
+                    continue
+
+                tipo, dom = classify_text_signatures(combined_page_text)
+                p_cpf = extract_cpf_fallback(combined_page_text)
+                p_rg = extract_rg_fallback(combined_page_text)
+                p_cnpj = extract_cnpj_fallback(combined_page_text)
+                p_curso = extract_course_fallback(combined_page_text)
+
+                p_entry = {
+                    "pagina": page_num,
+                    "dominio": dom or "outros",
+                    "tipo": tipo or "Documento Diverso",
+                    "cpf": p_cpf,
+                    "rg": p_rg,
+                    "cnpj": p_cnpj,
+                    "curso": p_curso
+                }
+                pages_info.append(p_entry)
+
+                if tipo and tipo not in seen_tipos:
+                    seen_tipos.append(tipo)
+                if dom and dom not in seen_dominios:
+                    seen_dominios.append(dom)
         except Exception:
-            p_text = ""
+            return result
+        finally:
+            if pdf is not None:
+                try:
+                    pdf.close()
+                except Exception:
+                    pass
 
-        embedded_texts = []
-        # 2. Se houver imagens embutidas em alta resolução (ex: recortes CDT/SENATRAN)
-        try:
-            for obj in page.get_objects():
-                if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE:
-                    bm = obj.get_bitmap()
-                    pil_img = bm.to_pil()
-                    if pil_img.width >= 200 and pil_img.height >= 200:
-                        t = run_tesseract_ocr_on_image(pil_img, try_rotation=True)
-                        if t and len(t) >= 15:
-                            embedded_texts.append(t)
-        except Exception:
-            pass
-
-        # 3. Se a página for imagem pura sem texto digital e não achou imagens embutidas, roda OCR se dentro do limite
-        ocr_rendered_text = ""
-        if len(p_text) < 40 and not embedded_texts and i < max_ocr_pages:
-            try:
-                p_img = page.render(scale=1.5).to_pil()
-                ocr_rendered_text = run_tesseract_ocr_on_image(p_img, try_rotation=True)
-            except Exception:
-                pass
-
-        combined_page_text = "\n".join(
-            x for x in [p_text, "\n".join(embedded_texts), ocr_rendered_text] if x.strip()
-        ).strip()
-
-        if not combined_page_text:
-            continue
-
-        tipo, dom = classify_text_signatures(combined_page_text)
-        p_cpf = extract_cpf_fallback(combined_page_text)
-        p_rg = extract_rg_fallback(combined_page_text)
-        p_cnpj = extract_cnpj_fallback(combined_page_text)
-        p_curso = extract_course_fallback(combined_page_text)
-
-        p_entry = {
-            "pagina": page_num,
-            "dominio": dom or "outros",
-            "tipo": tipo or "Documento Diverso",
-            "cpf": p_cpf,
-            "rg": p_rg,
-            "cnpj": p_cnpj,
-            "curso": p_curso
-        }
-        pages_info.append(p_entry)
-
-        if tipo and tipo not in seen_tipos:
-            seen_tipos.append(tipo)
-        if dom and dom not in seen_dominios:
-            seen_dominios.append(dom)
 
     # Hierarquia e Anti-Contaminação
     # CPF: Prioridade 1 = Identificação, 2 = Acadêmico, 3 = Financeiro
