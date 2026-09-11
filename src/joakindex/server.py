@@ -534,9 +534,12 @@ class BatchManager:
             reprocess_ocr = bool(params.get("reprocess_ocr", False))
             force = bool(params.get("force", False))
             no_individual = bool(params.get("no_individual", False))
+            hybrid = bool(params.get("hybrid", getattr(self.server_ctx, "hybrid", False)))
+            hybrid_cloud_model = str(params.get("hybrid_cloud_model") or getattr(self.server_ctx, "hybrid_cloud_model", "gpt-4o-mini"))
 
             mode_label = "Forçar Todos" if force else ("Reprocessar OCR" if reprocess_ocr else "Incremental")
-            self._add_log(f"Parâmetros: Modo={mode_label} | Provedor={provider} | Modelo={model or 'padrão'} | Workers={workers}")
+            h_info = f" | Híbrido (Fallback -> {hybrid_cloud_model})" if hybrid else ""
+            self._add_log(f"Parâmetros: Modo={mode_label} | Provedor={provider} | Modelo={model or 'padrão'}{h_info} | Workers={workers}")
             self._add_log(f"Diretórios: Entrada='{input_dir}' | Saída='{out_dir}'")
 
             def progress_callback(event: Dict[str, Any]):
@@ -629,7 +632,9 @@ class BatchManager:
                 no_individual=no_individual,
                 progress_callback=progress_callback,
                 stop_checker=lambda: self.stop_requested,
-                use_tqdm=False
+                use_tqdm=False,
+                hybrid=hybrid,
+                hybrid_cloud_model=hybrid_cloud_model
             )
 
             with self.lock:
@@ -693,7 +698,9 @@ class ConferenciaServer:
         model: str = None,
         ollama_url: str = "http://localhost:11434",
         openai_key: str = None,
-        openai_base_url: str = None
+        openai_base_url: str = None,
+        hybrid: bool = False,
+        hybrid_cloud_model: str = "gpt-4o-mini"
     ):
         self.json_path = Path(resolve_json_path(json_path)).resolve()
         self.pdf_dir = Path(resolve_pdf_dir(pdf_dir)).resolve()
@@ -713,6 +720,8 @@ class ConferenciaServer:
         self.ollama_url = ollama_url
         self.openai_key = openai_key
         self.openai_base_url = openai_base_url
+        self.hybrid = hybrid
+        self.hybrid_cloud_model = hybrid_cloud_model
         self._llm_client = None
         self.md5_to_file = {}
         self.batch_manager = BatchManager(self)
@@ -1540,6 +1549,8 @@ def create_handler(server_ctx: ConferenciaServer):
                 clean_vis["provider"] = server_ctx.provider
                 clean_vis["model"] = server_ctx.model
                 clean_vis["ollama_url"] = server_ctx.ollama_url
+                clean_vis["hybrid"] = getattr(server_ctx, "hybrid", clean_vis.get("hybrid", False))
+                clean_vis["hybrid_cloud_model"] = getattr(server_ctx, "hybrid_cloud_model", clean_vis.get("hybrid_cloud_model", "gpt-4o-mini"))
                 if clean_vis.get("openai_key"):
                     del clean_vis["openai_key"]
 
@@ -2035,8 +2046,33 @@ def create_handler(server_ctx: ConferenciaServer):
                         ollama_url=req_ollama_url
                     )
 
+                    req_hybrid = payload.get("hybrid")
+                    if req_hybrid is None:
+                        req_hybrid = getattr(server_ctx, "hybrid", False)
+                    req_hybrid = bool(req_hybrid)
+                    req_hybrid_cloud_model = payload.get("hybrid_cloud_model") or getattr(server_ctx, "hybrid_cloud_model", "gpt-4o-mini")
+
+                    hybrid_cloud_client = None
+                    if req_hybrid:
+                        try:
+                            hybrid_cloud_client = server_ctx.get_llm_client(
+                                provider="openai",
+                                model=req_hybrid_cloud_model,
+                                openai_key=req_key,
+                                openai_base_url=req_base
+                            )
+                        except Exception as ex_h:
+                            print(f"[Aviso] Falha ao inicializar cliente de fallback para modo híbrido sob demanda: {ex_h}")
+                            req_hybrid = False
+
                     # Executa a leitura e classificação completa do documento forçando OCR
-                    novo_doc = process_single_pdf(pdf_file, client, force_ocr=True)
+                    novo_doc = process_single_pdf(
+                        pdf_file,
+                        client,
+                        force_ocr=True,
+                        hybrid=req_hybrid,
+                        hybrid_cloud_client=hybrid_cloud_client
+                    )
                     novo_doc.pop("data_criacao", None)
 
                     # Sanitiza listas para strings para compatibilidade com o visualizador
@@ -2123,10 +2159,10 @@ def create_handler(server_ctx: ConferenciaServer):
                 updates_visualizador = payload.get("visualizador", {})
 
                 if not updates_classificador and not updates_visualizador:
-                    for k in ["input", "output_dir", "provider", "model", "workers", "max_pages", "skip_ocr", "docker", "ollama_url", "openai_key", "openai_base_url"]:
+                    for k in ["input", "output_dir", "provider", "model", "workers", "max_pages", "skip_ocr", "docker", "ollama_url", "openai_key", "openai_base_url", "hybrid", "hybrid_cloud_model"]:
                         if k in payload:
                             updates_classificador[k] = payload[k]
-                    for k in ["pdf_dir", "json_path", "port", "provider", "model", "ollama_url", "openai_key", "openai_base_url"]:
+                    for k in ["pdf_dir", "json_path", "port", "provider", "model", "ollama_url", "openai_key", "openai_base_url", "hybrid", "hybrid_cloud_model"]:
                         if k in payload:
                             updates_visualizador[k] = payload[k]
 
@@ -2195,6 +2231,18 @@ def create_handler(server_ctx: ConferenciaServer):
                 if new_base_url is not None:
                     server_ctx.openai_base_url = new_base_url
                     server_ctx._llm_client = None
+
+                if "hybrid" in updates_visualizador or "hybrid" in updates_classificador:
+                    h_val = updates_visualizador.get("hybrid")
+                    if h_val is None:
+                        h_val = updates_classificador.get("hybrid")
+                    if h_val is not None:
+                        server_ctx.hybrid = bool(h_val)
+
+                if "hybrid_cloud_model" in updates_visualizador or "hybrid_cloud_model" in updates_classificador:
+                    m_val = updates_visualizador.get("hybrid_cloud_model") or updates_classificador.get("hybrid_cloud_model")
+                    if m_val:
+                        server_ctx.hybrid_cloud_model = str(m_val).strip()
 
                 resp = json.dumps({
                     "status": "sucesso",
@@ -2494,6 +2542,26 @@ def main(argv: Optional[List[str]] = None):
         action="store_true",
         help="Executa a uniformização e consolidação inteligente de nomes de instituições na base de dados e sai."
     )
+    parser.add_argument(
+        "--hibrido", "--hybrid",
+        dest="hybrid",
+        action="store_true",
+        default=False,
+        help="Inicia o servidor com modo híbrido em cascata ativado (padrão: %(default)s)."
+    )
+    parser.add_argument(
+        "--no-hibrido", "--no-hybrid",
+        dest="hybrid",
+        action="store_false",
+        help="Desativa o modo híbrido em cascata no servidor."
+    )
+    parser.add_argument(
+        "--hybrid-cloud-model",
+        dest="hybrid_cloud_model",
+        type=str,
+        default="gpt-4o-mini",
+        help="Modelo cloud de fallback para o modo híbrido (padrão: %(default)s)."
+    )
 
     # Carrega configurações salvas prévias como padrões do parser
     saved_cfg = get_visualizer_config()
@@ -2511,6 +2579,8 @@ def main(argv: Optional[List[str]] = None):
         ollama_url=saved_cfg.get("ollama_url", "http://localhost:11434"),
         openai_key=saved_key,
         openai_base_url=saved_base_url,
+        hybrid=saved_cfg.get("hybrid", False),
+        hybrid_cloud_model=saved_cfg.get("hybrid_cloud_model", "gpt-4o-mini"),
     )
 
     raw_args = argv if argv is not None else sys.argv[1:]
@@ -2590,7 +2660,9 @@ def main(argv: Optional[List[str]] = None):
             "model": args.model,
             "ollama_url": args.ollama_url,
             "openai_key": args.openai_key,
-            "openai_base_url": args.openai_base_url
+            "openai_base_url": args.openai_base_url,
+            "hybrid": getattr(args, "hybrid", False),
+            "hybrid_cloud_model": getattr(args, "hybrid_cloud_model", "gpt-4o-mini")
         })
 
     ctx = ConferenciaServer(
@@ -2601,7 +2673,9 @@ def main(argv: Optional[List[str]] = None):
         model=args.model,
         ollama_url=args.ollama_url,
         openai_key=args.openai_key,
-        openai_base_url=args.openai_base_url
+        openai_base_url=args.openai_base_url,
+        hybrid=getattr(args, "hybrid", False),
+        hybrid_cloud_model=getattr(args, "hybrid_cloud_model", "gpt-4o-mini")
     )
     handler = create_handler(ctx)
 

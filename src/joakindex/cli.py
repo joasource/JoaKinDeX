@@ -14,6 +14,7 @@ import sys
 import json
 import re
 import time
+import random
 import hashlib
 import argparse
 import warnings
@@ -1673,27 +1674,115 @@ def analyze_pdf_dossier(
 
 
 # ---------------------------------------------------------------------------
-# Tratamento de JSON retornado pelo LLM
+# Tratamento e Auto-Reparo de JSON retornado pelo LLM
 # ---------------------------------------------------------------------------
 def clean_and_parse_json(raw_text: str) -> Dict[str, Any]:
     """
     Higieniza e decodifica a resposta JSON do modelo, tratando blocos de código
-    markdown e possíveis caracteres extras.
+    markdown, caracteres extras e truncamento acidental de tokens (auto-reparo).
     """
-    text = raw_text.strip()
+    text = (raw_text or "").strip()
+    if not text:
+        return {}
 
+    # 1. Limpeza de blocos de código markdown (```json ... ```)
     if "```" in text:
         text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
         text = re.sub(r"\s*```$", "", text)
         text = text.strip()
 
+    # 2. Tentativa direta com json.loads
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        match = re.search(r"(\{.*\})", text, re.DOTALL)
-        if match:
+    except Exception:
+        pass
+
+    # 3. Busca por bloco JSON completo delimitado por chaves { ... }
+    match = re.search(r"(\{.*\})", text, re.DOTALL)
+    if match:
+        try:
             return json.loads(match.group(1))
-        raise ValueError(f"Não foi possível converter a resposta em JSON válido: {raw_text[:200]}")
+        except Exception:
+            pass
+
+    # 4. Auto-reparo de JSON truncado ou cortado pelo LLM
+    try:
+        start_idx = text.find("{")
+        if start_idx != -1:
+            s = text[start_idx:]
+
+            # Conta aspas não escapadas para detectar strings abertas
+            def _count_unescaped_quotes(st: str) -> int:
+                count = 0
+                escaped = False
+                for ch in st:
+                    if ch == "\\" and not escaped:
+                        escaped = True
+                        continue
+                    if ch == '"' and not escaped:
+                        count += 1
+                    escaped = False
+                return count
+
+            if _count_unescaped_quotes(s) % 2 != 0:
+                last_quote_idx = s.rfind('"')
+                before_quote = s[:last_quote_idx].rstrip()
+                after_quote = s[last_quote_idx + 1:]
+                # Se for chave pendente como: , " ou , "campo
+                if ":" not in after_quote and (before_quote.endswith(",") or before_quote.endswith("{")):
+                    s = before_quote.rstrip(",")
+                else:
+                    # Se for valor de string interrompido: "campo": "texto_incompleto
+                    s = s + '"'
+
+            # Remove vírgulas finais soltas antes do fechamento
+            s = re.sub(r",\s*$", "", s)
+
+            # Empilha e fecha delimitadores não balanceados ({ e [)
+            stack = []
+            in_string = False
+            escaped = False
+            for ch in s:
+                if ch == "\\" and not escaped:
+                    escaped = True
+                    continue
+                if ch == '"':
+                    in_string = not in_string
+                elif not in_string:
+                    if ch in ("{", "["):
+                        stack.append(ch)
+                    elif ch == "}" and stack and stack[-1] == "{":
+                        stack.pop()
+                    elif ch == "]" and stack and stack[-1] == "[":
+                        stack.pop()
+                escaped = False
+
+            while stack:
+                opener = stack.pop()
+                s = s.rstrip().rstrip(",")
+                s += "}" if opener == "{" else "]"
+
+            repaired = json.loads(s)
+            if isinstance(repaired, dict):
+                return repaired
+    except Exception:
+        pass
+
+    # 5. Fallback Resiliente: Extração de pares chave-valor via Regex
+    extracted: Dict[str, Any] = {}
+    pattern = r'"([a-zA-Z0-9_]+)"\s*:\s*(null|true|false|-?\d+(?:\.\d+)?|"(?:[^"\\]|\\.)*")'
+    for m in re.finditer(pattern, text):
+        k = m.group(1)
+        v_raw = m.group(2)
+        try:
+            extracted[k] = json.loads(v_raw)
+        except Exception:
+            extracted[k] = v_raw.strip('"')
+
+    if extracted:
+        return extracted
+
+    raise ValueError(f"Não foi possível converter a resposta em JSON válido: {raw_text[:200]}")
 
 
 # ---------------------------------------------------------------------------
@@ -1898,6 +1987,7 @@ class OllamaClient(BaseLLMClient):
         self.docker_container = docker_container
         self.timeout = timeout
         self.use_docker = False
+        self.session = requests.Session() if requests else None
 
         self._detect_connection_mode()
 
@@ -1907,11 +1997,27 @@ class OllamaClient(BaseLLMClient):
             self._resolve_model_name()
             return
 
+        # 1. Prioridade Máxima: Tenta comunicação HTTP nativa direta com a URL base
+        # Se a porta 11434 estiver aberta no host (ou container exposto), utiliza conexão direta ultra-rápida
+        if requests:
+            try:
+                r = requests.get(f"{self.base_url}/api/tags", timeout=1.5)
+                if r.status_code == 200:
+                    data = r.json()
+                    models = [m.get("name") for m in data.get("models", []) if m.get("name")]
+                    if models:
+                        self.use_docker = False
+                        self.docker_container = None
+                        self._resolve_model_name()
+                        return
+            except Exception:
+                pass
+
+        # 2. Fallback: Se não respondeu nativo na porta, busca containers Docker em execução
         envs = detect_ollama_environments(base_url=self.base_url)
         running = [e for e in envs if e.get("is_running")]
 
         if running:
-            # Prefere ambiente que já possua modelos baixados
             best = next((e for e in running if e.get("models")), running[0])
             if best["type"] == "native_http":
                 self.use_docker = False
@@ -1953,7 +2059,10 @@ class OllamaClient(BaseLLMClient):
                     return [l.split()[0] for l in lines[1:] if l.split()]
             else:
                 url = self.base_url.rstrip("/") + "/api/tags"
-                r = requests.get(url, timeout=5)
+                if self.session:
+                    r = self.session.get(url, timeout=5)
+                else:
+                    r = requests.get(url, timeout=5)
                 data = r.json()
                 return [m["name"] for m in data.get("models", [])]
         except Exception:
@@ -1966,7 +2075,9 @@ class OllamaClient(BaseLLMClient):
             "format": "json",
             "stream": False,
             "options": {
-                "temperature": 0.0
+                "temperature": 0.0,
+                "num_predict": 2048,
+                "num_ctx": 4096
             }
         }
         payload_str = json.dumps(payload)
@@ -1990,7 +2101,10 @@ class OllamaClient(BaseLLMClient):
             raw_response = response_json.get("response", "")
         else:
             url = f"{self.base_url}/api/generate"
-            r = requests.post(url, json=payload, timeout=self.timeout)
+            if self.session:
+                r = self.session.post(url, json=payload, timeout=self.timeout)
+            else:
+                r = requests.post(url, json=payload, timeout=self.timeout)
             r.raise_for_status()
             response_json = r.json()
             raw_response = response_json.get("response", "")
@@ -2005,7 +2119,9 @@ class OllamaClient(BaseLLMClient):
             "format": "json",
             "stream": False,
             "options": {
-                "temperature": 0.0
+                "temperature": 0.0,
+                "num_predict": 2048,
+                "num_ctx": 4096
             }
         }
         payload_str = json.dumps(payload)
@@ -2029,7 +2145,10 @@ class OllamaClient(BaseLLMClient):
             raw_response = response_json.get("response", "")
         else:
             url = f"{self.base_url}/api/generate"
-            r = requests.post(url, json=payload, timeout=self.timeout)
+            if self.session:
+                r = self.session.post(url, json=payload, timeout=self.timeout)
+            else:
+                r = requests.post(url, json=payload, timeout=self.timeout)
             r.raise_for_status()
             response_json = r.json()
             raw_response = response_json.get("response", "")
@@ -2067,8 +2186,33 @@ class OpenAIClient(BaseLLMClient):
             base_url=base_url or os.environ.get("OPENAI_BASE_URL")
         )
 
+    @staticmethod
+    def _calculate_retry_delay(err_msg: str, attempt: int, default_step: float = 4.0) -> float:
+        """Calcula tempo de espera adaptativo para 429 / Rate Limit (TPM)."""
+        # 1. Tenta extrair tempo sugerido no corpo do erro da OpenAI
+        m_ms = re.search(r"try again in (\d+(?:\.\d+)?)\s*ms", err_msg, re.IGNORECASE)
+        if m_ms:
+            try:
+                ms_val = float(m_ms.group(1))
+                return max(0.8, (ms_val / 1000.0) + random.uniform(0.3, 1.2))
+            except Exception:
+                pass
+
+        m_s = re.search(r"try again in (\d+(?:\.\d+)?)\s*s", err_msg, re.IGNORECASE)
+        if m_s:
+            try:
+                s_val = float(m_s.group(1))
+                return max(1.0, s_val + random.uniform(0.5, 2.0))
+            except Exception:
+                pass
+
+        # 2. Backoff exponencial adaptativo com jitter para evitar efeito manada (thundering herd)
+        delays = [4.0, 8.0, 16.0, 30.0, 45.0, 60.0]
+        idx = min(attempt, len(delays) - 1)
+        return delays[idx] + random.uniform(0.5, 2.0)
+
     def generate_json(self, prompt: str) -> Dict[str, Any]:
-        max_retries = 5
+        max_retries = 6
         for attempt in range(max_retries):
             try:
                 response = self.client.chat.completions.create(
@@ -2093,7 +2237,8 @@ class OpenAIClient(BaseLLMClient):
                 err_msg = str(e).lower()
                 is_rate_limit = "429" in err_msg or "rate limit" in err_msg or "tokens per min" in err_msg
                 if is_rate_limit and attempt < max_retries - 1:
-                    sleep_s = (attempt + 1) * 3
+                    sleep_s = self._calculate_retry_delay(err_msg, attempt, default_step=3.0)
+                    print(f"[*] [OpenAI] Limite de taxa atingido (429/TPM). Aguardando {sleep_s:.1f}s antes da tentativa {attempt + 2}/{max_retries}...")
                     time.sleep(sleep_s)
                     continue
                 raise e
@@ -2108,7 +2253,7 @@ class OpenAIClient(BaseLLMClient):
                 }
             })
 
-        max_retries = 5
+        max_retries = 6
         for attempt in range(max_retries):
             try:
                 response = self.client.chat.completions.create(
@@ -2133,7 +2278,8 @@ class OpenAIClient(BaseLLMClient):
                 err_msg = str(e).lower()
                 is_rate_limit = "429" in err_msg or "rate limit" in err_msg or "tokens per min" in err_msg
                 if is_rate_limit and attempt < max_retries - 1:
-                    sleep_s = (attempt + 1) * 4
+                    sleep_s = self._calculate_retry_delay(err_msg, attempt, default_step=4.0)
+                    print(f"[*] [OpenAI] Limite de taxa atingido (429/TPM). Aguardando {sleep_s:.1f}s antes da tentativa {attempt + 2}/{max_retries}...")
                     time.sleep(sleep_s)
                     continue
                 raise e
@@ -2275,6 +2421,47 @@ build_vision_prompt = build_universal_vision_prompt
 build_prompt = build_universal_prompt
 
 
+def should_trigger_hybrid_fallback(doc: Dict[str, Any], text_length: int = 0) -> Tuple[bool, str]:
+    """
+    Avalia se um documento classificado localmente deve ser promovido para
+    reclassificação na nuvem (OpenAI) no modo cascata híbrido.
+    Retorna (deve_promover: bool, motivo: str).
+    """
+    if not doc:
+        return True, "resultado_nulo"
+
+    status = str(doc.get("status") or "").lower()
+    if status == "erro":
+        err_det = doc.get("motivo") or doc.get("erro") or "erro_leitura"
+        return True, f"falha_leitura_local ({err_det})"
+
+    tipo = str(doc.get("tipo_documento") or "").strip().upper()
+    if not tipo or tipo in ["NÃO IDENTIFICADO", "NAO IDENTIFICADO", "OUTRO", "DESCONHECIDO", "DOCUMENTO NÃO IDENTIFICADO"]:
+        return True, "tipo_documento_inconclusivo"
+
+    dominio = str(doc.get("dominio") or "").strip().lower()
+
+    if dominio == "academico" or any(k in tipo.lower() for k in ["diploma", "certificado", "histórico", "historico", "declaração", "declaracao"]):
+        tem_beneficiario = bool(str(doc.get("beneficiario") or "").strip())
+        tem_curso = bool(str(doc.get("curso") or "").strip())
+        tem_faculdade = bool(str(doc.get("faculdade") or "").strip())
+        if not tem_beneficiario:
+            return True, "beneficiario_ausente (aluno/titular não identificado)"
+        if not tem_curso and not tem_faculdade:
+            return True, "dados_academicos_essenciais_ausentes (sem curso nem instituição)"
+
+    elif dominio == "financeiro" or any(k in tipo.lower() for k in ["comprovante", "pagamento", "recibo", "nota fiscal", "extrato"]):
+        tem_valor = bool(str(doc.get("valor_monetario") or "").strip())
+        tem_beneficiario = bool(str(doc.get("beneficiario") or "").strip())
+        if not tem_valor and not tem_beneficiario:
+            return True, "dados_financeiros_essenciais_ausentes (sem valor nem beneficiário)"
+
+    if text_length > 0 and text_length < 100 and (not doc.get("beneficiario") or not doc.get("curso")):
+        return True, "camada_textual_insuficiente"
+
+    return False, ""
+
+
 # ---------------------------------------------------------------------------
 # Processamento Universal de Documentos (PDF e Imagens PNG/JPG/JPEG/WEBP)
 # ---------------------------------------------------------------------------
@@ -2284,7 +2471,9 @@ def process_single_pdf(
     max_pages: int = 4,
     force_ocr: bool = False,
     skip_ocr: bool = False,
-    metadata: Optional[Dict[str, str]] = None
+    metadata: Optional[Dict[str, str]] = None,
+    hybrid: bool = False,
+    hybrid_cloud_client: Optional[BaseLLMClient] = None
 ) -> Dict[str, Any]:
     pdf_path = Path(pdf_path)
     # Metadados do arquivo (MD5, data da última alteração, extensão)
@@ -2842,6 +3031,35 @@ def process_single_pdf(
     except Exception as e:
         res_dict["status"] = "erro"
         res_dict["erro"] = str(e)
+
+    # -------------------------------------------------------------------------
+    # MODO HÍBRIDO EM CASCATA: Fallback para Modelo de Nuvem (Item 4)
+    # -------------------------------------------------------------------------
+    if hybrid and hybrid_cloud_client is not None:
+        raw_text_len = len(text.strip()) if ('text' in locals() and text and isinstance(text, str)) else 0
+        if raw_text_len == 0 and 'tess_text' in locals() and tess_text and isinstance(tess_text, str):
+            raw_text_len = len(tess_text.strip())
+
+        should_fallback, reason = should_trigger_hybrid_fallback(res_dict, text_length=raw_text_len)
+        if should_fallback:
+            try:
+                cloud_doc = process_single_pdf(
+                    pdf_path=pdf_path,
+                    client=hybrid_cloud_client,
+                    max_pages=max_pages,
+                    force_ocr=True,
+                    skip_ocr=False,
+                    metadata=meta,
+                    hybrid=False,  # Evita recursão infinita
+                    hybrid_cloud_client=None
+                )
+                cloud_doc["metodo_leitura"] = "hibrido_fallback_openai"
+                cloud_doc["provedor_primario"] = getattr(client, "provider", "ollama")
+                cloud_doc["provedor_final"] = "openai"
+                cloud_doc["motivo_fallback"] = reason
+                return cloud_doc
+            except Exception as ex_cloud:
+                res_dict["erro_fallback_nuvem"] = str(ex_cloud)
 
     return res_dict
 
@@ -3432,7 +3650,11 @@ def run_batch_classification(
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     stop_checker: Optional[Callable[[], bool]] = None,
     use_tqdm: bool = True,
-    client: Optional[Any] = None
+    client: Optional[Any] = None,
+    hybrid: bool = False,
+    hybrid_cloud_model: str = "gpt-4o-mini",
+    hybrid_openai_key: Optional[str] = None,
+    hybrid_openai_base_url: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Executa a classificação em lote de documentos PDF com suporte a:
@@ -3730,6 +3952,30 @@ def run_batch_classification(
     save_interval = 10
     was_stopped = False
 
+    # Inicialização do Cliente Cloud para Modo Híbrido se ativo
+    hybrid_cloud_client = None
+    if hybrid:
+        cloud_key = hybrid_openai_key or openai_key or os.environ.get("OPENAI_API_KEY")
+        if not cloud_key:
+            print("[*] [Aviso Híbrido] Modo híbrido ativado, mas nenhuma chave da OpenAI foi configurada. Modo híbrido desativado.")
+            hybrid = False
+        else:
+            cloud_mod = hybrid_cloud_model or "gpt-4o-mini"
+            cloud_base = hybrid_openai_base_url or openai_base_url or os.environ.get("OPENAI_BASE_URL")
+            print(f"[*] [Modo Híbrido Ativado] Fallback configurado para OpenAI ({cloud_mod}).")
+            try:
+                hybrid_cloud_client = OpenAIClient(
+                    model=cloud_mod,
+                    api_key=cloud_key,
+                    base_url=cloud_base
+                )
+            except Exception as ex_init_h:
+                print(f"[*] [Aviso Híbrido] Falha ao inicializar cliente de fallback OpenAI ({ex_init_h}). Modo híbrido desativado.")
+                hybrid = False
+
+    if provider == "ollama" and workers > 2:
+        print(f"[*] [Dica de Performance] Executando Ollama local com {workers} workers. Em GPUs domésticas (12GB VRAM), recomenda-se 1 ou 2 workers para evitar fila de inferência.")
+
     if files_to_process:
         print(f"[*] Iniciando classificação de {len(files_to_process)} documento(s) com {workers} worker(s)...")
         notify({"event": "start_batch", "to_process": len(files_to_process), "workers": workers})
@@ -3744,7 +3990,9 @@ def run_batch_classification(
                 client,
                 max_pages=max_pages,
                 skip_ocr=skip_ocr,
-                metadata=meta
+                metadata=meta,
+                hybrid=hybrid,
+                hybrid_cloud_client=hybrid_cloud_client
             )
 
             # Preserva metadados de conferência humana caso já existissem
@@ -4077,6 +4325,26 @@ def main():
         action="store_true",
         help="Executa a uniformização e consolidação inteligente de nomes de instituições na base de dados sem reprocessar PDFs."
     )
+    parser.add_argument(
+        "--hibrido", "--hybrid",
+        dest="hybrid",
+        action="store_true",
+        default=False,
+        help="Ativa o modo cascata híbrido: tenta primeiro modelo local e faz fallback para OpenAI se inconclusivo (padrão: %(default)s)."
+    )
+    parser.add_argument(
+        "--no-hibrido", "--no-hybrid",
+        dest="hybrid",
+        action="store_false",
+        help="Desativa forçadamente o modo cascata híbrido."
+    )
+    parser.add_argument(
+        "--hybrid-cloud-model",
+        dest="hybrid_cloud_model",
+        type=str,
+        default="gpt-4o-mini",
+        help="Modelo OpenAI para fallback no modo híbrido (padrão: %(default)s)."
+    )
 
     # Carrega configurações salvas prévias como padrões do parser
     saved_cfg = get_classifier_config()
@@ -4093,6 +4361,8 @@ def main():
         max_pages=saved_cfg.get("max_pages", 4),
         skip_ocr=saved_cfg.get("skip_ocr", False),
         no_individual=saved_cfg.get("no_individual", False),
+        hybrid=saved_cfg.get("hybrid", False),
+        hybrid_cloud_model=saved_cfg.get("hybrid_cloud_model", "gpt-4o-mini"),
     )
 
     args = parser.parse_args()
@@ -4166,7 +4436,9 @@ def main():
             "workers": args.workers,
             "max_pages": args.max_pages,
             "skip_ocr": args.skip_ocr,
-            "no_individual": args.no_individual
+            "no_individual": args.no_individual,
+            "hybrid": getattr(args, "hybrid", False),
+            "hybrid_cloud_model": getattr(args, "hybrid_cloud_model", "gpt-4o-mini")
         })
 
     try:
@@ -4185,7 +4457,9 @@ def main():
             reprocess_ocr=args.reprocess_ocr,
             force=args.force,
             no_individual=args.no_individual,
-            use_tqdm=True
+            use_tqdm=True,
+            hybrid=getattr(args, "hybrid", False),
+            hybrid_cloud_model=getattr(args, "hybrid_cloud_model", "gpt-4o-mini")
         )
         if summary.get("status") == "erro":
             sys.exit(1)

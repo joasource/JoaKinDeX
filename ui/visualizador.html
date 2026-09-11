@@ -944,6 +944,10 @@
           <div id="currentStatusBadge" class="text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20 shrink-0 shadow-sm">
             Pendente
           </div>
+          <div id="currentHybridBadge" class="hidden text-[11px] px-2 py-0.5 rounded-full font-semibold border bg-amber-500/20 text-amber-300 border-amber-500/40 shrink-0 shadow-sm flex items-center gap-1" title="Classificado via Fallback Híbrido (Ollama ➔ OpenAI)">
+            <i class="fa-solid fa-bolt text-amber-400 text-[10px]"></i>
+            <span>Híbrido (Ollama ➔ Nuvem)</span>
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <!-- Controles de Imagem (quando documento for imagem nativa) -->
@@ -1177,460 +1181,53 @@
               </div>
             </div>
           </div>
+          <!-- ============================================================== -->
+          <!-- NOVO MOTOR DINÂMICO DE ENTIDADES (ZERO NOISE / ADAPTATIVO)     -->
+          <!-- ============================================================== -->
 
-          <!-- 2. CARD EXCLUSIVO DE COMPROVANTE PIX / FINANCEIRO (Contextual) -->
-          <div id="pixReceiptCard" class="hidden bg-gradient-to-br from-emerald-950/60 via-slate-900/95 to-slate-950 border border-emerald-500/40 rounded-xl p-3.5 space-y-3 shadow-lg ring-1 ring-emerald-500/20">
-            <div class="flex items-center justify-between border-b border-emerald-500/30 pb-2">
-              <div class="flex items-center gap-2">
-                <div class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                  <i class="fa-brands fa-pix text-xs"></i>
-                </div>
-                <div>
-                  <h4 class="text-xs font-bold text-emerald-300 uppercase tracking-wide">Comprovante de Transação PIX</h4>
-                  <span class="text-[10px] text-slate-400">Liquidação Financeira Instantânea BACEN</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <button type="button" onclick="removePixFromCurrentDoc()"
-                        class="px-2 py-1 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 text-[10px] font-semibold flex items-center gap-1 transition shadow-sm"
-                        title="Remover dados financeiros e desvincular este documento de PIX">
-                  <i class="fa-solid fa-ban text-[9px] text-rose-400"></i> Desvincular PIX
-                </button>
-                <span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-emerald-500/30">PIX OFICIAL</span>
-              </div>
+          <!-- Micro-Badges de Destaque / Hero Ribbon (Renderizado se houver dados chave) -->
+          <div id="dynamicHeroBadges" class="flex flex-wrap items-center gap-1.5 min-h-[0px] empty:hidden"></div>
+
+          <!-- Grade Adaptativa de Seções Semânticas (Apenas seções com dados são exibidas) -->
+          <div id="dynamicSectionsContainer" class="space-y-3">
+            <!-- Renderizado dinamicamente por renderDynamicInspector(doc) -->
+          </div>
+
+          <!-- Estado Vazio (quando o documento não tiver metadados específicos) -->
+          <div id="dynamicEmptyState" class="hidden p-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/40 text-center space-y-2.5">
+            <div class="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-400">
+              <i class="fa-solid fa-file-circle-question text-sm"></i>
             </div>
+            <div>
+              <p class="text-xs text-slate-200 font-medium">Nenhum atributo específico detectado</p>
+              <p class="text-[11px] text-slate-500 mt-0.5">A extração não identificou campos de texto específicos para este documento.</p>
+            </div>
+            <button type="button" onclick="openAddDynamicFieldModal()"
+                    class="text-xs px-3 py-1.5 rounded-lg bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/50 inline-flex items-center gap-1.5 transition shadow-sm font-medium">
+              <i class="fa-solid fa-plus text-[10px]"></i> Adicionar Atributo Manualmente
+            </button>
+          </div>
 
-            <!-- Valor Monetário em Destaque -->
-            <div class="bg-slate-950/80 p-2.5 rounded-lg border border-emerald-500/30 flex items-center justify-between">
-              <div class="flex-1">
-                <label for="input_valor_monetario" class="block text-[10px] font-semibold uppercase text-emerald-400/90">Valor Transferido (R$)</label>
-                <input type="text" id="input_valor_monetario" oninput="markDirty()" placeholder="R$ 0,00"
-                       class="bg-transparent text-lg sm:text-xl font-bold font-mono text-emerald-300 focus:outline-none w-full placeholder-emerald-800">
-              </div>
-              <button type="button" onclick="copyFieldValue('input_valor_monetario', 'Valor PIX', this)" title="Copiar Valor"
-                      class="text-xs text-slate-400 hover:text-emerald-400 px-2 py-1 rounded hover:bg-slate-800 transition">
-                <i class="fa-regular fa-copy"></i>
+          <!-- Rodapé Fixo do Inspetor: Botão + Campo & Observações da Conferência -->
+          <div class="pt-3 border-t border-slate-800/80 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-sliders text-cyan-400 text-[11px]"></i> Atributos do Documento
+              </span>
+              <button type="button" onclick="openAddDynamicFieldModal()"
+                      class="text-[11px] px-2.5 py-1 rounded-lg bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/50 flex items-center gap-1.5 transition shadow-sm font-medium">
+                <i class="fa-solid fa-plus text-[9px]"></i> Adicionar Campo
               </button>
-            </div>
-
-            <!-- Grid Pagador vs Recebedor -->
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <!-- Pagador -->
-              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1.5">
-                <div class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                  <i class="fa-solid fa-arrow-up-right-from-square text-rose-400 text-[9px]"></i> Pagador (Origem)
-                </div>
-                <input type="text" id="input_pix_pagador_nome" oninput="markDirty()" placeholder="Nome do Pagador"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
-                <input type="text" id="input_pix_pagador_cpf_cnpj" oninput="markDirty()" placeholder="CPF/CNPJ Mascarado"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
-                <input type="text" id="input_pix_pagador_banco" oninput="markDirty()" placeholder="Banco Origem"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
-              </div>
-
-              <!-- Recebedor / Beneficiário -->
-              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1.5">
-                <div class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                  <i class="fa-solid fa-arrow-down-left-and-up-right-to-center text-emerald-400 text-[9px]"></i> Recebedor (Destino)
-                </div>
-                <input type="text" id="input_pix_recebedor_nome_preview" oninput="syncRecebedorFromPixCard(this.value); markDirty();" placeholder="Nome do Favorecido"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
-                <input type="text" id="input_pix_recebedor_cpf_preview" oninput="syncCpfFromPixCard(this.value); markDirty();" placeholder="CPF/CNPJ Destino"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
-                <input type="text" id="input_pix_recebedor_banco" oninput="markDirty()" placeholder="Banco Destino"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500">
-              </div>
-            </div>
-
-            <!-- Chave PIX, Identificador E2E e Autenticação -->
-            <div class="space-y-1.5">
-              <!-- Chave PIX -->
-              <div>
-                <div class="flex items-center justify-between mb-0.5">
-                  <label for="input_pix_chave" class="text-[10px] font-medium text-slate-400">Chave PIX Utilizada</label>
-                  <button type="button" onclick="copyFieldValue('input_pix_chave', 'Chave PIX', this)" class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-                <input type="text" id="input_pix_chave" oninput="markDirty()" placeholder="Chave (E-mail, CPF, Celular ou EVP)"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-500">
-              </div>
-
-              <!-- Identificador Fim-a-Fim (E2E ID) -->
-              <div>
-                <div class="flex items-center justify-between mb-0.5">
-                  <label for="input_pix_e2e_id" class="text-[10px] font-medium text-slate-400 flex items-center gap-1">
-                    <span>ID Transação Fim-a-Fim (E2E ID)</span>
-                    <span class="text-[9px] bg-slate-800 text-slate-400 px-1 rounded font-mono">Bacen</span>
-                  </label>
-                  <button type="button" onclick="copyFieldValue('input_pix_e2e_id', 'E2E ID', this)" class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-                <input type="text" id="input_pix_e2e_id" oninput="markDirty()" placeholder="E0000000000000000000000000000000"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500">
-              </div>
-
-              <!-- Autenticação Bancária -->
-              <div>
-                <div class="flex items-center justify-between mb-0.5">
-                  <label for="input_pix_autenticacao" class="text-[10px] font-medium text-slate-400">Autenticação Bancária / Controle</label>
-                  <button type="button" onclick="copyFieldValue('input_pix_autenticacao', 'Autenticação', this)" class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-                <input type="text" id="input_pix_autenticacao" oninput="markDirty()" placeholder="Código de autenticação ou hash de segurança"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-300 focus:outline-none focus:border-emerald-500">
-              </div>
-            </div>
-          </div>
-
-          <!-- 2.1 CARD EXCLUSIVO DE DADOS CADASTRAIS / CARTÃO CNPJ (Contextual) -->
-          <div id="cartaoCnpjCard" class="hidden bg-gradient-to-br from-sky-950/60 via-slate-900/95 to-slate-950 border border-sky-500/40 rounded-xl p-3.5 space-y-3 shadow-lg ring-1 ring-sky-500/20">
-            <div class="flex items-center justify-between border-b border-sky-500/30 pb-2">
-              <div class="flex items-center gap-2">
-                <div class="w-6 h-6 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-400">
-                  <i class="fa-solid fa-landmark text-xs"></i>
-                </div>
-                <div>
-                  <h4 class="text-xs font-bold text-sky-300 uppercase tracking-wide">Comprovante de Situação Cadastral</h4>
-                  <span class="text-[10px] text-slate-400">Receita Federal do Brasil • Pessoa Jurídica</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <span id="cnpjSituacaoBadge" class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-emerald-500/30">ATIVA</span>
-              </div>
-            </div>
-
-            <!-- CNPJ em Destaque com Copiar -->
-            <div class="bg-slate-950/80 p-2.5 rounded-lg border border-sky-500/30 flex items-center justify-between">
-              <div class="flex-1">
-                <label for="input_cnpj" class="block text-[10px] font-semibold uppercase text-sky-400/90">Número de Inscrição (CNPJ)</label>
-                <input type="text" id="input_cnpj" oninput="syncCnpjToGeneral(this.value); markDirty();" placeholder="00.000.000/0000-00"
-                       class="bg-transparent text-base sm:text-lg font-bold font-mono text-sky-300 focus:outline-none w-full placeholder-sky-900">
-              </div>
-              <button type="button" onclick="copyFieldValue('input_cnpj', 'CNPJ', this)" title="Copiar CNPJ"
-                      class="text-xs text-slate-400 hover:text-sky-400 px-2 py-1 rounded hover:bg-slate-800 transition">
-                <i class="fa-regular fa-copy"></i>
-              </button>
-            </div>
-
-            <!-- Razão Social e Nome Fantasia -->
-            <div class="space-y-2 text-xs">
-              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
-                <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                    <i class="fa-solid fa-building text-sky-400 text-[9px]"></i> Nome Empresarial (Razão Social)
-                  </span>
-                  <button type="button" onclick="copyFieldValue('input_cnpj_razao_social', 'Razão Social', this)" class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-                <input type="text" id="input_cnpj_razao_social" oninput="syncRazaoSocialFromCnpjCard(this.value); markDirty();" placeholder="Nome Empresarial Oficial"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500 font-medium">
-              </div>
-
-              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
-                <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                    <i class="fa-solid fa-tag text-slate-400 text-[9px]"></i> Título do Estabelecimento (Nome Fantasia)
-                  </span>
-                  <button type="button" onclick="copyFieldValue('input_cnpj_nome_fantasia', 'Nome Fantasia', this)" class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-                <input type="text" id="input_cnpj_nome_fantasia" oninput="markDirty()" placeholder="Nome Fantasia (se houver)"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
-              </div>
-            </div>
-
-            <!-- Situação Cadastral e Data de Abertura -->
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
-                <label for="input_cnpj_situacao" class="block text-[10px] font-semibold text-slate-400">Situação Cadastral</label>
-                <input type="text" id="input_cnpj_situacao" oninput="updateCnpjBadge(); markDirty();" placeholder="Ex: ATIVA"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs font-semibold text-emerald-400 placeholder-slate-600 focus:outline-none focus:border-sky-500 uppercase">
-              </div>
-              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
-                <label for="input_cnpj_data_abertura" class="block text-[10px] font-semibold text-slate-400">Data de Abertura</label>
-                <input type="text" id="input_cnpj_data_abertura" oninput="markDirty()" placeholder="DD/MM/AAAA"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
-              </div>
-            </div>
-
-            <!-- Atividade Econômica Principal (CNAE) -->
-            <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
-              <div class="flex items-center justify-between">
-                <label for="input_cnpj_cnae" class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                  <i class="fa-solid fa-briefcase text-slate-400 text-[9px]"></i> Atividade Principal (CNAE)
-                </label>
-                <button type="button" onclick="copyFieldValue('input_cnpj_cnae', 'CNAE', this)" class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1">
-                  <i class="fa-regular fa-copy"></i> Copiar
-                </button>
-              </div>
-              <input type="text" id="input_cnpj_cnae" oninput="markDirty()" placeholder="Código e descrição CNAE"
-                     class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
-            </div>
-
-            <!-- Natureza Jurídica -->
-            <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
-              <label for="input_cnpj_natureza_juridica" class="block text-[10px] font-semibold text-slate-400">Natureza Jurídica</label>
-              <input type="text" id="input_cnpj_natureza_juridica" oninput="markDirty()" placeholder="Ex: 206-2 - Sociedade Empresária Limitada"
-                     class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-sky-500">
-            </div>
-
-            <!-- Endereço Completo -->
-            <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
-              <div class="flex items-center justify-between">
-                <label for="input_cnpj_endereco" class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                  <i class="fa-solid fa-location-dot text-rose-400 text-[9px]"></i> Endereço Cadastral Completo
-                </label>
-                <button type="button" onclick="copyFieldValue('input_cnpj_endereco', 'Endereço', this)" class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1">
-                  <i class="fa-regular fa-copy"></i> Copiar
-                </button>
-              </div>
-              <textarea id="input_cnpj_endereco" rows="2" oninput="syncCardEnderecoToGeneral(this.value); markDirty();" placeholder="Logradouro, número, bairro, município, UF, CEP"
-                        class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 resize-none"></textarea>
-            </div>
-
-            <!-- Telefone e E-mail de Contato -->
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
-                <div class="flex items-center justify-between">
-                  <label for="input_cnpj_telefone" class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                    <i class="fa-solid fa-phone text-emerald-400 text-[9px]"></i> Telefone
-                  </label>
-                  <button type="button" onclick="copyFieldValue('input_cnpj_telefone', 'Telefone', this)" class="text-[10px] text-slate-400 hover:text-sky-400">
-                    <i class="fa-regular fa-copy"></i>
-                  </button>
-                </div>
-                <input type="text" id="input_cnpj_telefone" oninput="markDirty()" placeholder="(00) 0000-0000"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
-              </div>
-
-              <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
-                <div class="flex items-center justify-between">
-                  <label for="input_cnpj_email" class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                    <i class="fa-solid fa-envelope text-amber-400 text-[9px]"></i> E-mail
-                  </label>
-                  <button type="button" onclick="copyFieldValue('input_cnpj_email', 'E-mail', this)" class="text-[10px] text-slate-400 hover:text-sky-400">
-                    <i class="fa-regular fa-copy"></i>
-                  </button>
-                </div>
-                <input type="text" id="input_cnpj_email" oninput="markDirty()" placeholder="contato@empresa.com.br"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500">
-              </div>
-            </div>
-          </div>
-
-          <!-- 3. BLOCO DE IDENTIFICAÇÃO DO TITULAR / PESSOA (Comum a todos os tipos) -->
-          <div class="space-y-3">
-            <!-- Beneficiário / Titular -->
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label for="input_beneficiario" id="label_beneficiario" class="text-xs font-medium text-slate-300">Nome do Titular / Beneficiário</label>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-slate-500 font-mono">beneficiario</span>
-                  <button type="button" onclick="copyFieldValue('input_beneficiario', 'Beneficiário', this)" title="Copiar Beneficiário"
-                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-              </div>
-              <input type="text" id="input_beneficiario" oninput="markDirty()"
-                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-            </div>
-
-            <!-- CPF, RG e CNPJ lado a lado -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div>
-                <div class="flex items-center justify-between mb-1">
-                  <label for="input_cpf" id="label_cpf" class="text-xs font-medium text-slate-300">CPF</label>
-                  <div class="flex items-center gap-1.5">
-                    <span id="badge_cpf" class="text-[10px] text-slate-500 font-mono">cpf</span>
-                    <button type="button" onclick="copyFieldValue('input_cpf', 'CPF', this)" title="Copiar CPF"
-                            class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-800 transition">
-                      <i class="fa-regular fa-copy"></i>
-                    </button>
-                  </div>
-                </div>
-                <input type="text" id="input_cpf" oninput="onCpfInput(this.value)" placeholder="000.000.000-00"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-              </div>
-              <div>
-                <div class="flex items-center justify-between mb-1">
-                  <label for="input_rg" id="label_rg" class="text-xs font-medium text-slate-300">RG / Identidade</label>
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-[10px] text-slate-500 font-mono">rg</span>
-                    <button type="button" onclick="copyFieldValue('input_rg', 'RG', this)" title="Copiar RG"
-                            class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-800 transition">
-                      <i class="fa-regular fa-copy"></i>
-                    </button>
-                  </div>
-                </div>
-                <input type="text" id="input_rg" oninput="markDirty()" placeholder="Ex: 2030359 SSP-ES"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-              </div>
-              <div>
-                <div class="flex items-center justify-between mb-1">
-                  <label for="input_doc_cnpj" id="label_doc_cnpj" class="text-xs font-medium text-slate-300">CNPJ</label>
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-[10px] text-slate-500 font-mono">cnpj</span>
-                    <button type="button" onclick="copyFieldValue('input_doc_cnpj', 'CNPJ', this)" title="Copiar CNPJ"
-                            class="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-800 transition">
-                      <i class="fa-regular fa-copy"></i>
-                    </button>
-                  </div>
-                </div>
-                <input type="text" id="input_doc_cnpj" oninput="syncGeneralCnpjToCard(this.value); markDirty();" placeholder="00.000.000/0000-00"
-                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-sky-300 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
-              </div>
-            </div>
-
-            <!-- Endereço / Localidade Geral -->
-            <div class="mt-2.5">
-              <div class="flex items-center justify-between mb-1">
-                <label for="input_doc_endereco" id="label_doc_endereco" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-                  <i class="fa-solid fa-location-dot text-rose-400 text-[11px]"></i>
-                  <span>Endereço / Localidade</span>
-                </label>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] text-slate-500 font-mono">endereço</span>
-                  <button type="button" onclick="copyFieldValue('input_doc_endereco', 'Endereço', this)" title="Copiar Endereço"
-                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-800 transition">
-                    <i class="fa-regular fa-copy"></i>
-                  </button>
-                </div>
-              </div>
-              <input type="text" id="input_doc_endereco" oninput="syncGeneralEndereco(this.value); markDirty();" placeholder="Logradouro, número, bairro, município - UF, CEP"
-                     class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-            </div>
-          </div>
-
-          <!-- 4. BLOCO ESPECÍFICO ACADÊMICO (Contextual: visível no domínio acadêmico) -->
-          <div id="section_academico" class="space-y-3 pt-2 border-t border-slate-800/80">
-            <div class="flex items-center justify-between text-[11px] text-indigo-400 font-semibold">
-              <span class="flex items-center gap-1.5"><i class="fa-solid fa-graduation-cap"></i> Metadados Acadêmicos</span>
-              <span class="text-[10px] text-slate-500 font-normal">Cursos / Diplomas</span>
-            </div>
-
-            <!-- Natureza do Curso -->
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label for="select_natureza_curso" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-                  <i class="fa-solid fa-award text-amber-400"></i>
-                  Natureza / Nível do Curso
-                </label>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-slate-500 font-mono">natureza_curso</span>
-                  <button type="button" onclick="copyFieldValue('select_natureza_curso', 'Natureza do Curso', this)" title="Copiar Natureza do Curso"
-                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-              </div>
-              <select id="select_natureza_curso" onchange="markDirty()"
-                      class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-                <option value="">Não identificada / Não se aplica</option>
-                <option value="Graduação / Curso Superior">Graduação / Curso Superior (Bacharelado/Licenciatura/Tecnólogo)</option>
-                <option value="Pós-Graduação Lato Sensu (Especialização/MBA)">Pós-Graduação Lato Sensu (Especialização/MBA)</option>
-                <option value="Pós-Graduação Stricto Sensu (Mestrado/Doutorado)">Pós-Graduação Stricto Sensu (Mestrado/Doutorado)</option>
-                <option value="Curso Técnico / Profissionalizante">Curso Técnico / Profissionalizante</option>
-                <option value="Curso de Extensão / Aperfeiçoamento">Curso de Extensão / Aperfeiçoamento</option>
-                <option value="Educação Básica">Educação Básica (Fundamental / Médio)</option>
-              </select>
-            </div>
-
-            <!-- Nome do Curso -->
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label for="input_curso" class="text-xs font-medium text-slate-300">Nome do Curso</label>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-slate-500 font-mono">curso</span>
-                  <button type="button" onclick="copyFieldValue('input_curso', 'Nome do Curso', this)" title="Copiar Nome do Curso"
-                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-              </div>
-              <textarea id="input_curso" oninput="markDirty()" rows="2"
-                        class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
-            </div>
-
-            <!-- Carga Horária -->
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label for="input_carga_horaria" class="text-xs font-medium text-slate-300">Carga Horária</label>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-slate-500 font-mono">carga_horaria</span>
-                  <button type="button" onclick="copyFieldValue('input_carga_horaria', 'Carga Horária', this)" title="Copiar Carga Horária"
-                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-              </div>
-              <input type="text" id="input_carga_horaria" oninput="markDirty()" placeholder="Ex: 750 h/aulas"
-                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-            </div>
-          </div>
-
-          <!-- 5. BLOCO INSTITUIÇÃO EMISSORA E DATA (Comum / Contextual) -->
-          <div class="space-y-3 pt-2 border-t border-slate-800/80">
-            <!-- Faculdade / Instituição Emissora -->
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label for="input_faculdade" id="label_faculdade" class="text-xs font-medium text-slate-300">Faculdade / Instituição Emissora</label>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-slate-500 font-mono">faculdade</span>
-                  <button type="button" onclick="copyFieldValue('input_faculdade', 'Faculdade', this)" title="Copiar Faculdade"
-                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-              </div>
-              <input type="text" id="input_faculdade" oninput="markDirty()"
-                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-            </div>
-
-            <!-- Data do Documento -->
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label for="input_data" id="label_data" class="text-xs font-medium text-slate-300">Data do Documento / Conclusão</label>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-slate-500 font-mono">data</span>
-                  <button type="button" onclick="copyFieldValue('input_data', 'Data do Documento', this)" title="Copiar Data do Documento"
-                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition">
-                    <i class="fa-regular fa-copy"></i> Copiar
-                  </button>
-                </div>
-              </div>
-              <input type="text" id="input_data" oninput="markDirty()" placeholder="Ex: 18 de dezembro de 2023"
-                     class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
             </div>
 
             <!-- Observações do Revisor Humano -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <label for="input_obs" class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
                 <span>Anotações / Observações da Conferência</span>
-                <span class="text-[10px] text-slate-500">opcional</span>
+                <span class="text-[10px] text-slate-500 font-mono">opcional</span>
               </label>
               <textarea id="input_obs" oninput="markDirty()" rows="2" placeholder="Observações manuais sobre o documento..."
-                        class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></textarea>
-            </div>
-
-            <!-- 6. METADADOS PERSONALIZADOS / ATRIBUTOS FLEXÍVEIS (Universal Key-Value) -->
-            <div id="section_dados_extras" class="pt-2 border-t border-slate-800/80 space-y-2">
-              <div class="flex items-center justify-between">
-                <label class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-                  <i class="fa-solid fa-sliders text-cyan-400 text-[11px]"></i> Metadados Personalizados (Chave / Valor)
-                </label>
-                <button type="button" onclick="addCustomMetaKey()" class="text-[10px] px-2 py-0.5 rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/50 flex items-center gap-1 transition shadow-sm">
-                  <i class="fa-solid fa-plus text-[9px]"></i> Novo Atributo
-                </button>
-              </div>
-              <div id="customMetaContainer" class="space-y-1.5 text-xs">
-                <!-- Chaves dinâmicas renderizadas aqui -->
-              </div>
+                        class="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 resize-none"></textarea>
             </div>
           </div>
 
@@ -3002,6 +2599,40 @@
               </div>
             </div>
           </div>
+
+          <!-- Bloco de Ativação do Modo Híbrido em Cascata -->
+          <div class="bg-slate-950/60 p-4 rounded-lg border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-bolt text-amber-400 text-sm"></i>
+                <div>
+                  <span class="text-xs font-semibold text-slate-200">Modo Híbrido em Cascata (Local ➔ Nuvem)</span>
+                  <span class="ml-1 text-[10px] text-amber-400/90 font-mono">[Ollama ➔ OpenAI]</span>
+                </div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer" title="Ativar ou desativar o Modo Híbrido em Cascata">
+                <input type="checkbox" id="cfgHybridMode" class="sr-only peer" onchange="toggleHybridOptions()">
+                <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+              Tenta classificar primeiro no seu computador via <strong>Ollama</strong> (100% gratuito e local). Caso o documento seja escaneado, ilegível ou faltem campos vitais (como beneficiário ou curso), promove automaticamente para a <strong>OpenAI</strong> com visão multimodal.
+            </p>
+            <div id="hybridOptionsContainer" class="hidden pt-2 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div class="space-y-1">
+                <label class="block text-[11px] font-medium text-slate-300">Modelo Cloud de Fallback:</label>
+                <input type="text" id="cfgHybridCloudModel" value="gpt-4o-mini"
+                       class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500">
+                <p class="text-[10px] text-slate-400">Padrão: gpt-4o-mini (econômico e rápido)</p>
+              </div>
+              <div class="space-y-1">
+                <label class="block text-[11px] font-medium text-slate-300">Chave OpenAI para Fallback (Opcional):</label>
+                <input type="password" id="cfgHybridOpenaiKey" placeholder="sk-... (ou use a chave do .env)"
+                       class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-100 font-mono focus:outline-none focus:border-amber-500">
+                <p class="text-[10px] text-slate-400">Deixe em branco se a chave já estiver configurada.</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ABA 3: EXECUÇÃO EM LOTE & PROGRESSO -->
@@ -3063,6 +2694,26 @@
               <label class="flex items-center gap-2 cursor-pointer text-slate-300">
                 <input type="checkbox" id="cfgSkipOcr" class="rounded text-emerald-500 focus:ring-emerald-500">
                 <span>Pular OCR Visual (extrair apenas texto embutido no PDF)</span>
+              </label>
+            </div>
+
+            <!-- Alternador Rápido de Modo Híbrido no Lote -->
+            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between p-2.5 rounded bg-slate-900/60 border border-slate-800 text-xs">
+              <div class="flex items-center gap-2.5">
+                <div class="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <i class="fa-solid fa-bolt text-xs"></i>
+                </div>
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-semibold text-slate-200">Modo Híbrido em Cascata</span>
+                    <span id="cfgBatchHybridStatusBadge" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700 font-normal">Desligado</span>
+                  </div>
+                  <p class="text-[10.5px] text-slate-400">Ollama local primeiro; fallback automático para OpenAI se o documento for complexo/escaneado.</p>
+                </div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-2" title="Ativar ou desativar o Modo Híbrido para este lote">
+                <input type="checkbox" id="cfgBatchHybridToggle" class="sr-only peer" onchange="syncHybridFromBatch(this.checked)">
+                <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
               </label>
             </div>
           </div>
@@ -3336,6 +2987,97 @@
         <button type="button" onclick="confirmAddTag()"
                 class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition">
           <i class="fa-solid fa-check"></i> Adicionar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADICIONAR ATRIBUTO AO DOCUMENTO (DINÂMICO) -->
+  <div id="modalAddDynamicField" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 w-full max-w-md space-y-4 animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-xs font-semibold text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-cyan-400"></i> Adicionar Atributo ao Documento
+        </h3>
+        <button type="button" onclick="closeAddDynamicFieldModal()" class="text-slate-400 hover:text-slate-200 text-sm p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-300 mb-1">Selecione um Atributo Frequente:</label>
+          <select id="quickSelectDynamicField" onchange="onQuickSelectDynamicFieldChange()"
+                  class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500">
+            <option value="">-- Escolha um atributo ou digite abaixo --</option>
+            <optgroup label="Financeiro">
+              <option value="valor_monetario|Valor Monetário (R$)">Valor Monetário (R$)</option>
+              <option value="banco|Instituição Bancária">Instituição Bancária / Banco</option>
+              <option value="agencia|Agência">Agência</option>
+              <option value="conta|Conta Corrente">Conta Corrente</option>
+              <option value="linha_digitavel|Linha Digitável / Código">Linha Digitável / Código</option>
+              <option value="pix_chave|Chave PIX">Chave PIX Utilizada</option>
+              <option value="pix_e2e_id|ID Transação PIX (E2E)">ID Transação PIX (E2E)</option>
+              <option value="vencimento|Data de Vencimento">Data de Vencimento</option>
+            </optgroup>
+            <optgroup label="Identificação & Pessoas">
+              <option value="beneficiario|Nome Completo / Favorecido">Nome Completo / Favorecido</option>
+              <option value="cpf|CPF">CPF</option>
+              <option value="rg|RG / Identidade">RG / Identidade</option>
+              <option value="cnpj|CNPJ">CNPJ</option>
+              <option value="data_nascimento|Data de Nascimento">Data de Nascimento</option>
+              <option value="filiacao|Filiação (Mãe/Pai)">Filiação (Mãe/Pai)</option>
+              <option value="orgao_emissor|Órgão Emissor">Órgão Emissor (SSP/DETRAN)</option>
+            </optgroup>
+            <optgroup label="Veículos & Transportes">
+              <option value="placa|Placa do Veículo">Placa do Veículo</option>
+              <option value="renavam|Código RENAVAM">Código RENAVAM</option>
+              <option value="chassi|Número do Chassi">Número do Chassi</option>
+              <option value="ano_modelo|Ano / Modelo">Ano / Modelo</option>
+              <option value="combustivel|Tipo de Combustível">Tipo de Combustível</option>
+            </optgroup>
+            <optgroup label="Acadêmico & Qualificação">
+              <option value="curso|Nome do Curso">Nome do Curso</option>
+              <option value="carga_horaria|Carga Horária">Carga Horária</option>
+              <option value="faculdade|Instituição de Ensino">Instituição de Ensino</option>
+              <option value="natureza_curso|Grau / Nível do Curso">Grau / Nível do Curso</option>
+            </optgroup>
+            <optgroup label="Jurídico & Processual">
+              <option value="numero_processo|Número do Processo">Número do Processo</option>
+              <option value="vara|Vara / Juizado">Vara / Juizado</option>
+              <option value="comarca|Comarca / Foro">Comarca / Foro</option>
+              <option value="tribunal|Tribunal">Tribunal</option>
+            </optgroup>
+            <optgroup label="Localidade & Contatos">
+              <option value="endereco_completo|Endereço Completo">Endereço Completo</option>
+              <option value="telefone|Telefone de Contato">Telefone de Contato</option>
+              <option value="email|E-mail">E-mail</option>
+              <option value="cep|CEP">CEP</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-slate-300 mb-1">Nome Técnico do Campo (Chave):</label>
+          <input type="text" id="dynamicFieldKeyInput" placeholder="Ex: placa, matricula, num_nota..."
+                 class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-slate-300 mb-1">Valor do Campo:</label>
+          <input type="text" id="dynamicFieldValueInput" placeholder="Digite o valor a ser atribuído..."
+                 class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button type="button" onclick="closeAddDynamicFieldModal()"
+                class="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200">
+          Cancelar
+        </button>
+        <button type="button" onclick="confirmAddDynamicField()"
+                class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
+          <i class="fa-solid fa-check"></i> Adicionar Atributo
         </button>
       </div>
     </div>
@@ -6873,6 +6615,11 @@
           ? `<span class="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded text-[9px] font-semibold shrink-0" title="${doc.todos_tipos.join(', ')}">+${tiposCount - 1} doc${tiposCount > 2 ? 's' : ''}</span>`
           : '';
 
+        const isHybridFallback = (doc.metodo_leitura === 'hibrido_fallback_openai');
+        const hybridBadge = isHybridFallback
+          ? `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1 py-0.2 rounded text-[9px] font-semibold shrink-0 flex items-center gap-0.5" title="Classificado via Fallback Híbrido (Ollama ➔ OpenAI)"><i class="fa-solid fa-bolt text-amber-400 text-[8px]"></i>Híbrido</span>`
+          : '';
+
         const chkBoxHtml = `<input type="checkbox" ${isDocChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleSelectDoc('${doc.md5}', this.checked)" class="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-3.5 w-3.5 shrink-0 mr-0.5" title="Selecionar para ações em lote">`;
 
         if (sidebarViewMode === 'thumbnails') {
@@ -6895,6 +6642,7 @@
                     <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
                     ${tipoBadge}
                     ${multiBadge}
+                    ${hybridBadge}
                   </div>
                   ${statusBadge}
                 </div>
@@ -6919,6 +6667,7 @@
                 <span class="font-mono text-[11px] text-slate-300 shrink-0">${md5Short}...</span>
                 ${tipoBadge}
                 ${multiBadge}
+                ${hybridBadge}
               </div>
               ${statusBadge}
             </div>
@@ -7188,38 +6937,29 @@
 
       const selectDom = document.getElementById('select_dominio');
       if (selectDom) selectDom.value = 'academico';
-      const inputValor = document.getElementById('input_valor_monetario');
-      if (inputValor) inputValor.value = '';
-      ['input_pix_pagador_nome', 'input_pix_pagador_cpf_cnpj', 'input_pix_pagador_banco',
-       'input_pix_recebedor_nome_preview', 'input_pix_recebedor_cpf_preview', 'input_pix_recebedor_banco',
-       'input_pix_chave', 'input_pix_e2e_id', 'input_pix_autenticacao',
-       'input_doc_cnpj', 'input_cnpj', 'input_cnpj_razao_social', 'input_cnpj_nome_fantasia',
-       'input_cnpj_situacao', 'input_cnpj_data_abertura', 'input_cnpj_cnae',
-       'input_cnpj_natureza_juridica', 'input_cnpj_endereco', 'input_doc_endereco', 'input_cnpj_telefone', 'input_cnpj_email'].forEach(id => {
+
+      const clearEl = (id) => {
         const el = document.getElementById(id);
         if (el) el.value = '';
-      });
+      };
+      ['input_valor_monetario', 'input_beneficiario', 'input_cpf', 'input_rg',
+       'input_doc_cnpj', 'input_cnpj', 'input_cnpj_razao_social', 'input_cnpj_nome_fantasia',
+       'input_cnpj_situacao', 'input_cnpj_data_abertura', 'input_cnpj_cnae',
+       'input_cnpj_natureza_juridica', 'input_cnpj_endereco', 'input_doc_endereco',
+       'input_cnpj_telefone', 'input_cnpj_email', 'select_natureza_curso',
+       'input_curso', 'input_carga_horaria', 'input_data', 'input_faculdade', 'input_obs'].forEach(clearEl);
+
+      const selectTipo = document.getElementById('select_tipo_documento');
+      if (selectTipo) selectTipo.value = 'Certificado';
+
+      const secContainer = document.getElementById('dynamicSectionsContainer');
+      if (secContainer) secContainer.innerHTML = '';
+      const heroBadges = document.getElementById('dynamicHeroBadges');
+      if (heroBadges) heroBadges.innerHTML = '';
+      const emptyState = document.getElementById('dynamicEmptyState');
+      if (emptyState) emptyState.classList.add('hidden');
+
       onDominioChange();
-
-      document.getElementById('input_beneficiario').value = '';
-      document.getElementById('input_cpf').value = '';
-      document.getElementById('input_rg').value = '';
-      document.getElementById('input_doc_cnpj').value = '';
-      document.getElementById('input_doc_endereco').value = '';
-      document.getElementById('select_natureza_curso').value = '';
-      document.getElementById('input_curso').value = '';
-      document.getElementById('input_carga_horaria').value = '';
-      document.getElementById('input_data').value = '';
-      document.getElementById('input_faculdade').value = '';
-      document.getElementById('select_tipo_documento').value = 'Certificado';
-      document.getElementById('input_obs').value = '';
-
-      const badge = document.getElementById('currentStatusBadge');
-      badge.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-slate-800 text-slate-400 border-slate-700";
-      badge.innerText = "Nenhum documento";
-
-      const cmc = document.getElementById('customMetaContainer');
-      if (cmc) cmc.innerHTML = '';
 
       document.getElementById('jsonViewer').innerText = '{}';
       if (typeof updateClassificationButtonsState === 'function') updateClassificationButtonsState();
@@ -7270,81 +7010,21 @@
         fAutor.title = autVal;
       }
       const fMetodo = document.getElementById('field_metodo_leitura');
-      if (fMetodo) fMetodo.innerText = safeString(doc.metodo_leitura) || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital');
+      if (fMetodo) {
+        if (doc.metodo_leitura === 'hibrido_fallback_openai') {
+          fMetodo.innerHTML = '<span class="text-amber-300 font-semibold inline-flex items-center gap-1" title="Fallback Híbrido ativado: Ollama ➔ OpenAI"><i class="fa-solid fa-bolt text-amber-400"></i> Híbrido (Ollama ➔ Nuvem)</span>';
+        } else {
+          fMetodo.innerText = safeString(doc.metodo_leitura) || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital');
+        }
+      }
       const fTentativa = document.getElementById('field_tentativa_ocr');
       if (fTentativa) fTentativa.innerText = doc.tentativa_ocr_llm ? 'Sim' : 'Não';
 
-      // Domínio e campos de comprovante financeiro / PIX
+      // Domínio e Tipo de Documento
       const docDominio = safeString(doc.dominio || 'academico').toLowerCase() || 'academico';
       const selectDom = document.getElementById('select_dominio');
       if (selectDom) selectDom.value = docDominio;
 
-      const inputValor = document.getElementById('input_valor_monetario');
-      if (inputValor) inputValor.value = safeString(doc.valor_monetario);
-
-      const de = doc.dados_extras || {};
-      const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.value = safeString(val);
-      };
-      setVal('input_pix_pagador_nome', doc.pix_pagador_nome || de.pix_pagador_nome);
-      setVal('input_pix_pagador_cpf_cnpj', doc.pix_pagador_cpf_cnpj || de.pix_pagador_cpf_cnpj);
-      setVal('input_pix_pagador_banco', doc.pix_pagador_banco || de.pix_pagador_banco);
-      setVal('input_pix_recebedor_nome_preview', doc.pix_recebedor_nome || de.pix_recebedor_nome || doc.beneficiario);
-      setVal('input_pix_recebedor_cpf_preview', doc.pix_recebedor_cpf_cnpj || de.pix_recebedor_cpf_cnpj || doc.cpf);
-      setVal('input_pix_recebedor_banco', doc.pix_recebedor_banco || de.pix_recebedor_banco);
-      setVal('input_pix_chave', doc.pix_chave || de.pix_chave);
-      setVal('input_pix_e2e_id', doc.pix_e2e_id || de.pix_e2e_id);
-      setVal('input_pix_autenticacao', doc.pix_autenticacao || de.pix_autenticacao);
-
-      // CNPJ e dados cadastrais da empresa
-      const cnpjVal = safeString(doc.cnpj || de.cnpj || (doc.cpf && doc.cpf.includes('/') ? doc.cpf : ''));
-      setVal('input_doc_cnpj', cnpjVal);
-      setVal('input_cnpj', cnpjVal);
-      setVal('input_cnpj_razao_social', de.razao_social || doc.razao_social || (docDominio === 'profissional' ? doc.beneficiario : ''));
-      setVal('input_cnpj_nome_fantasia', de.nome_fantasia || doc.nome_fantasia);
-      setVal('input_cnpj_situacao', de.situacao_cadastral || doc.situacao_cadastral || (docDominio === 'profissional' && cnpjVal ? 'ATIVA' : ''));
-      setVal('input_cnpj_data_abertura', de.data_abertura || doc.data_abertura);
-      setVal('input_cnpj_cnae', de.cnae_principal || doc.cnae_principal);
-      setVal('input_cnpj_natureza_juridica', de.natureza_juridica || doc.natureza_juridica);
-      const endVal = safeString(de.endereco_completo || doc.endereco_completo || de.endereco || doc.endereco);
-      setVal('input_doc_endereco', endVal);
-      setVal('input_cnpj_endereco', endVal);
-      setVal('input_cnpj_telefone', de.telefone || doc.telefone);
-      setVal('input_cnpj_email', de.email || doc.email);
-      updateCnpjBadge();
-
-      onDominioChange();
-
-      document.getElementById('input_beneficiario').value = safeString(doc.beneficiario);
-      document.getElementById('input_cpf').value = safeString(doc.cpf || (docDominio === 'profissional' ? cnpjVal : ''));
-      document.getElementById('input_rg').value = safeString(doc.rg);
-      
-      // Natureza do Curso: seleciona ou insere opção dinamicamente se necessário
-      const selectNat = document.getElementById('select_natureza_curso');
-      const docNat = safeString(doc.natureza_curso).trim();
-      if (docNat) {
-        let exists = false;
-        for (let i = 0; i < selectNat.options.length; i++) {
-          if (selectNat.options[i].value === docNat) {
-            exists = true;
-            break;
-          }
-        }
-        if (!exists) {
-          const opt = document.createElement('option');
-          opt.value = docNat;
-          opt.innerText = docNat;
-          selectNat.appendChild(opt);
-        }
-      }
-      selectNat.value = docNat;
-
-      document.getElementById('input_curso').value = safeString(doc.curso);
-      document.getElementById('input_carga_horaria').value = safeString(doc.carga_horaria);
-      document.getElementById('input_data').value = safeString(doc.data);
-      document.getElementById('input_faculdade').value = safeString(doc.faculdade);
-      
       // Tipo de Documento: seleciona ou insere opção se for novo
       const selectTipo = document.getElementById('select_tipo_documento');
       const docTipo = safeString(doc.tipo_documento).trim();
@@ -7367,7 +7047,13 @@
         selectTipo.value = 'Certificado';
       }
 
-      document.getElementById('input_obs').value = safeString(doc.observacoes_conferencia);
+      const inputObs = document.getElementById('input_obs');
+      if (inputObs) inputObs.value = safeString(doc.observacoes_conferencia);
+
+      onDominioChange();
+
+      // Renderiza o Inspetor Dinâmico de Entidades (Zero Noise)
+      renderDynamicInspector(doc);
 
       // Atualiza badge de status
       const isUnproc = isDocumentUnprocessed(doc);
@@ -7388,6 +7074,15 @@
         badge.innerText = "Pendente de Conferência";
       }
 
+      const hybridBadgeEl = document.getElementById('currentHybridBadge');
+      if (hybridBadgeEl) {
+        if (doc.metodo_leitura === 'hibrido_fallback_openai') {
+          hybridBadgeEl.classList.remove('hidden');
+        } else {
+          hybridBadgeEl.classList.add('hidden');
+        }
+      }
+
       updateJsonView();
       if (!skipSidebarUpdate) {
         updateSidebarSelection();
@@ -7399,7 +7094,7 @@
       renderMultiTags(doc);
       renderDossierPageShortcuts(doc);
       renderDossierPagesGrid(doc);
-      renderCustomMetaFields(doc);
+      renderDynamicInspector(doc);
       updateFichaTecnica(doc);
       if (currentInspectorTab === 'texto') {
         loadDocumentText(doc.md5);
@@ -7410,75 +7105,533 @@
     }
 
     // -----------------------------------------------------------------------
-    // Metadados Personalizados / Atributos Flexíveis (Universal Key-Value)
+    // MOTOR DO INSPETOR DINÂMICO DE ENTIDADES (ZERO NOISE / ADAPTATIVO)
     // -----------------------------------------------------------------------
-    function renderCustomMetaFields(doc) {
-      const container = document.getElementById('customMetaContainer');
+
+    const CANONICAL_FIELD_MAP = {
+      // Finanças
+      valor_monetario: { label: 'Valor da Operação (R$)', icon: 'fa-solid fa-coins', category: 'financas', type: 'currency', isCore: true },
+      valor: { label: 'Valor (R$)', icon: 'fa-solid fa-coins', category: 'financas', type: 'currency', isCore: false },
+      valor_pago: { label: 'Valor Pago (R$)', icon: 'fa-solid fa-coins', category: 'financas', type: 'currency', isCore: false },
+      banco: { label: 'Instituição Bancária', icon: 'fa-solid fa-building-columns', category: 'financas', type: 'text', isCore: false },
+      instituicao_financeira: { label: 'Instituição Financeira', icon: 'fa-solid fa-building-columns', category: 'financas', type: 'text', isCore: false },
+      agencia: { label: 'Agência', icon: 'fa-solid fa-code-branch', category: 'financas', type: 'text', isCore: false },
+      conta: { label: 'Conta Bancária', icon: 'fa-solid fa-wallet', category: 'financas', type: 'text', isCore: false },
+      forma_pagamento: { label: 'Forma de Pagamento', icon: 'fa-regular fa-credit-card', category: 'financas', type: 'text', isCore: false },
+      linha_digitavel: { label: 'Linha Digitável (Boleto)', icon: 'fa-solid fa-barcode', category: 'financas', type: 'mono', isCore: false },
+      codigo_barras: { label: 'Código de Barras', icon: 'fa-solid fa-barcode', category: 'financas', type: 'mono', isCore: false },
+      vencimento: { label: 'Data de Vencimento', icon: 'fa-regular fa-calendar-xmark', category: 'financas', type: 'text', isCore: false },
+      data_pagamento: { label: 'Data do Pagamento', icon: 'fa-regular fa-calendar-check', category: 'financas', type: 'text', isCore: false },
+      
+      // PIX (Exibido se e somente se houver dados de PIX no documento)
+      pix_chave: { label: 'Chave PIX Utilizada', icon: 'fa-solid fa-key', category: 'financas', type: 'mono', isCore: false },
+      pix_e2e_id: { label: 'ID Transação Fim-a-Fim (E2E)', icon: 'fa-solid fa-fingerprint', category: 'financas', type: 'mono', isCore: false },
+      pix_autenticacao: { label: 'Autenticação Bancária', icon: 'fa-solid fa-shield-halved', category: 'financas', type: 'mono', isCore: false },
+      pix_pagador_nome: { label: 'Nome do Pagador (Origem)', icon: 'fa-solid fa-arrow-up-right-from-square', category: 'financas', type: 'text', isCore: false },
+      pix_pagador_cpf_cnpj: { label: 'CPF/CNPJ Pagador', icon: 'fa-regular fa-id-badge', category: 'financas', type: 'mono', isCore: false },
+      pix_pagador_banco: { label: 'Banco do Pagador', icon: 'fa-solid fa-building-columns', category: 'financas', type: 'text', isCore: false },
+      pix_recebedor_nome: { label: 'Favorecido (Destino)', icon: 'fa-solid fa-arrow-down-left-and-up-right-to-center', category: 'financas', type: 'text', isCore: false },
+      pix_recebedor_cpf_cnpj: { label: 'CPF/CNPJ Favorecido', icon: 'fa-regular fa-id-badge', category: 'financas', type: 'mono', isCore: false },
+      pix_recebedor_banco: { label: 'Banco do Favorecido', icon: 'fa-solid fa-building-columns', category: 'financas', type: 'text', isCore: false },
+
+      // Identificação & Pessoas
+      beneficiario: { label: 'Nome do Titular / Beneficiário', icon: 'fa-solid fa-user', category: 'identificacao', type: 'text', isCore: true },
+      nome: { label: 'Nome Completo', icon: 'fa-solid fa-user', category: 'identificacao', type: 'text', isCore: false },
+      titular: { label: 'Nome do Titular', icon: 'fa-solid fa-user-check', category: 'identificacao', type: 'text', isCore: false },
+      cpf: { label: 'CPF', icon: 'fa-solid fa-id-card', category: 'identificacao', type: 'mono', isCore: true },
+      rg: { label: 'RG / Identidade', icon: 'fa-solid fa-address-card', category: 'identificacao', type: 'text', isCore: true },
+      cnpj: { label: 'CNPJ', icon: 'fa-solid fa-landmark', category: 'identificacao', type: 'mono', isCore: true },
+      razao_social: { label: 'Nome Empresarial (Razão Social)', icon: 'fa-solid fa-building', category: 'identificacao', type: 'text', isCore: false },
+      nome_fantasia: { label: 'Nome Fantasia', icon: 'fa-solid fa-tag', category: 'identificacao', type: 'text', isCore: false },
+      data_nascimento: { label: 'Data de Nascimento', icon: 'fa-regular fa-calendar', category: 'identificacao', type: 'text', isCore: false },
+      filiacao: { label: 'Filiação', icon: 'fa-solid fa-people-arrows', category: 'identificacao', type: 'text', isCore: false },
+      nome_mae: { label: 'Nome da Mãe', icon: 'fa-solid fa-person-dress', category: 'identificacao', type: 'text', isCore: false },
+      nome_pai: { label: 'Nome do Pai', icon: 'fa-solid fa-person', category: 'identificacao', type: 'text', isCore: false },
+      orgao_emissor: { label: 'Órgão Emissor / Expedidor', icon: 'fa-solid fa-building-shield', category: 'identificacao', type: 'text', isCore: false },
+      naturalidade: { label: 'Naturalidade', icon: 'fa-solid fa-map-pin', category: 'identificacao', type: 'text', isCore: false },
+      nacionalidade: { label: 'Nacionalidade', icon: 'fa-solid fa-globe', category: 'identificacao', type: 'text', isCore: false },
+      estado_civil: { label: 'Estado Civil', icon: 'fa-solid fa-ring', category: 'identificacao', type: 'text', isCore: false },
+      situacao_cadastral: { label: 'Situação Cadastral', icon: 'fa-solid fa-check-circle', category: 'identificacao', type: 'badge', isCore: false },
+      data_abertura: { label: 'Data de Abertura', icon: 'fa-regular fa-calendar-days', category: 'identificacao', type: 'text', isCore: false },
+      cnae_principal: { label: 'Atividade Principal (CNAE)', icon: 'fa-solid fa-briefcase', category: 'identificacao', type: 'text', isCore: false },
+      natureza_juridica: { label: 'Natureza Jurídica', icon: 'fa-solid fa-scale-balanced', category: 'identificacao', type: 'text', isCore: false },
+
+      // Acadêmico
+      curso: { label: 'Nome do Curso / Habilitação', icon: 'fa-solid fa-graduation-cap', category: 'academico', type: 'textarea', isCore: true },
+      natureza_curso: { label: 'Nível / Natureza do Curso', icon: 'fa-solid fa-award', category: 'academico', type: 'text', isCore: true },
+      carga_horaria: { label: 'Carga Horária', icon: 'fa-solid fa-clock', category: 'academico', type: 'text', isCore: true },
+      faculdade: { label: 'Instituição de Ensino / Emissora', icon: 'fa-solid fa-university', category: 'academico', type: 'text', isCore: true },
+      instituicao: { label: 'Instituição', icon: 'fa-solid fa-university', category: 'academico', type: 'text', isCore: false },
+      conclusao: { label: 'Data de Conclusão', icon: 'fa-regular fa-calendar-check', category: 'academico', type: 'text', isCore: false },
+      registro_diploma: { label: 'Nº do Registro do Diploma', icon: 'fa-solid fa-certificate', category: 'academico', type: 'mono', isCore: false },
+
+      // Dados do Documento & Registros Específicos
+      data: { label: 'Data do Documento', icon: 'fa-regular fa-calendar-days', category: 'documento', type: 'text', isCore: true },
+      placa: { label: 'Placa do Veículo', icon: 'fa-solid fa-car-side', category: 'documento', type: 'mono', isCore: false },
+      placa_veiculo: { label: 'Placa do Veículo', icon: 'fa-solid fa-car-side', category: 'documento', type: 'mono', isCore: false },
+      renavam: { label: 'Código RENAVAM', icon: 'fa-solid fa-file-invoice', category: 'documento', type: 'mono', isCore: false },
+      chassi: { label: 'Número do Chassi', icon: 'fa-solid fa-shield-halved', category: 'documento', type: 'mono', isCore: false },
+      ano_fabricacao: { label: 'Ano de Fabricação', icon: 'fa-solid fa-calendar', category: 'documento', type: 'text', isCore: false },
+      ano_modelo: { label: 'Ano / Modelo', icon: 'fa-solid fa-car', category: 'documento', type: 'text', isCore: false },
+      combustivel: { label: 'Combustível', icon: 'fa-solid fa-gas-pump', category: 'documento', type: 'text', isCore: false },
+      cor_veiculo: { label: 'Cor do Veículo', icon: 'fa-solid fa-palette', category: 'documento', type: 'text', isCore: false },
+      numero_processo: { label: 'Número do Processo', icon: 'fa-solid fa-gavel', category: 'documento', type: 'mono', isCore: false },
+      vara: { label: 'Vara / Juizado', icon: 'fa-solid fa-landmark', category: 'documento', type: 'text', isCore: false },
+      comarca: { label: 'Comarca / Foro', icon: 'fa-solid fa-map-marked-alt', category: 'documento', type: 'text', isCore: false },
+      tribunal: { label: 'Tribunal', icon: 'fa-solid fa-balance-scale', category: 'documento', type: 'text', isCore: false },
+      outorgante: { label: 'Outorgante', icon: 'fa-solid fa-file-signature', category: 'documento', type: 'text', isCore: false },
+      outorgado: { label: 'Outorgado', icon: 'fa-solid fa-user-check', category: 'documento', type: 'text', isCore: false },
+      vigencia: { label: 'Prazo de Vigência', icon: 'fa-regular fa-clock', category: 'documento', type: 'text', isCore: false },
+
+      // Contato & Localidade
+      endereco_completo: { label: 'Endereço Completo', icon: 'fa-solid fa-location-dot', category: 'contato', type: 'textarea', isCore: false },
+      endereco: { label: 'Endereço', icon: 'fa-solid fa-location-dot', category: 'contato', type: 'textarea', isCore: false },
+      cidade: { label: 'Município / Cidade', icon: 'fa-solid fa-city', category: 'contato', type: 'text', isCore: false },
+      uf: { label: 'UF / Estado', icon: 'fa-solid fa-flag', category: 'contato', type: 'text', isCore: false },
+      cep: { label: 'CEP', icon: 'fa-solid fa-mail-bulk', category: 'contato', type: 'mono', isCore: false },
+      telefone: { label: 'Telefone', icon: 'fa-solid fa-phone', category: 'contato', type: 'text', isCore: false },
+      email: { label: 'E-mail', icon: 'fa-solid fa-envelope', category: 'contato', type: 'text', isCore: false }
+    };
+
+    const CATEGORY_CONFIG = {
+      financas: {
+        title: 'Valores & Dados Financeiros',
+        icon: 'fa-solid fa-coins',
+        color: 'emerald',
+        badgeBg: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+      },
+      identificacao: {
+        title: 'Pessoas & Identificação',
+        icon: 'fa-solid fa-id-card',
+        color: 'cyan',
+        badgeBg: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
+      },
+      academico: {
+        title: 'Qualificação & Metadados Acadêmicos',
+        icon: 'fa-solid fa-graduation-cap',
+        color: 'indigo',
+        badgeBg: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+      },
+      documento: {
+        title: 'Dados Específicos do Documento',
+        icon: 'fa-solid fa-file-lines',
+        color: 'amber',
+        badgeBg: 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+      },
+      contato: {
+        title: 'Endereço & Contatos',
+        icon: 'fa-solid fa-location-dot',
+        color: 'rose',
+        badgeBg: 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+      },
+      outros: {
+        title: 'Atributos & Informações Complementares',
+        icon: 'fa-solid fa-sliders',
+        color: 'slate',
+        badgeBg: 'bg-slate-800 text-slate-300 border-slate-700'
+      }
+    };
+
+    function getCanonicalFieldMeta(key) {
+      if (CANONICAL_FIELD_MAP[key]) {
+        return CANONICAL_FIELD_MAP[key];
+      }
+      const friendlyLabel = key
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+      return {
+        label: friendlyLabel,
+        icon: 'fa-solid fa-tag',
+        category: 'outros',
+        type: 'text',
+        isCore: false
+      };
+    }
+
+    function extractActiveDocumentFields(doc) {
+      if (!doc) return [];
+      const fields = [];
+      const seen = new Set();
+      const de = (doc.dados_extras && typeof doc.dados_extras === 'object') ? doc.dados_extras : {};
+      const internalKeys = new Set(['dossie_paginas', 'todos_dominios', 'todos_tipos', 'data_criacao']);
+
+      const candidateEntries = [
+        { key: 'valor_monetario', val: doc.valor_monetario },
+        { key: 'beneficiario', val: doc.beneficiario },
+        { key: 'cpf', val: doc.cpf },
+        { key: 'rg', val: doc.rg },
+        { key: 'cnpj', val: doc.cnpj || de.cnpj },
+        { key: 'curso', val: doc.curso },
+        { key: 'natureza_curso', val: doc.natureza_curso },
+        { key: 'carga_horaria', val: doc.carga_horaria },
+        { key: 'faculdade', val: doc.faculdade },
+        { key: 'data', val: doc.data },
+        { key: 'pix_chave', val: doc.pix_chave || de.pix_chave },
+        { key: 'pix_e2e_id', val: doc.pix_e2e_id || de.pix_e2e_id },
+        { key: 'pix_autenticacao', val: doc.pix_autenticacao || de.pix_autenticacao },
+        { key: 'pix_pagador_nome', val: doc.pix_pagador_nome || de.pix_pagador_nome },
+        { key: 'pix_pagador_cpf_cnpj', val: doc.pix_pagador_cpf_cnpj || de.pix_pagador_cpf_cnpj },
+        { key: 'pix_pagador_banco', val: doc.pix_pagador_banco || de.pix_pagador_banco },
+        { key: 'pix_recebedor_nome', val: doc.pix_recebedor_nome || de.pix_recebedor_nome },
+        { key: 'pix_recebedor_cpf_cnpj', val: doc.pix_recebedor_cpf_cnpj || de.pix_recebedor_cpf_cnpj },
+        { key: 'pix_recebedor_banco', val: doc.pix_recebedor_banco || de.pix_recebedor_banco }
+      ];
+
+      Object.keys(de).forEach(k => {
+        if (!internalKeys.has(k)) {
+          candidateEntries.push({ key: k, val: de[k] });
+        }
+      });
+
+      candidateEntries.forEach(item => {
+        if (seen.has(item.key)) return;
+        seen.add(item.key);
+
+        if (item.val === null || item.val === undefined) return;
+        if (typeof item.val === 'object') return;
+        const strVal = String(item.val).trim();
+        
+        // REGRA ZERO NOISE: descarta brancos, vazios ou marcadores nulos
+        if (!strVal || strVal === '-' || strVal === '--' || strVal === 'N/A' || strVal.toLowerCase() === 'null' || strVal.toLowerCase() === 'none' || strVal.toLowerCase() === 'não informado' || strVal.toLowerCase() === 'nao informado') {
+          return;
+        }
+
+        const meta = getCanonicalFieldMeta(item.key);
+        fields.push({
+          key: item.key,
+          val: strVal,
+          meta: meta
+        });
+      });
+
+      return fields;
+    }
+
+    function renderHeroBadges(doc, activeFields) {
+      const container = document.getElementById('dynamicHeroBadges');
       if (!container) return;
       container.innerHTML = '';
-      if (!doc) return;
 
-      const de = doc.dados_extras || {};
-      const internalKeys = new Set([
-        'pix_pagador_nome', 'pix_pagador_cpf_cnpj', 'pix_pagador_banco',
-        'pix_recebedor_nome', 'pix_recebedor_cpf_cnpj', 'pix_recebedor_banco',
-        'pix_chave', 'pix_e2e_id', 'pix_autenticacao', 'dossie_paginas'
-      ]);
+      const pills = [];
 
-      const keys = Object.keys(de).filter(k => !internalKeys.has(k));
-      if (keys.length === 0) {
-        container.innerHTML = '<div class="text-[11px] text-slate-500 italic p-1.5 bg-slate-950/40 rounded border border-slate-900 flex items-center justify-between"><span>Nenhum metadado extra definido.</span><button type="button" onclick="addCustomMetaKey()" class="text-cyan-400 hover:text-cyan-300 font-medium">+ Adicionar</button></div>';
+      // Valor Monetário
+      const valField = activeFields.find(f => f.key === 'valor_monetario' || f.key === 'valor');
+      if (valField) {
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-xs font-semibold shadow-sm">
+            <i class="fa-solid fa-coins text-emerald-400 text-[11px]"></i>
+            <span>${escapeHtml(valField.val)}</span>
+            <button type="button" onclick="navigator.clipboard.writeText('${escapeHtml(valField.val)}'); showToast('Valor copiado!', 'success');" title="Copiar Valor" class="hover:text-white ml-0.5 text-[10px]">
+              <i class="fa-regular fa-copy"></i>
+            </button>
+          </div>
+        `);
+      }
+
+      // PIX (somente e estritamente se houver chave pix ou id e2e)
+      const hasPix = activeFields.some(f => f.key === 'pix_chave' || f.key === 'pix_e2e_id');
+      if (hasPix) {
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-teal-500/15 border border-teal-500/30 text-teal-300 font-mono text-[11px] font-semibold">
+            <i class="fa-brands fa-pix text-teal-400"></i>
+            <span>PIX</span>
+          </div>
+        `);
+      }
+
+      // Boleto Bancário
+      const hasBoleto = activeFields.some(f => f.key === 'linha_digitavel' || f.key === 'codigo_barras') || (doc.tipo_documento || '').toLowerCase().includes('boleto');
+      if (hasBoleto) {
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-[11px] font-semibold">
+            <i class="fa-solid fa-barcode text-amber-400"></i>
+            <span>Boleto</span>
+          </div>
+        `);
+      }
+
+      // Placa de Veículo
+      const placaField = activeFields.find(f => f.key === 'placa' || f.key === 'placa_veiculo');
+      if (placaField) {
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-300 font-mono text-[11px] font-semibold uppercase">
+            <i class="fa-solid fa-car text-sky-400"></i>
+            <span>${escapeHtml(placaField.val)}</span>
+          </div>
+        `);
+      }
+
+      // Data do Documento
+      const dataField = activeFields.find(f => f.key === 'data');
+      if (dataField) {
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[11px]">
+            <i class="fa-regular fa-calendar-days text-slate-400"></i>
+            <span>${escapeHtml(dataField.val)}</span>
+          </div>
+        `);
+      }
+
+      // CPF / CNPJ
+      const cpfField = activeFields.find(f => f.key === 'cpf');
+      if (cpfField) {
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-slate-300 font-mono text-[11px]">
+            <i class="fa-solid fa-id-card text-cyan-400"></i>
+            <span>CPF: ${escapeHtml(cpfField.val)}</span>
+          </div>
+        `);
+      }
+      const cnpjField = activeFields.find(f => f.key === 'cnpj');
+      if (cnpjField) {
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-sky-300 font-mono text-[11px]">
+            <i class="fa-solid fa-landmark text-sky-400"></i>
+            <span>CNPJ: ${escapeHtml(cnpjField.val)}</span>
+          </div>
+        `);
+      }
+
+      container.innerHTML = pills.join('');
+    }
+
+    function renderDynamicInspector(doc) {
+      const container = document.getElementById('dynamicSectionsContainer');
+      const emptyState = document.getElementById('dynamicEmptyState');
+      if (!container || !doc) return;
+
+      const activeFields = extractActiveDocumentFields(doc);
+
+      // Renderiza Hero Badges no topo
+      renderHeroBadges(doc, activeFields);
+
+      if (activeFields.length === 0) {
+        container.innerHTML = '';
+        if (emptyState) emptyState.classList.remove('hidden');
         return;
       }
 
-      keys.forEach(key => {
-        const row = document.createElement('div');
-        row.className = 'flex items-center gap-1.5 bg-slate-950/70 p-1.5 rounded border border-slate-800';
-        row.innerHTML = `
-          <span class="text-[10px] font-mono text-cyan-300 w-28 truncate shrink-0" title="${escapeHtml(key)}">${escapeHtml(key)}:</span>
-          <input type="text" value="${escapeHtml(safeString(de[key]))}" oninput="updateCustomMetaVal('${escapeHtml(key)}', this.value)"
-                 class="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-500">
-          <button type="button" onclick="removeCustomMetaKey('${escapeHtml(key)}')" class="text-slate-500 hover:text-rose-400 p-1 text-[11px] transition shrink-0" title="Remover metadado">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        `;
-        container.appendChild(row);
+      if (emptyState) emptyState.classList.add('hidden');
+
+      // Agrupamento por Categoria
+      const groups = {
+        financas: [],
+        identificacao: [],
+        academico: [],
+        documento: [],
+        contato: [],
+        outros: []
+      };
+
+      activeFields.forEach(f => {
+        const cat = f.meta.category || 'outros';
+        if (groups[cat]) {
+          groups[cat].push(f);
+        } else {
+          groups.outros.push(f);
+        }
       });
+
+      const categoryOrder = ['financas', 'identificacao', 'academico', 'documento', 'contato', 'outros'];
+      let html = '';
+
+      categoryOrder.forEach(catKey => {
+        const fields = groups[catKey];
+        if (!fields || fields.length === 0) return; // ZERO NOISE: Categoria vazia não é renderizada!
+
+        const catConf = CATEGORY_CONFIG[catKey] || CATEGORY_CONFIG.outros;
+        const isFinancas = catKey === 'financas';
+        const hasPix = isFinancas && activeFields.some(f => f.key === 'pix_chave' || f.key === 'pix_e2e_id');
+
+        html += `
+          <div class="bg-slate-900/85 border border-slate-800 rounded-xl p-3.5 space-y-3 shadow-sm transition-all">
+            <!-- Cabeçalho da Seção -->
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800/80">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-slate-800 flex items-center justify-center text-${catConf.color}-400 text-xs">
+                  <i class="${catConf.icon}"></i>
+                </div>
+                <h4 class="text-xs font-bold text-slate-200 uppercase tracking-wide">${catConf.title}</h4>
+              </div>
+              <div class="flex items-center gap-1.5">
+                ${hasPix ? `
+                  <button type="button" onclick="removePixFromCurrentDoc()"
+                          class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 text-[10px] font-medium flex items-center gap-1 transition"
+                          title="Remover chaves de PIX e desvincular deste documento">
+                    <i class="fa-solid fa-ban text-[9px] text-rose-400"></i> Desvincular PIX
+                  </button>
+                  <span class="bg-teal-500/20 text-teal-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border border-teal-500/30">PIX OFICIAL</span>
+                ` : `
+                  <span class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full border ${catConf.badgeBg}">
+                    ${fields.length} ${fields.length === 1 ? 'campo' : 'campos'}
+                  </span>
+                `}
+              </div>
+            </div>
+
+            <!-- Grade de Campos da Seção -->
+            <div class="space-y-2.5">
+        `;
+
+        fields.forEach(f => {
+          const isTextarea = f.meta.type === 'textarea' || f.val.length > 70;
+          const isCurrency = f.meta.type === 'currency' || f.key === 'valor_monetario';
+          const inputId = `input_${f.key}`;
+
+          html += `
+            <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/90 hover:border-slate-700 transition space-y-1">
+              <div class="flex items-center justify-between">
+                <label for="${inputId}" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                  <i class="${f.meta.icon} text-[11px] text-${catConf.color}-400"></i>
+                  <span>${escapeHtml(f.meta.label)}</span>
+                </label>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] text-slate-500 font-mono">${escapeHtml(f.key)}</span>
+                  <button type="button" onclick="copyFieldValue('${inputId}', '${escapeHtml(f.meta.label)}', this)"
+                          class="text-[10px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition" title="Copiar valor">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                  <button type="button" onclick="removeDynamicField('${escapeHtml(f.key)}')"
+                          class="text-[10px] text-slate-500 hover:text-rose-400 px-1 py-0.5 rounded hover:bg-slate-800 transition" title="Remover este campo do documento">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </div>
+
+              ${isTextarea ? `
+                <textarea id="${inputId}" data-dynamic-key="${escapeHtml(f.key)}" oninput="onDynamicFieldInput('${escapeHtml(f.key)}', this.value)" rows="2"
+                          class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-${catConf.color}-500 resize-none font-sans">${escapeHtml(f.val)}</textarea>
+              ` : `
+                <input type="text" id="${inputId}" data-dynamic-key="${escapeHtml(f.key)}" value="${escapeHtml(f.val)}" oninput="onDynamicFieldInput('${escapeHtml(f.key)}', this.value)"
+                       class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-${catConf.color}-500 ${isCurrency ? 'text-sm font-bold font-mono text-emerald-300' : (f.meta.type === 'mono' ? 'font-mono' : '')}">
+              `}
+            </div>
+          `;
+        });
+
+        html += `
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
     }
 
-    function addCustomMetaKey() {
-      const keyName = prompt('Nome do novo atributo (ex: matricula, num_processo, orgao_expedidor, estado_civil):');
-      if (!keyName) return;
-      const cleanKey = keyName.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-      if (!cleanKey) return;
-      const doc = filteredDocs[currentIndex];
-      if (!doc) return;
-      if (!doc.dados_extras || typeof doc.dados_extras !== 'object') {
-        doc.dados_extras = {};
-      }
-      if (doc.dados_extras[cleanKey] === undefined) {
-        doc.dados_extras[cleanKey] = '';
-      }
-      renderCustomMetaFields(doc);
+    function onDynamicFieldInput(key, val) {
       markDirty();
-    }
-
-    function updateCustomMetaVal(key, val) {
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
       const doc = filteredDocs[currentIndex];
-      if (!doc) return;
+      const meta = getCanonicalFieldMeta(key);
+
+      if (meta.isCore) {
+        doc[key] = val;
+      }
       if (!doc.dados_extras || typeof doc.dados_extras !== 'object') {
         doc.dados_extras = {};
       }
       doc.dados_extras[key] = val;
+
+      updateJsonView();
+    }
+
+    function removeDynamicField(key) {
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      const meta = getCanonicalFieldMeta(key);
+
+      if (meta.isCore) {
+        doc[key] = null;
+      }
+      if (doc.dados_extras && typeof doc.dados_extras === 'object') {
+        delete doc.dados_extras[key];
+      }
+      delete doc[key];
+
       markDirty();
+      renderDynamicInspector(doc);
+      updateJsonView();
+      showToast(`Campo "${meta.label}" removido.`, 'info');
+    }
+
+    function openAddDynamicFieldModal() {
+      const modal = document.getElementById('modalAddDynamicField');
+      if (modal) {
+        document.getElementById('quickSelectDynamicField').value = '';
+        document.getElementById('dynamicFieldKeyInput').value = '';
+        document.getElementById('dynamicFieldValueInput').value = '';
+        modal.classList.remove('hidden');
+        document.getElementById('dynamicFieldKeyInput').focus();
+      }
+    }
+
+    function closeAddDynamicFieldModal() {
+      const modal = document.getElementById('modalAddDynamicField');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function onQuickSelectDynamicFieldChange() {
+      const val = document.getElementById('quickSelectDynamicField').value;
+      if (val) {
+        const parts = val.split('|');
+        const key = parts[0];
+        document.getElementById('dynamicFieldKeyInput').value = key;
+        document.getElementById('dynamicFieldValueInput').focus();
+      }
+    }
+
+    function confirmAddDynamicField() {
+      const rawKey = (document.getElementById('dynamicFieldKeyInput').value || '').trim();
+      const val = (document.getElementById('dynamicFieldValueInput').value || '').trim();
+
+      if (!rawKey) {
+        showToast('Informe o nome do atributo.', 'warning');
+        return;
+      }
+      if (!val) {
+        showToast('Informe o valor do atributo.', 'warning');
+        return;
+      }
+
+      const cleanKey = rawKey.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) {
+        closeAddDynamicFieldModal();
+        return;
+      }
+
+      const doc = filteredDocs[currentIndex];
+      const meta = getCanonicalFieldMeta(cleanKey);
+
+      if (meta.isCore) {
+        doc[cleanKey] = val;
+      }
+      if (!doc.dados_extras || typeof doc.dados_extras !== 'object') {
+        doc.dados_extras = {};
+      }
+      doc.dados_extras[cleanKey] = val;
+
+      closeAddDynamicFieldModal();
+      markDirty();
+      renderDynamicInspector(doc);
+      updateJsonView();
+      showToast(`Atributo "${meta.label}" adicionado!`, 'success');
+    }
+
+    // Aliases para retrocompatibilidade
+    function renderCustomMetaFields(doc) {
+      renderDynamicInspector(doc);
+    }
+
+    function addCustomMetaKey() {
+      openAddDynamicFieldModal();
+    }
+
+    function updateCustomMetaVal(key, val) {
+      onDynamicFieldInput(key, val);
     }
 
     function removeCustomMetaKey(key) {
-      const doc = filteredDocs[currentIndex];
-      if (!doc || !doc.dados_extras) return;
-      delete doc.dados_extras[key];
-      renderCustomMetaFields(doc);
-      markDirty();
+      removeDynamicField(key);
     }
 
     // -----------------------------------------------------------------------
@@ -7845,6 +7998,7 @@
 
       recalculateDocDomains(doc);
       renderMultiTags(doc);
+      renderDynamicInspector(doc);
       markDirty();
       saveCurrentDoc();
       showToast(`Classificação "${tipo}" removida.`, 'info');
@@ -7939,6 +8093,7 @@
       if (pixCard) pixCard.classList.add('hidden');
 
       onDominioChange();
+      renderDynamicInspector(doc);
       renderMultiTags(doc);
       markDirty();
       saveCurrentDoc();
@@ -8111,37 +8266,59 @@
       });
       const todosDominios = Array.from(domsSet);
 
+      // Coleta valores de todos os campos renderizados dinamicamente via [data-dynamic-key]
+      const dynamicInputs = document.querySelectorAll('[data-dynamic-key]');
+      dynamicInputs.forEach(input => {
+        const key = input.getAttribute('data-dynamic-key');
+        const val = input.value.trim();
+        if (val) {
+          dadosExtras[key] = val;
+        } else {
+          delete dadosExtras[key];
+        }
+      });
+
+      const getFieldVal = (id, key) => {
+        const el = document.getElementById(id) || document.querySelector(`[data-dynamic-key="${key}"]`);
+        if (el) {
+          const v = el.value.trim();
+          return v || null;
+        }
+        return doc[key] || dadosExtras[key] || null;
+      };
+
       const res = {
         ...doc,
         dominio: dominio,
         todos_dominios: todosDominios,
         todos_tipos: todosTipos,
         dossie_paginas: doc.dossie_paginas || [],
-        valor_monetario: isFinancial ? (valorMonetario || null) : null,
-        beneficiario: document.getElementById('input_beneficiario').value.trim() || null,
-        cpf: document.getElementById('input_cpf').value.trim() || null,
-        rg: document.getElementById('input_rg').value.trim() || null,
-        cnpj: cnpjVal,
-        natureza_curso: document.getElementById('select_natureza_curso').value || null,
-        curso: document.getElementById('input_curso').value.trim() || null,
-        carga_horaria: document.getElementById('input_carga_horaria').value.trim() || null,
-        data: document.getElementById('input_data').value.trim() || null,
-        faculdade: document.getElementById('input_faculdade').value.trim() || null,
+        valor_monetario: getFieldVal('input_valor_monetario', 'valor_monetario'),
+        beneficiario: getFieldVal('input_beneficiario', 'beneficiario'),
+        cpf: getFieldVal('input_cpf', 'cpf'),
+        rg: getFieldVal('input_rg', 'rg'),
+        cnpj: cnpjVal || getFieldVal('input_cnpj', 'cnpj') || getFieldVal('input_doc_cnpj', 'cnpj'),
+        natureza_curso: document.getElementById('select_natureza_curso')?.value || getFieldVal('input_natureza_curso', 'natureza_curso'),
+        curso: getFieldVal('input_curso', 'curso'),
+        carga_horaria: getFieldVal('input_carga_horaria', 'carga_horaria'),
+        data: getFieldVal('input_data', 'data'),
+        faculdade: getFieldVal('input_faculdade', 'faculdade'),
         tipo_documento: primaryTipo,
-        observacoes_conferencia: document.getElementById('input_obs').value.trim() || null,
+        observacoes_conferencia: document.getElementById('input_obs')?.value.trim() || null,
         dados_extras: dadosExtras
       };
 
-      if (isFinancial) {
-        res.pix_pagador_nome = pixPagadorNome || null;
-        res.pix_pagador_cpf_cnpj = pixPagadorCpfCnpj || null;
-        res.pix_pagador_banco = pixPagadorBanco || null;
-        res.pix_recebedor_nome = pixRecebedorNome || null;
-        res.pix_recebedor_cpf_cnpj = pixRecebedorCpfCnpj || null;
-        res.pix_recebedor_banco = pixRecebedorBanco || null;
-        res.pix_chave = pixChave || null;
-        res.pix_e2e_id = pixE2eId || null;
-        res.pix_autenticacao = pixAutenticacao || null;
+      const hasPix = isFinancial && (pixChave || pixE2eId || dadosExtras.pix_chave || dadosExtras.pix_e2e_id);
+      if (hasPix) {
+        res.pix_pagador_nome = pixPagadorNome || dadosExtras.pix_pagador_nome || null;
+        res.pix_pagador_cpf_cnpj = pixPagadorCpfCnpj || dadosExtras.pix_pagador_cpf_cnpj || null;
+        res.pix_pagador_banco = pixPagadorBanco || dadosExtras.pix_pagador_banco || null;
+        res.pix_recebedor_nome = pixRecebedorNome || dadosExtras.pix_recebedor_nome || null;
+        res.pix_recebedor_cpf_cnpj = pixRecebedorCpfCnpj || dadosExtras.pix_recebedor_cpf_cnpj || null;
+        res.pix_recebedor_banco = pixRecebedorBanco || dadosExtras.pix_recebedor_banco || null;
+        res.pix_chave = pixChave || dadosExtras.pix_chave || null;
+        res.pix_e2e_id = pixE2eId || dadosExtras.pix_e2e_id || null;
+        res.pix_autenticacao = pixAutenticacao || dadosExtras.pix_autenticacao || null;
       } else {
         res.pix_pagador_nome = null;
         res.pix_pagador_cpf_cnpj = null;
@@ -8842,7 +9019,14 @@
       }
       setEl('audit_tamanho', sizeStr);
       setEl('audit_caminho', doc.caminho_relativo || '-');
-      setEl('audit_metodo_leitura', doc.metodo_leitura || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital'));
+      const auditMetodoEl = document.getElementById('audit_metodo_leitura');
+      if (auditMetodoEl) {
+        if (doc.metodo_leitura === 'hibrido_fallback_openai') {
+          auditMetodoEl.innerHTML = '<span class="text-amber-300 font-semibold inline-flex items-center gap-1"><i class="fa-solid fa-bolt text-amber-400"></i> Híbrido (Ollama ➔ Nuvem)</span>';
+        } else {
+          auditMetodoEl.innerText = doc.metodo_leitura || (doc.status === 'nao_processado' ? 'não processado' : 'texto_digital');
+        }
+      }
       setEl('audit_tentativa_ocr', doc.tentativa_ocr_llm ? 'Sim (Executado)' : 'Não');
       setEl('audit_data_modificacao', doc.data_modificacao || '-');
       setEl('audit_autor', doc.autor || '-');
@@ -9019,99 +9203,97 @@
 
       const doc = filteredDocs[currentIndex] || {};
       const selectDom = document.getElementById('select_dominio');
-      const dominio = selectDom ? selectDom.value : (doc.dominio || 'academico');
+      const dominio = (selectDom ? selectDom.value : (doc.dominio || 'outro')).toLowerCase();
+      const tipoDoc = (document.getElementById('select_tipo_documento')?.value || doc.tipo_documento || '').trim();
+      const tipoLower = tipoDoc.toLowerCase();
 
-      const beneficiario = (document.getElementById('input_beneficiario')?.value || '').trim();
-      const cpf = (document.getElementById('input_cpf')?.value || '').trim();
-      const rg = (document.getElementById('input_rg')?.value || '').trim();
-      const selectNat = document.getElementById('select_natureza_curso');
-      const natureza = (selectNat?.value || '').trim();
-      const curso = (document.getElementById('input_curso')?.value || '').trim();
-      const cargaHoraria = (document.getElementById('input_carga_horaria')?.value || '').trim();
-      const dataDoc = (document.getElementById('input_data')?.value || '').trim();
-      const faculdade = (document.getElementById('input_faculdade')?.value || '').trim();
-      const tipoDoc = (document.getElementById('select_tipo_documento')?.value || '').trim();
+      // Verifica se o documento de fato contém chave ou transação PIX
+      const hasPix = !!(
+        document.querySelector('[data-dynamic-key="pix_chave"]')?.value?.trim() ||
+        document.querySelector('[data-dynamic-key="pix_e2e_id"]')?.value?.trim() ||
+        doc.dados_extras?.pix_chave ||
+        doc.dados_extras?.pix_e2e_id
+      );
 
-      const items = [];
-      let boxTitle = 'COMPROVAÇÃO DE QUALIFICAÇÃO / DOCUMENTO ACADÊMICO';
-      let themeColor = '#1e40af'; // Blue
+      let boxTitle = 'FICHA DE DADOS DO DOCUMENTO';
+      let themeColor = '#1e40af'; // Azul padrão
 
-      if (dominio === 'financeiro') {
+      if (hasPix) {
         boxTitle = 'COMPROVANTE DE TRANSAÇÃO FINANCEIRA (PIX)';
-        themeColor = '#059669'; // Emerald
-        const getVal = (id) => (document.getElementById(id)?.value || '').trim();
-        const valor = getVal('input_valor_monetario');
-        const pagador = getVal('input_pix_pagador_nome');
-        const pagadorCpf = getVal('input_pix_pagador_cpf_cnpj');
-        const pagadorBanco = getVal('input_pix_pagador_banco');
-        const recBanco = getVal('input_pix_recebedor_banco');
-        const chavePix = getVal('input_pix_chave');
-        const e2eId = getVal('input_pix_e2e_id');
-        const autBanc = getVal('input_pix_autenticacao');
-
-        if (tipoDoc) items.push({ label: 'Tipo de Operação', val: tipoDoc });
-        if (valor) items.push({ label: 'Valor Transferido', val: valor, highlight: true });
-        if (pagador) items.push({ label: 'Pagador (Origem)', val: pagador, highlight: true });
-        if (pagadorCpf) items.push({ label: 'CPF/CNPJ Pagador', val: pagadorCpf, mono: true });
-        if (pagadorBanco) items.push({ label: 'Instituição Origem', val: pagadorBanco });
-        if (beneficiario) items.push({ label: 'Recebedor (Destino)', val: beneficiario, highlight: true });
-        if (cpf) items.push({ label: 'CPF/CNPJ Destino', val: cpf, mono: true });
-        if (recBanco) items.push({ label: 'Instituição Destino', val: recBanco });
-        if (chavePix) items.push({ label: 'Chave PIX Utilizada', val: chavePix, mono: true });
-        if (e2eId) items.push({ label: 'ID Transação (E2E)', val: e2eId, mono: true });
-        if (autBanc) items.push({ label: 'Autenticação Bancária', val: autBanc, mono: true });
-        if (dataDoc) items.push({ label: 'Data e Hora da Operação', val: dataDoc });
-      } else if (dominio === 'identificacao') {
+        themeColor = '#059669'; // Esmeralda
+      } else if (dominio === 'financeiro' || tipoLower.includes('pagamento') || tipoLower.includes('recibo') || tipoLower.includes('boleto') || tipoLower.includes('ted') || tipoLower.includes('doc')) {
+        boxTitle = tipoDoc ? tipoDoc.toUpperCase() : 'COMPROVANTE DE OPERAÇÃO FINANCEIRA';
+        themeColor = '#059669';
+      } else if (dominio === 'veiculo' || tipoLower.includes('crlv') || tipoLower.includes('veículo') || tipoLower.includes('veiculo') || tipoLower.includes('detran')) {
+        boxTitle = 'DOCUMENTO VEICULAR / CRLV';
+        themeColor = '#d97706'; // Âmbar escuro
+      } else if (dominio === 'identificacao' || tipoLower.includes('rg') || tipoLower.includes('cpf') || tipoLower.includes('cnh') || tipoLower.includes('certidão') || tipoLower.includes('certidao')) {
         boxTitle = 'DOCUMENTO DE IDENTIFICAÇÃO CIVIL';
         themeColor = '#0284c7'; // Sky
-        if (beneficiario) items.push({ label: 'Nome Completo', val: beneficiario, highlight: true });
-        if (cpf) items.push({ label: 'CPF', val: cpf, mono: true });
-        if (rg) items.push({ label: 'RG / Registro Geral', val: rg, mono: true });
-        if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
-        if (faculdade) items.push({ label: 'Órgão Emissor', val: faculdade });
-        if (dataDoc) items.push({ label: 'Data de Emissão', val: dataDoc });
-      } else if (dominio === 'profissional' || tipoDoc.toLowerCase().includes('cadastral') || tipoDoc.toLowerCase().includes('cartão cnpj') || tipoDoc.toLowerCase().includes('cartao cnpj')) {
-        boxTitle = 'COMPROVANTE DE INSCRIÇÃO E SITUAÇÃO CADASTRAL / PROFISSIONAL';
+      } else if (dominio === 'profissional' || tipoLower.includes('cadastral') || tipoLower.includes('cnpj')) {
+        boxTitle = 'COMPROVANTE DE SITUAÇÃO CADASTRAL / PROFISSIONAL';
         themeColor = '#0d9488'; // Teal
-        const getVal = (id) => (document.getElementById(id)?.value || '').trim();
-        const cnpjVal = getVal('input_cnpj') || getVal('input_doc_cnpj');
-        const razao = getVal('input_cnpj_razao_social') || beneficiario;
-        const fantasia = getVal('input_cnpj_nome_fantasia');
-        const situacao = getVal('input_cnpj_situacao');
-        const abertura = getVal('input_cnpj_data_abertura');
-        const cnae = getVal('input_cnpj_cnae');
-        const naturezaJur = getVal('input_cnpj_natureza_juridica');
-        const endereco = getVal('input_doc_endereco') || getVal('input_cnpj_endereco');
-        const tel = getVal('input_cnpj_telefone');
-        const email = getVal('input_cnpj_email');
-
-        if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
-        if (cnpjVal) items.push({ label: 'CNPJ', val: cnpjVal, mono: true, highlight: true });
-        if (razao) items.push({ label: 'Razão Social', val: razao, highlight: true });
-        if (fantasia) items.push({ label: 'Nome Fantasia', val: fantasia });
-        if (situacao) items.push({ label: 'Situação Cadastral', val: situacao });
-        if (abertura) items.push({ label: 'Data de Abertura', val: abertura });
-        if (cnae) items.push({ label: 'CNAE Principal', val: cnae });
-        if (naturezaJur) items.push({ label: 'Natureza Jurídica', val: naturezaJur });
-        if (endereco) items.push({ label: 'Endereço Completo', val: endereco });
-        if (tel) items.push({ label: 'Telefone', val: tel });
-        if (email) items.push({ label: 'E-mail', val: email });
-        if (dataDoc && !abertura) items.push({ label: 'Data do Documento', val: dataDoc });
+      } else if (dominio === 'juridico' || tipoLower.includes('processo') || tipoLower.includes('petição') || tipoLower.includes('procuração')) {
+        boxTitle = 'DOCUMENTO JURÍDICO / PROCESSUAL';
+        themeColor = '#7c3aed'; // Roxo
+      } else if (dominio === 'academico') {
+        boxTitle = 'COMPROVAÇÃO DE QUALIFICAÇÃO / DOCUMENTO ACADÊMICO';
+        themeColor = '#1e40af'; // Azul
       } else {
-        // Acadêmico e outros
-        if (beneficiario) items.push({ label: 'Titular / Beneficiário', val: beneficiario, highlight: true });
-        if (cpf) items.push({ label: 'CPF', val: cpf, mono: true });
-        if (rg) items.push({ label: 'RG / Identidade', val: rg });
-        if (tipoDoc) items.push({ label: 'Tipo de Documento', val: tipoDoc });
-        if (curso) items.push({ label: 'Curso', val: curso, highlight: true });
-        if (natureza) items.push({ label: 'Nível / Natureza', val: natureza });
-        if (faculdade) items.push({ label: 'Instituição de Ensino', val: faculdade });
-        const cnpjEmissor = (document.getElementById('input_doc_cnpj')?.value || document.getElementById('input_cnpj')?.value || '').trim();
-        if (cnpjEmissor) items.push({ label: 'CNPJ da Instituição', val: cnpjEmissor, mono: true });
-        if (cargaHoraria) items.push({ label: 'Carga Horária', val: cargaHoraria });
-        const endGeral = (document.getElementById('input_doc_endereco')?.value || document.getElementById('input_cnpj_endereco')?.value || '').trim();
-        if (endGeral) items.push({ label: 'Endereço / Localidade', val: endGeral });
-        if (dataDoc) items.push({ label: 'Data do Documento', val: dataDoc });
+        boxTitle = tipoDoc ? tipoDoc.toUpperCase() : 'FICHA DE DADOS DO DOCUMENTO';
+        themeColor = '#475569';
+      }
+
+      const items = [];
+      const processedKeys = new Set();
+
+      if (tipoDoc) {
+        items.push({ label: 'Tipo de Documento', val: tipoDoc, highlight: false });
+        processedKeys.add('tipo_documento');
+      }
+
+      // Prioriza ler os inputs renderizados dinamicamente no formulário (reflete edições ativas)
+      const dynamicInputs = document.querySelectorAll('[data-dynamic-key]');
+      if (dynamicInputs && dynamicInputs.length > 0) {
+        dynamicInputs.forEach(input => {
+          const key = input.getAttribute('data-dynamic-key');
+          const val = input.value.trim();
+          if (!val || processedKeys.has(key)) return;
+          processedKeys.add(key);
+
+          const meta = getCanonicalFieldMeta(key);
+          const isHighlight = meta.type === 'currency' || key === 'beneficiario' || key === 'razao_social' || key === 'curso' || key === 'placa';
+          const isMono = meta.type === 'mono' || key === 'cpf' || key === 'cnpj' || key === 'rg' || key.includes('id') || key.includes('codigo') || key.includes('autenticacao') || key.includes('chave');
+
+          items.push({
+            label: meta.label,
+            val: val,
+            highlight: isHighlight,
+            mono: isMono
+          });
+        });
+      } else {
+        // Fallback: extrai diretamente do objeto doc caso o container DOM não esteja carregado
+        const activeFields = extractActiveDocumentFields(doc);
+        activeFields.forEach(f => {
+          if (processedKeys.has(f.key)) return;
+          processedKeys.add(f.key);
+
+          const isHighlight = f.meta.type === 'currency' || f.key === 'beneficiario' || f.key === 'razao_social' || f.key === 'curso' || f.key === 'placa';
+          const isMono = f.meta.type === 'mono' || f.key === 'cpf' || f.key === 'cnpj' || f.key === 'rg' || f.key.includes('id') || f.key.includes('codigo') || f.key.includes('autenticacao') || f.key.includes('chave');
+
+          items.push({
+            label: f.meta.label,
+            val: f.val,
+            highlight: isHighlight,
+            mono: isMono
+          });
+        });
+      }
+
+      const obs = (document.getElementById('input_obs')?.value || doc.observacoes || '').trim();
+      if (obs) {
+        items.push({ label: 'Observações / Notas', val: obs });
       }
 
       if (items.length === 0) {
@@ -9570,6 +9752,34 @@
       }
     }
 
+    function toggleHybridOptions() {
+      const isChecked = !!document.getElementById('cfgHybridMode')?.checked;
+      const container = document.getElementById('hybridOptionsContainer');
+      if (container) {
+        if (isChecked) container.classList.remove('hidden');
+        else container.classList.add('hidden');
+      }
+      const batchToggle = document.getElementById('cfgBatchHybridToggle');
+      if (batchToggle && batchToggle.checked !== isChecked) {
+        batchToggle.checked = isChecked;
+      }
+      const batchStatus = document.getElementById('cfgBatchHybridStatusBadge');
+      if (batchStatus) {
+        batchStatus.innerText = isChecked ? 'Ativado (Ollama ➔ Nuvem)' : 'Desligado';
+        batchStatus.className = isChecked 
+          ? 'text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 font-semibold'
+          : 'text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700 font-normal';
+      }
+    }
+
+    function syncHybridFromBatch(checked) {
+      const hybridCheck = document.getElementById('cfgHybridMode');
+      if (hybridCheck) {
+        hybridCheck.checked = checked;
+        toggleHybridOptions();
+      }
+    }
+
     async function loadSystemConfig() {
       try {
         const res = await fetch('/api/config');
@@ -9654,6 +9864,15 @@
 
         const skipO = document.getElementById('cfgSkipOcr');
         if (skipO) skipO.checked = !!classif.skip_ocr;
+
+        // 4. Modo Híbrido em Cascata (Ollama ➔ OpenAI)
+        const isHybrid = !!(classif.hybrid ?? vis.hybrid ?? false);
+        const hybridCheck = document.getElementById('cfgHybridMode');
+        if (hybridCheck) hybridCheck.checked = isHybrid;
+        const hybridModel = classif.hybrid_cloud_model || vis.hybrid_cloud_model || 'gpt-4o-mini';
+        const inHybridModel = document.getElementById('cfgHybridCloudModel');
+        if (inHybridModel) inHybridModel.value = hybridModel;
+        toggleHybridOptions();
 
         // Atualiza estado do lote
         if (data.batch_status) {
@@ -9830,6 +10049,13 @@
         if (!model) model = 'gpt-4o-mini';
       }
 
+      const hybrid = !!document.getElementById('cfgHybridMode')?.checked;
+      const hybridCloudModel = (document.getElementById('cfgHybridCloudModel')?.value || 'gpt-4o-mini').trim();
+      const hybridKey = (document.getElementById('cfgHybridOpenaiKey')?.value || '').trim();
+      if (!openaiKey && hybridKey) {
+        openaiKey = hybridKey;
+      }
+
       return {
         classificador: {
           input: pdfDir,
@@ -9842,7 +10068,9 @@
           openai_base_url: openaiBaseUrl || undefined,
           workers: workers,
           max_pages: maxPages,
-          skip_ocr: skipOcr
+          skip_ocr: skipOcr,
+          hybrid: hybrid,
+          hybrid_cloud_model: hybridCloudModel
         },
         visualizador: {
           pdf_dir: pdfDir,
@@ -9851,7 +10079,9 @@
           model: model,
           ollama_url: ollamaUrl,
           openai_key: openaiKey || undefined,
-          openai_base_url: openaiBaseUrl || undefined
+          openai_base_url: openaiBaseUrl || undefined,
+          hybrid: hybrid,
+          hybrid_cloud_model: hybridCloudModel
         }
       };
     }
@@ -10633,6 +10863,11 @@
           ? `<span class="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold shrink-0" title="Dossiê com ${pgsCount} páginas">+${pgsCount}p</span>`
           : '';
 
+        const isHybrid = (doc.metodo_leitura === 'hibrido_fallback_openai');
+        const hybridGalleryBadge = isHybrid 
+          ? `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1 py-0.2 rounded text-[8.5px] font-bold shrink-0 flex items-center gap-0.5" title="Fallback Híbrido: Promovido para OpenAI"><i class="fa-solid fa-bolt text-amber-400 text-[7.5px]"></i>Híbrido</span>`
+          : '';
+
         // 1. Obtenção de TODAS as TAGs do documento de forma única e limpa
         let allDocTags = [];
         if (Array.isArray(doc.todos_tipos) && doc.todos_tipos.length > 0) {
@@ -10706,6 +10941,7 @@
                   <i class="${docFmt.icon} text-[8px] mr-0.5"></i>${docFmt.label}
                 </span>
                 ${dossieBadge}
+                ${hybridGalleryBadge}
               </div>
               <div class="shrink-0" id="gcard-status-${doc.md5}">
                 ${statusBadge}

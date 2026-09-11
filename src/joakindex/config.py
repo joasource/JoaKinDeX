@@ -50,6 +50,8 @@ def get_factory_defaults() -> Dict[str, Any]:
             "reprocess_ocr": False,
             "force": False,
             "no_individual": False,
+            "hybrid": False,
+            "hybrid_cloud_model": "gpt-4o-mini",
         },
         "visualizador": {
             "pdf_dir": "./pdf",
@@ -61,6 +63,8 @@ def get_factory_defaults() -> Dict[str, Any]:
             "ollama_url": "http://localhost:11434",
             "openai_key": None,
             "openai_base_url": None,
+            "hybrid": False,
+            "hybrid_cloud_model": "gpt-4o-mini",
         }
     }
 
@@ -235,6 +239,12 @@ def save_classifier_config(updates: Dict[str, Any]) -> None:
     if "openai_base_url" in updates and updates["openai_base_url"]:
         config["visualizador"]["openai_base_url"] = updates["openai_base_url"]
 
+    if "hybrid" in updates and updates["hybrid"] is not None:
+        config["visualizador"]["hybrid"] = bool(updates["hybrid"])
+
+    if "hybrid_cloud_model" in updates and updates["hybrid_cloud_model"]:
+        config["visualizador"]["hybrid_cloud_model"] = str(updates["hybrid_cloud_model"]).strip()
+
     save_all_config(config)
 
 
@@ -284,6 +294,12 @@ def save_visualizer_config(updates: Dict[str, Any]) -> None:
 
     if "model" in updates and updates["model"]:
         config["classificador"]["model"] = updates["model"]
+
+    if "hybrid" in updates and updates["hybrid"] is not None:
+        config["classificador"]["hybrid"] = bool(updates["hybrid"])
+
+    if "hybrid_cloud_model" in updates and updates["hybrid_cloud_model"]:
+        config["classificador"]["hybrid_cloud_model"] = str(updates["hybrid_cloud_model"]).strip()
 
     save_all_config(config)
 
