@@ -7701,6 +7701,7 @@
       tipos.forEach(tipo => {
         const cleanTipo = safeString(tipo).trim();
         if (!cleanTipo) return;
+        const isPrimary = cleanTipo.toLowerCase() === primaryTipo.toLowerCase();
         const tLower = cleanTipo.toLowerCase();
         const isHandwritingTag = tLower.includes('manuscrito') || tLower.includes('mão') || tLower.includes('mao') || tLower.includes('punho');
 
