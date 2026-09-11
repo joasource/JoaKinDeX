@@ -1,6 +1,6 @@
 import pytest
 import argparse
-from joakindex.cli import should_trigger_hybrid_fallback, OpenAIClient, clean_and_parse_json
+from joakindex.cli import should_trigger_hybrid_fallback, OpenAIClient, clean_and_parse_json, build_universal_vision_prompt, build_universal_prompt
 from joakindex.config import get_factory_defaults, load_all_config, save_classifier_config, reset_classifier_config
 
 
@@ -160,4 +160,51 @@ def test_clean_and_parse_json_regex_fallback():
     res = clean_and_parse_json(raw)
     assert res["dominio"] == "juridico"
     assert res["tipo_documento"] == "Procuracao"
+
+
+def test_should_trigger_hybrid_fallback_on_incomplete_handwritten_doc():
+    doc = {
+        "status": "sucesso",
+        "tipo_documento": "Recibo Manual",
+        "dominio": "financeiro",
+        "manuscrito": True,
+        "beneficiario": None,
+        "valor_monetario": None,
+        "curso": None
+    }
+    trigger, reason = should_trigger_hybrid_fallback(doc, text_length=50)
+    assert trigger is True
+    assert "manuscrito_incompleto" in reason
+
+
+def test_should_not_trigger_hybrid_fallback_on_complete_handwritten_doc():
+    doc = {
+        "status": "sucesso",
+        "tipo_documento": "Recibo Manual",
+        "dominio": "financeiro",
+        "manuscrito": True,
+        "beneficiario": "Antônio Ferreira",
+        "valor_monetario": "R$ 350,00",
+        "emitente": "Oficina do Zé"
+    }
+    trigger, reason = should_trigger_hybrid_fallback(doc, text_length=60)
+    assert trigger is False
+    assert reason == ""
+
+
+def test_universal_vision_prompt_has_handwriting_instructions():
+    prompt = build_universal_vision_prompt(extra_context="Recibo manual de papelaria")
+    assert "manuscrito" in prompt.lower()
+    assert "preenchido à mão" in prompt.lower() or "preenchimento à mão" in prompt.lower()
+    assert "emitente" in prompt.lower()
+    assert "referente_a" in prompt.lower()
+    assert "conteudo_manuscrito" in prompt.lower()
+
+
+def test_universal_text_prompt_has_handwriting_instructions():
+    prompt = build_universal_prompt(document_text="Recebi de João Silva a quantia...")
+    assert "manuscrito" in prompt.lower()
+    assert "emitente" in prompt.lower()
+    assert "referente_a" in prompt.lower()
+
 

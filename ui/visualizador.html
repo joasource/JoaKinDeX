@@ -2969,6 +2969,13 @@
               <option value="Contrato">Contrato</option>
               <option value="Termo de Posse">Termo de Posse</option>
             </optgroup>
+            <optgroup label="Manuscritos & Preenchimento Manual">
+              <option value="Manuscrito">✍️ Manuscrito (Geral)</option>
+              <option value="Preenchido à Mão">✍️ Preenchido à Mão</option>
+              <option value="Recibo Manual">✍️ Recibo Manual</option>
+              <option value="Nota Promissória">✍️ Nota Promissória</option>
+              <option value="Declaração de Próprio Punho">✍️ Declaração de Próprio Punho</option>
+            </optgroup>
           </select>
         </div>
 
@@ -3053,6 +3060,13 @@
               <option value="telefone|Telefone de Contato">Telefone de Contato</option>
               <option value="email|E-mail">E-mail</option>
               <option value="cep|CEP">CEP</option>
+            </optgroup>
+            <optgroup label="Manuscritos & Preenchimento Manual">
+              <option value="emitente|Emitente / Responsável">Emitente / Responsável</option>
+              <option value="referente_a|Referente a / Finalidade">Referente a / Finalidade</option>
+              <option value="conteudo_manuscrito|Conteúdo Manuscrito (Transcrição)">Conteúdo Manuscrito (Transcrição)</option>
+              <option value="observacoes_manuscritas|Observações Manuscritas">Observações Manuscritas</option>
+              <option value="manuscrito|Documento Manuscrito">Documento Manuscrito (Sim/Não)</option>
             </optgroup>
           </select>
         </div>
@@ -7183,6 +7197,14 @@
       outorgado: { label: 'Outorgado', icon: 'fa-solid fa-user-check', category: 'documento', type: 'text', isCore: false },
       vigencia: { label: 'Prazo de Vigência', icon: 'fa-regular fa-clock', category: 'documento', type: 'text', isCore: false },
 
+      // Escrita Manual & Manuscritos
+      manuscrito: { label: 'Documento Manuscrito', icon: 'fa-solid fa-pen-nib', category: 'documento', type: 'badge', isCore: false },
+      preenchido_a_mao: { label: 'Preenchido à Mão', icon: 'fa-solid fa-pen-fancy', category: 'documento', type: 'badge', isCore: false },
+      emitente: { label: 'Emitente / Responsável', icon: 'fa-solid fa-user-pen', category: 'identificacao', type: 'text', isCore: false },
+      referente_a: { label: 'Referente a / Finalidade', icon: 'fa-solid fa-file-signature', category: 'documento', type: 'textarea', isCore: false },
+      conteudo_manuscrito: { label: 'Conteúdo Manuscrito (Transcrição)', icon: 'fa-solid fa-pen-nib', category: 'documento', type: 'textarea', isCore: false },
+      observacoes_manuscritas: { label: 'Observações Manuscritas', icon: 'fa-solid fa-note-sticky', category: 'documento', type: 'textarea', isCore: false },
+
       // Contato & Localidade
       endereco_completo: { label: 'Endereço Completo', icon: 'fa-solid fa-location-dot', category: 'contato', type: 'textarea', isCore: false },
       endereco: { label: 'Endereço', icon: 'fa-solid fa-location-dot', category: 'contato', type: 'textarea', isCore: false },
@@ -7346,6 +7368,26 @@
           <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-[11px] font-semibold">
             <i class="fa-solid fa-barcode text-amber-400"></i>
             <span>Boleto</span>
+          </div>
+        `);
+      }
+
+      // Documento Manuscrito / Preenchido à Mão
+      const isHandwritten = (
+        doc.manuscrito === true ||
+        doc.dados_extras?.manuscrito === true ||
+        doc.dados_extras?.manuscrito === 'true' ||
+        activeFields.some(f => f.key === 'manuscrito' && (f.val === true || f.val === 'true' || String(f.val).toLowerCase() === 'sim')) ||
+        (Array.isArray(doc.todos_tipos) && doc.todos_tipos.some(t => {
+          const tl = safeString(t).toLowerCase();
+          return tl.includes('manuscrito') || tl.includes('preenchido a mão') || tl.includes('preenchido à mão') || tl.includes('próprio punho') || tl.includes('proprio punho');
+        }))
+      );
+      if (isHandwritten) {
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 font-sans text-[11px] font-semibold shadow-sm" title="Documento com escrita manual ou preenchido à mão com caneta">
+            <i class="fa-solid fa-pen-nib text-amber-400"></i>
+            <span>Preenchido à Mão</span>
           </div>
         `);
       }
@@ -7659,22 +7701,25 @@
       tipos.forEach(tipo => {
         const cleanTipo = safeString(tipo).trim();
         if (!cleanTipo) return;
-        const isPrimary = cleanTipo.toLowerCase() === primaryTipo.toLowerCase();
+        const tLower = cleanTipo.toLowerCase();
+        const isHandwritingTag = tLower.includes('manuscrito') || tLower.includes('mão') || tLower.includes('mao') || tLower.includes('punho');
+
+        const tagStyle = isPrimary
+          ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/30'
+          : (isHandwritingTag
+              ? 'bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25 shadow-sm'
+              : 'bg-slate-800/90 text-slate-300 border border-slate-700 hover:border-slate-600 hover:bg-slate-800');
 
         const tagEl = document.createElement('div');
-        tagEl.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-all ${
-          isPrimary
-            ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/30'
-            : 'bg-slate-800/90 text-slate-300 border border-slate-700 hover:border-slate-600 hover:bg-slate-800'
-        }`;
+        tagEl.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-all ${tagStyle}`;
 
         // Ícone temático
         let iconClass = 'fa-regular fa-file text-slate-400';
-        const tLower = cleanTipo.toLowerCase();
         if (tLower.includes('diploma') || tLower.includes('certificado')) iconClass = 'fa-solid fa-graduation-cap text-purple-400';
         else if (tLower.includes('histórico') || tLower.includes('historico')) iconClass = 'fa-solid fa-book-bookmark text-indigo-400';
         else if (tLower.includes('cnh') || tLower.includes('rg') || tLower.includes('cpf') || tLower.includes('identidade') || tLower.includes('passaporte') || tLower.includes('eleitor')) iconClass = 'fa-regular fa-id-card text-cyan-400';
         else if (tLower.includes('certidão') || tLower.includes('certidao')) iconClass = 'fa-solid fa-scroll text-amber-400';
+        else if (isHandwritingTag) iconClass = 'fa-solid fa-pen-nib text-amber-400';
         else if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto')) iconClass = 'fa-solid fa-money-bill-wave text-emerald-400';
         else if (tLower.includes('procuração') || tLower.includes('procuracao') || tLower.includes('contrato') || tLower.includes('posse')) iconClass = 'fa-solid fa-gavel text-amber-400';
 
@@ -9215,6 +9260,17 @@
         doc.dados_extras?.pix_e2e_id
       );
 
+      // Verifica se o documento é manuscrito ou preenchido à mão
+      const isHandwrittenDoc = (
+        doc.manuscrito === true ||
+        doc.dados_extras?.manuscrito === true ||
+        doc.dados_extras?.manuscrito === 'true' ||
+        (Array.isArray(doc.todos_tipos) && doc.todos_tipos.some(t => {
+          const tl = safeString(t).toLowerCase();
+          return tl.includes('manuscrito') || tl.includes('mão') || tl.includes('mao') || tl.includes('punho');
+        }))
+      );
+
       let boxTitle = 'FICHA DE DADOS DO DOCUMENTO';
       let themeColor = '#1e40af'; // Azul padrão
 
@@ -9222,8 +9278,11 @@
         boxTitle = 'COMPROVANTE DE TRANSAÇÃO FINANCEIRA (PIX)';
         themeColor = '#059669'; // Esmeralda
       } else if (dominio === 'financeiro' || tipoLower.includes('pagamento') || tipoLower.includes('recibo') || tipoLower.includes('boleto') || tipoLower.includes('ted') || tipoLower.includes('doc')) {
-        boxTitle = tipoDoc ? tipoDoc.toUpperCase() : 'COMPROVANTE DE OPERAÇÃO FINANCEIRA';
+        boxTitle = tipoDoc ? (isHandwrittenDoc && !tipoDoc.toLowerCase().includes('manuscrito') ? `${tipoDoc.toUpperCase()} (MANUSCRITO)` : tipoDoc.toUpperCase()) : 'COMPROVANTE DE OPERAÇÃO FINANCEIRA';
         themeColor = '#059669';
+      } else if (tipoLower.includes('declaração') || tipoLower.includes('declaracao') || tipoLower.includes('punho')) {
+        boxTitle = isHandwrittenDoc ? 'DECLARAÇÃO DE PRÓPRIO PUNHO / MANUSCRITA' : 'DECLARAÇÃO';
+        themeColor = '#d97706';
       } else if (dominio === 'veiculo' || tipoLower.includes('crlv') || tipoLower.includes('veículo') || tipoLower.includes('veiculo') || tipoLower.includes('detran')) {
         boxTitle = 'DOCUMENTO VEICULAR / CRLV';
         themeColor = '#d97706'; // Âmbar escuro
@@ -9239,6 +9298,9 @@
       } else if (dominio === 'academico') {
         boxTitle = 'COMPROVAÇÃO DE QUALIFICAÇÃO / DOCUMENTO ACADÊMICO';
         themeColor = '#1e40af'; // Azul
+      } else if (isHandwrittenDoc) {
+        boxTitle = tipoDoc ? `${tipoDoc.toUpperCase()} (PREENCHIDO À MÃO)` : 'DOCUMENTO PREENCHIDO À MÃO / MANUSCRITO';
+        themeColor = '#d97706';
       } else {
         boxTitle = tipoDoc ? tipoDoc.toUpperCase() : 'FICHA DE DADOS DO DOCUMENTO';
         themeColor = '#475569';
@@ -9252,17 +9314,21 @@
         processedKeys.add('tipo_documento');
       }
 
+      if (isHandwrittenDoc) {
+        items.push({ label: 'Preenchimento', val: 'Manuscrito / Preenchido à Mão com Caneta', highlight: true });
+      }
+
       // Prioriza ler os inputs renderizados dinamicamente no formulário (reflete edições ativas)
       const dynamicInputs = document.querySelectorAll('[data-dynamic-key]');
       if (dynamicInputs && dynamicInputs.length > 0) {
         dynamicInputs.forEach(input => {
           const key = input.getAttribute('data-dynamic-key');
           const val = input.value.trim();
-          if (!val || processedKeys.has(key)) return;
+          if (!val || processedKeys.has(key) || key === 'manuscrito') return;
           processedKeys.add(key);
 
           const meta = getCanonicalFieldMeta(key);
-          const isHighlight = meta.type === 'currency' || key === 'beneficiario' || key === 'razao_social' || key === 'curso' || key === 'placa';
+          const isHighlight = meta.type === 'currency' || key === 'beneficiario' || key === 'razao_social' || key === 'curso' || key === 'placa' || key === 'emitente';
           const isMono = meta.type === 'mono' || key === 'cpf' || key === 'cnpj' || key === 'rg' || key.includes('id') || key.includes('codigo') || key.includes('autenticacao') || key.includes('chave');
 
           items.push({
@@ -9276,10 +9342,10 @@
         // Fallback: extrai diretamente do objeto doc caso o container DOM não esteja carregado
         const activeFields = extractActiveDocumentFields(doc);
         activeFields.forEach(f => {
-          if (processedKeys.has(f.key)) return;
+          if (processedKeys.has(f.key) || f.key === 'manuscrito') return;
           processedKeys.add(f.key);
 
-          const isHighlight = f.meta.type === 'currency' || f.key === 'beneficiario' || f.key === 'razao_social' || f.key === 'curso' || f.key === 'placa';
+          const isHighlight = f.meta.type === 'currency' || f.key === 'beneficiario' || f.key === 'razao_social' || f.key === 'curso' || f.key === 'placa' || f.key === 'emitente';
           const isMono = f.meta.type === 'mono' || f.key === 'cpf' || f.key === 'cnpj' || f.key === 'rg' || f.key.includes('id') || f.key.includes('codigo') || f.key.includes('autenticacao') || f.key.includes('chave');
 
           items.push({

@@ -2349,9 +2349,16 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "telefone": Telefone oficial informado no cadastro.
 - "email": Endereço eletrônico / e-mail informado na Receita.
 
+6. ESCRITA MANUAL / PREENCHIMENTO À MÃO (ATENÇÃO ESPECIAL):
+- "manuscrito": true ou false. Defina OBRIGATORIAMENTE como true se o documento contiver escrita cursiva, manual ou se for um formulário/recibo preenchido com caneta/lápis (ex: recibos manuais de papelaria preenchidos à mão, notas promissórias, declarações de próprio punho, fichas com preenchimento manual). Caso contrário, retorne false.
+- "emitente": Se for documento/recibo preenchido à mão, nome do emitente, pagador ou responsável que preencheu/assinou. Se não houver, retorne null.
+- "referente_a": Finalidade, histórico ou justificativa manuscrita da operação (ex: "Serviços prestados de reforma", "Aluguel referente ao mês de janeiro"). Se não houver, retorne null.
+- "conteudo_manuscrito": Transcrição fiel do conteúdo escrito à mão relevante (especialmente para declarações de próprio punho ou observações manuais). Se não houver, retorne null.
+
 REGRAS:
 1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
-2. Não invente nenhuma informação. Se não estiver visível na imagem, preencha o valor como null.
+2. ATENÇÃO A DOCUMENTOS PREENCHIDOS À MÃO: Leia atentamente caligrafia e números manuscritos com caneta, transcrevendo com máxima fidelidade valores, nomes, CPFs, datas e emitentes para os respectivos campos.
+3. Não invente nenhuma informação. Se não estiver visível na imagem, preencha o valor como null.
 """
 
 
@@ -2411,9 +2418,16 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "telefone": Telefone oficial informado no cadastro.
 - "email": Endereço eletrônico / e-mail informado na Receita.
 
+6. ESCRITA MANUAL / PREENCHIMENTO À MÃO:
+- "manuscrito": true ou false. Defina como true se o texto indicar documento escrito ou preenchido à mão (ex: recibos preenchidos com caneta, notas promissórias, declarações de próprio punho). Caso contrário, retorne false.
+- "emitente": Se for documento/recibo manual, nome do emitente ou pagador. Se não houver, retorne null.
+- "referente_a": Finalidade ou justificativa da operação manuscrita. Se não houver, retorne null.
+- "conteudo_manuscrito": Transcrição de trecho escrito à mão se identificado. Se não houver, retorne null.
+
 REGRAS:
 1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
-2. Não invente nenhuma informação. Se não estiver explícito no texto, preencha como null.
+2. ATENÇÃO A DOCUMENTOS PREENCHIDOS À MÃO: Se o texto contiver dados preenchidos manualmente com caneta, transcreva com fidelidade valores, nomes e datas.
+3. Não invente nenhuma informação. Se não estiver explícito no texto, preencha como null.
 """
 
 # Aliases para retrocompatibilidade
@@ -2441,6 +2455,20 @@ def should_trigger_hybrid_fallback(doc: Dict[str, Any], text_length: int = 0) ->
 
     dominio = str(doc.get("dominio") or "").strip().lower()
 
+    # 1. Detecção de documento manuscrito / preenchido à mão com leitura local incompleta
+    is_manuscrito = bool(
+        doc.get("manuscrito")
+        or any("manuscrito" in str(t).lower() or "mão" in str(t).lower() or "mao" in str(t).lower() for t in (doc.get("todos_tipos") or []))
+        or "manuscrito" in tipo.lower() or "manual" in tipo.lower()
+    )
+    if is_manuscrito:
+        tem_beneficiario = bool(str(doc.get("beneficiario") or "").strip())
+        tem_valor = bool(str(doc.get("valor_monetario") or "").strip())
+        tem_curso = bool(str(doc.get("curso") or "").strip())
+        tem_emitente = bool(str(doc.get("emitente") or "").strip())
+        if not tem_beneficiario and not tem_valor and not tem_curso and not tem_emitente:
+            return True, "manuscrito_incompleto (caligrafia requer visão multimodal em nuvem)"
+
     if dominio == "academico" or any(k in tipo.lower() for k in ["diploma", "certificado", "histórico", "historico", "declaração", "declaracao"]):
         tem_beneficiario = bool(str(doc.get("beneficiario") or "").strip())
         tem_curso = bool(str(doc.get("curso") or "").strip())
@@ -2456,8 +2484,11 @@ def should_trigger_hybrid_fallback(doc: Dict[str, Any], text_length: int = 0) ->
         if not tem_valor and not tem_beneficiario:
             return True, "dados_financeiros_essenciais_ausentes (sem valor nem beneficiário)"
 
-    if text_length > 0 and text_length < 100 and (not doc.get("beneficiario") or not doc.get("curso")):
-        return True, "camada_textual_insuficiente"
+    if text_length > 0 and text_length < 100:
+        if dominio == "academico" and (not doc.get("beneficiario") or not doc.get("curso")):
+            return True, "camada_textual_insuficiente"
+        elif not doc.get("beneficiario") and not doc.get("valor_monetario"):
+            return True, "camada_textual_insuficiente"
 
     return False, ""
 
@@ -2866,6 +2897,54 @@ def process_single_pdf(
         if pix_e2e_id: res_dict["pix_e2e_id"] = pix_e2e_id
         if pix_autenticacao: res_dict["pix_autenticacao"] = pix_autenticacao
 
+        # Detecção de escrita manual / preenchimento à mão (caneta/lápis)
+        is_manuscrito = bool(
+            extracted_data.get("manuscrito") is True
+            or str(extracted_data.get("manuscrito") or "").strip().lower() in ["true", "1", "sim", "yes"]
+            or any(k in tipo_lower for k in ["manuscrito", "preenchido a mão", "preenchido à mão", "proprio punho", "próprio punho", "recibo manual", "nota promissória manual", "declaracao de proprio punho", "declaração de próprio punho"])
+            or (has_text and any(k in text.lower() for k in ["preenchido a mão", "preenchido à mão", "de próprio punho", "de proprio punho"]))
+            or (tess_text and any(k in tess_text.lower() for k in ["preenchido a mão", "preenchido à mão", "de próprio punho", "de proprio punho"]))
+        )
+
+        if "dados_extras" not in res_dict or not isinstance(res_dict["dados_extras"], dict):
+            res_dict["dados_extras"] = {}
+
+        if is_manuscrito:
+            res_dict["manuscrito"] = True
+            res_dict["dados_extras"]["manuscrito"] = True
+
+        emitente_val = _clean_str(extracted_data.get("emitente"))
+        if emitente_val:
+            res_dict["emitente"] = emitente_val
+            res_dict["dados_extras"]["emitente"] = emitente_val
+
+        referente_val = _clean_str(extracted_data.get("referente_a"))
+        if referente_val:
+            res_dict["referente_a"] = referente_val
+            res_dict["dados_extras"]["referente_a"] = referente_val
+
+        conteudo_manuscrito_val = _clean_str(extracted_data.get("conteudo_manuscrito"))
+        if conteudo_manuscrito_val:
+            res_dict["conteudo_manuscrito"] = conteudo_manuscrito_val
+            res_dict["dados_extras"]["conteudo_manuscrito"] = conteudo_manuscrito_val
+
+        # Consolidação de quaisquer atributos adicionais da LLM em dados_extras
+        known_top_level = {
+            "dominio", "tipo_documento", "data", "beneficiario", "cpf", "rg", "cnpj",
+            "valor_monetario", "curso", "natureza_curso", "carga_horaria", "faculdade",
+            "pix_pagador_nome", "pix_pagador_cpf_cnpj", "pix_pagador_banco", "pix_recebedor_banco",
+            "pix_chave", "pix_e2e_id", "pix_autenticacao", "razao_social", "nome_fantasia",
+            "situacao_cadastral", "data_situacao", "data_abertura", "cnae_principal",
+            "natureza_juridica", "endereco_completo", "telefone", "email", "manuscrito",
+            "emitente", "referente_a", "conteudo_manuscrito", "dados_extras"
+        }
+        for k_dyn, v_dyn in extracted_data.items():
+            if k_dyn not in known_top_level and v_dyn is not None:
+                v_clean = _clean_str(v_dyn) if isinstance(v_dyn, str) else v_dyn
+                if v_clean not in [None, "", "null", "N/A", "none"]:
+                    res_dict["dados_extras"][k_dyn] = v_clean
+                    res_dict[k_dyn] = v_clean
+
         # ---------------------------------------------------------------------
         # CASO 2 (Somente PDF com texto digital): Se dados essenciais falharam,
         # faz tentativa de OCR local rápido (Tesseract) e/ou multimodal via LLM
@@ -2937,6 +3016,19 @@ def process_single_pdf(
                                 res_dict["faculdade"] = normalizar_instituicao(_clean_str(ocr_data.get("faculdade")))
                             if not res_dict["data"] and ocr_data.get("data"):
                                 res_dict["data"] = _clean_str(ocr_data.get("data"))
+                            if ocr_data.get("manuscrito"):
+                                res_dict["manuscrito"] = True
+                                if "dados_extras" in res_dict and isinstance(res_dict["dados_extras"], dict):
+                                    res_dict["dados_extras"]["manuscrito"] = True
+                            if not res_dict.get("emitente") and ocr_data.get("emitente"):
+                                res_dict["emitente"] = _clean_str(ocr_data.get("emitente"))
+                                res_dict["dados_extras"]["emitente"] = res_dict["emitente"]
+                            if not res_dict.get("referente_a") and ocr_data.get("referente_a"):
+                                res_dict["referente_a"] = _clean_str(ocr_data.get("referente_a"))
+                                res_dict["dados_extras"]["referente_a"] = res_dict["referente_a"]
+                            if not res_dict.get("conteudo_manuscrito") and ocr_data.get("conteudo_manuscrito"):
+                                res_dict["conteudo_manuscrito"] = _clean_str(ocr_data.get("conteudo_manuscrito"))
+                                res_dict["dados_extras"]["conteudo_manuscrito"] = res_dict["conteudo_manuscrito"]
                     except Exception:
                         pass
 
@@ -3008,6 +3100,12 @@ def process_single_pdf(
             res_dict["todos_dominios"] = [prim_dom] if prim_dom else []
             res_dict["dossie_paginas"] = [{"pagina": 1, "tipo": prim_tipo or "Documento", "dominio": prim_dom or "outros"}]
 
+        # Se for identificado como manuscrito ou preenchido à mão, adiciona a tag "Manuscrito"
+        if res_dict.get("manuscrito"):
+            tem_tag_man = any("manuscrito" in str(t).lower() or "mão" in str(t).lower() or "mao" in str(t).lower() for t in res_dict.get("todos_tipos", []))
+            if not tem_tag_man:
+                res_dict["todos_tipos"].append("Manuscrito")
+
         # Validação de sucesso adaptativa para múltiplos domínios
         campos_uteis = [
             res_dict.get("beneficiario"),
@@ -3019,7 +3117,10 @@ def process_single_pdf(
             res_dict.get("tipo_documento"),
             res_dict.get("valor_monetario"),
             res_dict.get("pix_pagador_nome"),
-            res_dict.get("pix_e2e_id")
+            res_dict.get("pix_e2e_id"),
+            res_dict.get("emitente"),
+            res_dict.get("referente_a"),
+            res_dict.get("conteudo_manuscrito")
         ]
         if any(campos_uteis):
             res_dict["status"] = "sucesso"
