@@ -4364,11 +4364,20 @@
         barEl.style.width = `${pct}%`;
         percentEl.innerText = `${pct}%`;
 
+        const isBulkHybrid = !!(document.getElementById('cfgHybridMode')?.checked ?? systemConfig?.visualizador?.hybrid ?? false);
+        const bulkHybridModel = (document.getElementById('cfgHybridCloudModel')?.value || systemConfig?.visualizador?.hybrid_cloud_model || 'gpt-4o-mini').trim();
+        const bulkHybridKey = (document.getElementById('cfgHybridOpenaiKey')?.value || document.getElementById('cfgOpenaiKey')?.value || '').trim();
+
         try {
           const res = await fetch('/api/processar-documento', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ md5: m })
+            body: JSON.stringify({
+              md5: m,
+              hybrid: isBulkHybrid,
+              hybrid_cloud_model: bulkHybridModel,
+              openai_key: bulkHybridKey || undefined
+            })
           });
           const data = await res.json();
           if (res.ok && data.status === 'sucesso' && data.documento) {
@@ -8705,15 +8714,21 @@
       showToast(`Executando leitura e classificação com OCR via ${provLabel} (${modelName})...`, 'info');
 
       try {
+        const isHybrid = !!(document.getElementById('cfgHybridMode')?.checked ?? systemConfig?.visualizador?.hybrid ?? systemConfig?.classificador?.hybrid ?? false);
+        const hybridCloudModel = (document.getElementById('cfgHybridCloudModel')?.value || systemConfig?.visualizador?.hybrid_cloud_model || 'gpt-4o-mini').trim();
+        const hybridKey = (document.getElementById('cfgHybridOpenaiKey')?.value || openaiKeyInput || '').trim();
+
         const payload = {
           md5: targetMd5,
           nome_arquivo: doc.nome_arquivo,
           provider: prov,
           model: modelName,
-          force_ocr: true
+          force_ocr: true,
+          hybrid: isHybrid,
+          hybrid_cloud_model: hybridCloudModel
         };
-        if (openaiKeyInput) {
-          payload.openai_key = openaiKeyInput;
+        if (openaiKeyInput || hybridKey) {
+          payload.openai_key = openaiKeyInput || hybridKey;
         }
         const customBaseUrl = (document.getElementById('cfgOpenaiBaseUrl')?.value || '').trim();
         if (customBaseUrl) {
