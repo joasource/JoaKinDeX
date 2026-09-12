@@ -1457,10 +1457,10 @@
             <span>Copiar Ficha (Visual Law)</span>
           </button>
 
-          <button type="button" id="btnProcessarDoc" onclick="triggerProcessarDocumento()" title="Classificar ou reclassificar dados deste documento com OCR multimodal via LLM ou API externa"
+          <button type="button" id="btnProcessarDoc" onclick="triggerProcessarDocumento()" title="Ler texto integral e classificar dados deste documento com OCR multimodal via LLM ou API externa"
                   class="py-1.5 px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0">
             <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
-            <span>Classificar com OCR</span>
+            <span>Ler e Classificar (OCR)</span>
           </button>
         </div>
 
@@ -7284,7 +7284,10 @@
       const fields = [];
       const seen = new Set();
       const de = (doc.dados_extras && typeof doc.dados_extras === 'object') ? doc.dados_extras : {};
-      const internalKeys = new Set(['dossie_paginas', 'todos_dominios', 'todos_tipos', 'data_criacao']);
+      const internalKeys = new Set([
+        'dossie_paginas', 'todos_dominios', 'todos_tipos', 'data_criacao',
+        'texto_transcrito', 'texto_ocr', 'texto_digital', 'transcricao_completa'
+      ]);
 
       const candidateEntries = [
         { key: 'valor_monetario', val: doc.valor_monetario },
@@ -8629,10 +8632,10 @@
         if (btn1) {
           btn1.className = "py-1.5 px-3 bg-cyan-600/15 hover:bg-cyan-600/25 text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0";
           if (isUnproc) {
-            btn1.title = `Classificar este documento pela primeira vez com OCR visual via OpenAI API (${modelName})`;
-            btn1.innerHTML = `<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Classificar com OCR (OpenAI)</span>`;
+            btn1.title = `Ler texto e classificar este documento pela primeira vez com OCR visual via OpenAI API (${modelName})`;
+            btn1.innerHTML = `<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Ler e Classificar (OpenAI)</span>`;
           } else {
-            btn1.title = `Re-executar leitura e classificação completa deste documento com OCR visual via OpenAI API (${modelName})`;
+            btn1.title = `Re-executar leitura de texto e classificação completa deste documento com OCR visual via OpenAI API (${modelName})`;
             btn1.innerHTML = `<i class="fa-solid fa-cloud text-cyan-400"></i> <span>Reclassificar com OCR (OpenAI)</span>`;
           }
         }
@@ -8640,8 +8643,8 @@
         if (btn2) {
           btn2.className = "px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm";
           if (isUnproc) {
-            btn2.title = `Classificar este documento pela primeira vez com OCR multimodal via Ollama Local (${modelName})`;
-            btn2.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Classificar (${shortModel})</span>`;
+            btn2.title = `Ler e classificar este documento pela primeira vez com OCR multimodal via Ollama Local (${modelName})`;
+            btn2.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Ler e Classificar (${shortModel})</span>`;
           } else {
             btn2.title = `Re-executar leitura e classificação completa deste documento com OCR multimodal via Ollama Local (${modelName})`;
             btn2.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Reclassificar (${shortModel})</span>`;
@@ -8650,10 +8653,10 @@
         if (btn1) {
           btn1.className = "py-1.5 px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0";
           if (isUnproc) {
-            btn1.title = `Classificar este documento pela primeira vez com OCR multimodal via Ollama Local (${modelName})`;
-            btn1.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Classificar com OCR</span>`;
+            btn1.title = `Ler texto e classificar este documento pela primeira vez com OCR multimodal via Ollama Local (${modelName})`;
+            btn1.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Ler e Classificar (OCR)</span>`;
           } else {
-            btn1.title = `Re-executar leitura e classificação completa deste documento com OCR multimodal via Ollama Local (${modelName})`;
+            btn1.title = `Re-executar leitura de texto e classificação completa deste documento com OCR multimodal via Ollama Local (${modelName})`;
             btn1.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span>Reclassificar com OCR</span>`;
           }
         }
@@ -8698,7 +8701,7 @@
 
       const spinColor = prov === 'openai' ? 'text-cyan-400' : 'text-purple-400';
       const provLabel = prov === 'openai' ? 'OpenAI API' : 'Ollama';
-      const actionVerb = isUnproc ? 'Classificando' : 'Reclassificando';
+      const actionVerb = isUnproc ? 'Lendo e Classificando' : 'Relendo e Classificando';
 
       if (btn1) {
         btn1.disabled = true;
@@ -8711,7 +8714,7 @@
         btn2.classList.add('opacity-75', 'cursor-not-allowed');
       }
 
-      showToast(`Executando leitura e classificação com OCR via ${provLabel} (${modelName})...`, 'info');
+      showToast(`Executando leitura integral e classificação com OCR via ${provLabel} (${modelName})...`, 'info');
 
       try {
         const isHybrid = !!(document.getElementById('cfgHybridMode')?.checked ?? systemConfig?.visualizador?.hybrid ?? systemConfig?.classificador?.hybrid ?? false);
@@ -8764,7 +8767,14 @@
         // Atualiza formulário e JSON viewer com os dados atualizados
         selectDocument(currentIndex, true);
         applyFilter(true);
-        showToast(resData.mensagem || `Documento classificado com sucesso via ${provLabel}!`, 'success');
+
+        // Invalida cache de texto do documento e recarrega a aba de OCR com a nova leitura integral
+        if (docTextCache[targetMd5]) {
+          delete docTextCache[targetMd5];
+        }
+        loadDocumentText(targetMd5, true);
+
+        showToast(resData.mensagem || `Documento lido e classificado com sucesso via ${provLabel}!`, 'success');
       } catch (err) {
         console.error(`Erro na classificação via ${provLabel}:`, err);
         showToast(`Erro ao classificar: ${err.message}`, 'error');
@@ -8971,6 +8981,10 @@
           currentDocRawText = data.texto;
           if (badgeEl) badgeEl.innerText = data.origem || 'extraído';
           renderDocText(currentDocRawText);
+        } else if (data.status === 'aviso' && data.texto) {
+          currentDocRawText = data.texto;
+          if (badgeEl) badgeEl.innerText = data.origem || 'sem texto digital';
+          renderDocText(currentDocRawText);
         } else {
           currentDocRawText = data.mensagem || 'Texto não disponível.';
           if (badgeEl) badgeEl.innerText = 'indisponível';
@@ -8991,6 +9005,27 @@
       if (!contentEl) return;
       if (!textToRender) {
         contentEl.innerHTML = '<span class="text-slate-500 italic">Nenhum texto extraído para este documento.</span>';
+        return;
+      }
+
+      if (textToRender.includes("sem camada de texto nativa detectada")) {
+        contentEl.innerHTML = `
+          <div class="p-6 text-center space-y-3 bg-slate-900/60 rounded-xl border border-slate-800 my-4 shadow-sm">
+            <div class="w-12 h-12 mx-auto rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-xl">
+              <i class="fa-solid fa-file-lines"></i>
+            </div>
+            <div class="text-xs font-semibold text-slate-200">Documento Digitalizado / Sem Camada de Texto Digital</div>
+            <div class="text-[11px] text-slate-400 max-w-md mx-auto leading-relaxed">
+              Este arquivo não possui texto digital embutido. Acione o botão <strong class="text-purple-300">"Ler e Classificar (OCR)"</strong> para executar a leitura visual integral e transcrição via IA.
+            </div>
+            <div class="pt-2">
+              <button type="button" onclick="triggerProcessarDocumento()" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition shadow-sm">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+                <span>Ler e Classificar com OCR Agora</span>
+              </button>
+            </div>
+          </div>
+        `;
         return;
       }
 

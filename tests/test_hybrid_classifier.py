@@ -208,3 +208,39 @@ def test_universal_text_prompt_has_handwriting_instructions():
     assert "referente_a" in prompt.lower()
 
 
+def test_universal_vision_prompt_has_ocr_transcription_instruction():
+    prompt = build_universal_vision_prompt()
+    assert "texto_transcrito" in prompt
+    assert "transcrição textual contínua e integral" in prompt.lower() or "ocr completo" in prompt.lower()
+
+
+def test_format_single_txt_zero_noise_and_appends_ocr():
+    from joakindex.cli import format_single_txt
+    item = {
+        "md5": "abc1234567890def",
+        "status": "sucesso",
+        "dominio": "academico",
+        "tipo_documento": "Certificado de Conclusão",
+        "beneficiario": "Carlos Drummond de Andrade",
+        "curso": "Letras",
+        "cpf": None,
+        "rg": "",
+        "cnpj": "Não informado",
+        "dados_extras": {
+            "texto_transcrito": "Certificamos que Carlos Drummond de Andrade concluiu o curso de Letras em 1950 com nota máxima."
+        }
+    }
+    txt = format_single_txt(item)
+    assert "Carlos Drummond de Andrade" in txt
+    assert "Letras" in txt
+    # Zero Noise: não deve imprimir campos vazios como "Não informado"
+    assert "CPF                     :" not in txt
+    assert "RG / Identidade         :" not in txt
+    assert "CNPJ                    :" not in txt
+    assert "Não informado" not in txt
+    # Transcrição OCR anexada
+    assert "TEXTO INTEGRAL / TRANSCRIÇÃO OCR" in txt
+    assert "Certificamos que Carlos Drummond" in txt
+
+
+

@@ -2355,6 +2355,9 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "referente_a": Finalidade, histórico ou justificativa manuscrita da operação (ex: "Serviços prestados de reforma", "Aluguel referente ao mês de janeiro"). Se não houver, retorne null.
 - "conteudo_manuscrito": Transcrição fiel do conteúdo escrito à mão relevante (especialmente para declarações de próprio punho ou observações manuais). Se não houver, retorne null.
 
+7. LEITURA E TRANSCRIÇÃO INTEGRAL (OCR COMPLETO):
+- "texto_transcrito": Transcrição textual contínua e integral de TODO o conteúdo legível no documento (OCR completo de todas as páginas/imagens, incluindo parágrafos digitados, cabeçalhos, carimbos, tabelas e escrita manual). Transcreva com máxima fidelidade. Se o documento for ilegível ou sem texto visível, retorne null.
+
 REGRAS:
 1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
 2. ATENÇÃO A DOCUMENTOS PREENCHIDOS À MÃO: Leia atentamente caligrafia e números manuscritos com caneta, transcrevendo com máxima fidelidade valores, nomes, CPFs, datas e emitentes para os respectivos campos.
@@ -2423,6 +2426,9 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "emitente": Se for documento/recibo manual, nome do emitente ou pagador. Se não houver, retorne null.
 - "referente_a": Finalidade ou justificativa da operação manuscrita. Se não houver, retorne null.
 - "conteudo_manuscrito": Transcrição de trecho escrito à mão se identificado. Se não houver, retorne null.
+
+7. LEITURA E TRANSCRIÇÃO INTEGRAL:
+- "texto_transcrito": Se o documento necessitar de transcrição ou consolidação textual completa, retorne-a na íntegra. Caso contrário, retorne null.
 
 REGRAS:
 1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
@@ -2928,6 +2934,18 @@ def process_single_pdf(
             res_dict["conteudo_manuscrito"] = conteudo_manuscrito_val
             res_dict["dados_extras"]["conteudo_manuscrito"] = conteudo_manuscrito_val
 
+        # Captura da transcrição textual integral (OCR / Leitura Completa)
+        texto_transcrito_val = _clean_str(
+            extracted_data.get("texto_transcrito")
+            or extracted_data.get("texto_ocr")
+            or extracted_data.get("transcricao_completa")
+        )
+        if texto_transcrito_val:
+            res_dict["texto_transcrito"] = texto_transcrito_val
+            res_dict["dados_extras"]["texto_transcrito"] = texto_transcrito_val
+        elif text and text.strip():
+            res_dict["dados_extras"]["texto_digital"] = text.strip()
+
         # Consolidação de quaisquer atributos adicionais da LLM em dados_extras
         known_top_level = {
             "dominio", "tipo_documento", "data", "beneficiario", "cpf", "rg", "cnpj",
@@ -2936,7 +2954,8 @@ def process_single_pdf(
             "pix_chave", "pix_e2e_id", "pix_autenticacao", "razao_social", "nome_fantasia",
             "situacao_cadastral", "data_situacao", "data_abertura", "cnae_principal",
             "natureza_juridica", "endereco_completo", "telefone", "email", "manuscrito",
-            "emitente", "referente_a", "conteudo_manuscrito", "dados_extras"
+            "emitente", "referente_a", "conteudo_manuscrito", "texto_transcrito", "texto_ocr",
+            "transcricao_completa", "dados_extras"
         }
         for k_dyn, v_dyn in extracted_data.items():
             if k_dyn not in known_top_level and v_dyn is not None:
@@ -3182,66 +3201,107 @@ def format_single_txt(item: Dict[str, Any]) -> str:
     todos_tipos = item.get("todos_tipos") or []
     dossie_line = f"\nDocumentos no Arquivo  : {', '.join(str(t) for t in todos_tipos)}" if (isinstance(todos_tipos, list) and len(todos_tipos) > 1) else ""
     de = item.get("dados_extras") if isinstance(item.get("dados_extras"), dict) else {}
+    if isinstance(de, str):
+        try:
+            de = json.loads(de)
+        except Exception:
+            de = {}
 
-    dc_extra = ""
-    if item.get('dc_title'):
-        dc_extra += f"dc:title                : {item.get('dc_title')}\n"
-    if item.get('dc_creator_tool'):
-        dc_extra += f"dc:tool                 : {item.get('dc_creator_tool')}\n"
+    lines = [
+        "-" * 80,
+        f"MD5                     : {item.get('md5')}",
+        f"Status                  : {str(item.get('status', '')).upper()}",
+        f"Domínio                 : {dom.upper()}",
+        f"Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}{dossie_line}",
+        f"Extensão                : {ext.upper() if ext else 'N/A'}",
+        f"Método de Leitura       : {metodo}",
+        f"Data da Última Alteração: {item.get('data_modificacao') or 'N/A'}",
+    ]
 
-    txt = f"""--------------------------------------------------------------------------------
-MD5                     : {item.get('md5')}
-Status                  : {item.get('status', '').upper()}
-Domínio                 : {dom.upper()}
-Tipo Documento          : {item.get('tipo_documento') or 'Não identificado'}{dossie_line}
-Extensão                : {ext.upper() if ext else 'N/A'}
-Método de Leitura       : {metodo}
-Data da Última Alteração: {item.get('data_modificacao')}
-dc:creator              : {item.get('autor') or 'Não informado'}
-{dc_extra}Beneficiário / Titular  : {item.get('beneficiario') or 'Não informado'}
-CPF                     : {item.get('cpf') or 'Não informado'}
-RG / Identidade         : {item.get('rg') or 'Não informado'}
-CNPJ                    : {item.get('cnpj') or 'Não informado'}
-"""
-    if dom == "financeiro" or item.get("valor_monetario") or item.get("pix_pagador_nome"):
-        txt += f"""Valor Monetário         : {item.get('valor_monetario') or 'Não informado'}
-Data da Transação       : {item.get('data') or 'Não informada'}
-Instituição / Banco     : {item.get('faculdade') or 'Não informada'}
-Pagador                 : {item.get('pix_pagador_nome') or 'Não informado'}
-CPF/CNPJ do Pagador     : {item.get('pix_pagador_cpf_cnpj') or 'Não informado'}
-Banco Origem (Pagador)  : {item.get('pix_pagador_banco') or 'Não informado'}
-Banco Destino (Receb.)  : {item.get('pix_recebedor_banco') or 'Não informado'}
-Chave PIX               : {item.get('pix_chave') or 'Não informada'}
-ID Fim-a-Fim (E2E)      : {item.get('pix_e2e_id') or 'Não informado'}
-Autenticação Bancária   : {item.get('pix_autenticacao') or 'Não informada'}
-"""
-    elif dom == "profissional" or item.get("cnpj") or de.get("situacao_cadastral"):
-        txt += f"""Razão Social            : {item.get('beneficiario') or de.get('razao_social') or 'Não informada'}
-Nome Fantasia           : {de.get('nome_fantasia') or 'Não informado'}
-CNPJ                    : {item.get('cnpj') or 'Não informado'}
-Situação Cadastral      : {de.get('situacao_cadastral') or 'Não informada'}
-Data da Situação        : {de.get('data_situacao') or 'Não informada'}
-Data de Abertura        : {de.get('data_abertura') or 'Não informada'}
-CNAE Principal          : {de.get('cnae_principal') or 'Não informado'}
-Natureza Jurídica       : {de.get('natureza_juridica') or 'Não informada'}
-Endereço Completo       : {de.get('endereco_completo') or 'Não informado'}
-Telefone                : {de.get('telefone') or 'Não informado'}
-E-mail                  : {de.get('email') or 'Não informado'}
-Instituição Emissora    : {item.get('faculdade') or 'Receita Federal do Brasil (RFB)'}
-Data do Documento       : {item.get('data') or 'Não informada'}
-"""
-    else:
-        txt += f"""Curso                   : {item.get('curso') or 'Não informado'}
-Natureza do Curso       : {item.get('natureza_curso') or 'Não identificada'}
-Carga Horária           : {item.get('carga_horaria') or 'Não informada'}
-Faculdade / Instituição : {item.get('faculdade') or 'Não informada'}
-Data do Documento       : {item.get('data') or 'Não informada'}
-"""
+    # REGRA ZERO NOISE: Somente inclui campos que realmente possuem valor substantivo
+    def _add_if_val(label: str, val: Any):
+        if val is None:
+            return
+        s_val = str(val).strip()
+        if not s_val or s_val.lower() in [
+            "não informado", "não identificada", "não identificado",
+            "nao informado", "nao identificada", "nao identificado",
+            "none", "null", "n/a", "-", "--"
+        ]:
+            return
+        lines.append(f"{label:<24}: {s_val}")
 
-    txt += f"""Processado em           : {item.get('processado_em')}
-{f"Erro                    : {item.get('erro')}" if item.get('erro') else ""}--------------------------------------------------------------------------------
-"""
-    return txt
+    _add_if_val("dc:creator", item.get("autor"))
+    _add_if_val("dc:title", item.get("dc_title"))
+    _add_if_val("dc:tool", item.get("dc_creator_tool"))
+    _add_if_val("Beneficiário / Titular", item.get("beneficiario"))
+    _add_if_val("CPF", item.get("cpf"))
+    _add_if_val("RG / Identidade", item.get("rg"))
+    _add_if_val("CNPJ", item.get("cnpj") or de.get("cnpj"))
+    _add_if_val("Valor Monetário", item.get("valor_monetario"))
+    _add_if_val("Data do Documento", item.get("data"))
+    _add_if_val("Instituição / Faculdade", item.get("faculdade"))
+
+    if dom == "academico":
+        _add_if_val("Curso", item.get("curso"))
+        _add_if_val("Natureza do Curso", item.get("natureza_curso"))
+        _add_if_val("Carga Horária", item.get("carga_horaria"))
+    elif dom == "financeiro":
+        _add_if_val("Pagador", item.get("pix_pagador_nome"))
+        _add_if_val("CPF/CNPJ do Pagador", item.get("pix_pagador_cpf_cnpj"))
+        _add_if_val("Banco Origem (Pagador)", item.get("pix_pagador_banco"))
+        _add_if_val("Banco Destino (Receb.)", item.get("pix_recebedor_banco"))
+        _add_if_val("Chave PIX", item.get("pix_chave"))
+        _add_if_val("ID Fim-a-Fim (E2E)", item.get("pix_e2e_id"))
+        _add_if_val("Autenticação Bancária", item.get("pix_autenticacao"))
+    elif dom == "profissional":
+        _add_if_val("Razão Social", de.get("razao_social") or item.get("beneficiario"))
+        _add_if_val("Nome Fantasia", de.get("nome_fantasia"))
+        _add_if_val("Situação Cadastral", de.get("situacao_cadastral"))
+        _add_if_val("Data da Situação", de.get("data_situacao"))
+        _add_if_val("Data de Abertura", de.get("data_abertura"))
+        _add_if_val("CNAE Principal", de.get("cnae_principal"))
+        _add_if_val("Natureza Jurídica", de.get("natureza_juridica"))
+        _add_if_val("Endereço Completo", de.get("endereco_completo"))
+        _add_if_val("Telefone", de.get("telefone"))
+        _add_if_val("E-mail", de.get("email"))
+
+    # Dados de manuscrito
+    if de.get("manuscrito") or item.get("manuscrito"):
+        _add_if_val("Preenchimento Manual", "Sim (Documento manuscrito)")
+        _add_if_val("Emitente / Assinante", de.get("emitente") or item.get("emitente"))
+        _add_if_val("Referente a", de.get("referente_a") or item.get("referente_a"))
+        _add_if_val("Conteúdo Manuscrito", de.get("conteudo_manuscrito") or item.get("conteudo_manuscrito"))
+
+    # Outros campos dinâmicos em dados_extras
+    ignore_keys = {
+        "razao_social", "nome_fantasia", "situacao_cadastral", "data_situacao",
+        "data_abertura", "cnae_principal", "natureza_juridica", "endereco_completo",
+        "telefone", "email", "manuscrito", "emitente", "referente_a", "conteudo_manuscrito",
+        "texto_transcrito", "texto_ocr", "texto_digital", "transcricao_completa",
+        "dossie_paginas", "todos_dominios", "todos_tipos", "data_criacao"
+    }
+    for k, v in de.items():
+        if k not in ignore_keys:
+            label = k.replace("_", " ").title()
+            _add_if_val(label, v)
+
+    _add_if_val("Processado em", item.get("processado_em"))
+    if item.get("erro"):
+        lines.append(f"Erro                    : {item.get('erro')}")
+
+    lines.append("-" * 80)
+
+    # Se houver texto integral transcrito ou texto digital, inclui na íntegra
+    texto_puro = de.get("texto_transcrito") or de.get("texto_ocr") or item.get("texto_transcrito") or de.get("texto_digital")
+    if texto_puro and str(texto_puro).strip():
+        lines.append("\n" + "=" * 80)
+        lines.append("TEXTO INTEGRAL / TRANSCRIÇÃO OCR")
+        lines.append("=" * 80)
+        lines.append(str(texto_puro).strip())
+        lines.append("\n" + "-" * 80)
+
+    return "\n".join(lines) + "\n"
 
 
 def generate_consolidated_txt(

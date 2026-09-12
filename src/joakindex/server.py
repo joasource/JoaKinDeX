@@ -49,6 +49,7 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
 try:
     from joakindex.cli import (
         process_single_pdf,
+        format_single_txt,
         extract_file_author,
         extract_file_dublin_core,
         OllamaClient,
@@ -66,6 +67,7 @@ except Exception:
     try:
         from .cli import (
             process_single_pdf,
+            format_single_txt,
             extract_file_author,
             extract_file_dublin_core,
             OllamaClient,
@@ -1197,14 +1199,52 @@ def start_background_thumbnail_generator(server_ctx: "ConferenciaServer", target
 
 
 def extract_document_text_content(server_ctx: "ConferenciaServer", md5_str: str) -> Dict[str, Any]:
-    """Retorna o texto bruto integral do documento para a aba de OCR/Texto."""
+    """Retorna o texto bruto integral do documento para a aba de OCR/Texto (Zero Noise)."""
+    # 1. Prioridade Máxima: Transcrição textual completa obtida via IA (OCR Multimodal / Leitura LLM)
+    doc = get_document_by_md5(server_ctx.db_path, md5_str)
+    if doc:
+        de = doc.get("dados_extras") if isinstance(doc.get("dados_extras"), dict) else {}
+        if isinstance(de, str):
+            try:
+                de = json.loads(de)
+            except Exception:
+                de = {}
+
+        # Transcrição completa gerada por LLM / OCR
+        texto_llm = de.get("texto_transcrito") or de.get("texto_ocr") or doc.get("texto_transcrito")
+        if texto_llm and str(texto_llm).strip():
+            return {"status": "sucesso", "texto": str(texto_llm).strip(), "origem": "ocr_llm"}
+
+        # Se for manuscrito e tiver conteúdo manuscrito relevante transcrito
+        manuscrito_txt = de.get("conteudo_manuscrito") or doc.get("conteudo_manuscrito")
+        if manuscrito_txt and str(manuscrito_txt).strip():
+            partes = ["[TRANSCRIÇÃO DE ESCRITA MANUAL / PREENCHIMENTO À MÃO]", "-" * 60]
+            if de.get("emitente") or doc.get("emitente"):
+                partes.append(f"Emitente / Assinante: {de.get('emitente') or doc.get('emitente')}")
+            if de.get("referente_a") or doc.get("referente_a"):
+                partes.append(f"Referente a         : {de.get('referente_a') or doc.get('referente_a')}")
+            partes.append("-" * 60)
+            partes.append(str(manuscrito_txt).strip())
+            return {"status": "sucesso", "texto": "\n".join(partes), "origem": "manuscrito_ocr"}
+
+    # 2. Se o arquivo individual .txt contiver a seção 'TEXTO INTEGRAL / TRANSCRIÇÃO OCR', utiliza
     indiv_txt = server_ctx.json_path.parent / "individuais" / f"{md5_str}.txt"
     if indiv_txt.exists():
         try:
-            return {"status": "sucesso", "texto": indiv_txt.read_text(encoding="utf-8", errors="replace"), "origem": "ficha_individual"}
+            raw_file_text = indiv_txt.read_text(encoding="utf-8", errors="replace")
+            marker = "TEXTO INTEGRAL / TRANSCRIÇÃO OCR"
+            if marker in raw_file_text:
+                parts = raw_file_text.split(marker, 1)
+                if len(parts) > 1:
+                    clean_extracted = parts[1].strip()
+                    # Remove separadores '====' ou '----' iniciais se houver
+                    clean_extracted = clean_extracted.lstrip("=").lstrip("-").strip()
+                    if clean_extracted:
+                        return {"status": "sucesso", "texto": clean_extracted, "origem": "arquivo_ocr"}
         except Exception:
             pass
 
+    # 3. Prioridade Nativa: Extração direta da camada digital do arquivo PDF (via pdfium)
     pdf_file = server_ctx.md5_to_file.get(md5_str)
     if not pdf_file or not pdf_file.exists():
         server_ctx.build_pdf_index()
@@ -1239,15 +1279,19 @@ def extract_document_text_content(server_ctx: "ConferenciaServer", md5_str: str)
         except Exception:
             pass
 
-    doc = get_document_by_md5(server_ctx.db_path, md5_str)
-    if doc:
-        linhas = [f"Metadados Indexados no Acervo (MD5: {md5_str}):\n" + "-" * 50]
-        for k, v in doc.items():
-            if v and k not in ["dados_extras", "dossie_paginas"]:
-                linhas.append(f"{k.replace('_', ' ').title():<25}: {v}")
-        return {"status": "sucesso", "texto": "\n".join(linhas), "origem": "metadados_banco"}
+    # 4. Se for arquivo de texto (.txt) nativo
+    if pdf_file.suffix.lower() == ".txt":
+        try:
+            return {"status": "sucesso", "texto": pdf_file.read_text(encoding="utf-8", errors="replace"), "origem": "arquivo_txt"}
+        except Exception:
+            pass
 
-    return {"status": "erro", "mensagem": "Texto não disponível para este documento."}
+    # 5. Se não há camada digital legível nem transcrição OCR realizada ainda
+    return {
+        "status": "aviso",
+        "texto": "Documento digitalizado ou imagem sem camada de texto nativa detectada.\n\nUtilize o botão 'Ler e Classificar (OCR)' no rodapé ou no topo do Inspetor para realizar a leitura visual integral e transcrição via IA.",
+        "origem": "pendente_ocr"
+    }
 
 
 def create_documents_zip(server_ctx: "ConferenciaServer", md5_list: List[str]) -> io.BytesIO:
@@ -2117,6 +2161,12 @@ def create_handler(server_ctx: ConferenciaServer):
                         try:
                             with open(indiv_file, "w", encoding="utf-8") as fi:
                                 json.dump(novo_doc, fi, ensure_ascii=False, indent=2)
+                        except Exception:
+                            pass
+                        indiv_txt_file = indiv_dir / f"{target_md5}.txt"
+                        try:
+                            with open(indiv_txt_file, "w", encoding="utf-8") as ft:
+                                ft.write(format_single_txt(novo_doc))
                         except Exception:
                             pass
 
