@@ -855,6 +855,126 @@ def extract_pix_authentication(text: str) -> Optional[str]:
     return None
 
 
+def sanitize_llm_transcription(text: Optional[str]) -> Optional[str]:
+    """
+    Higieniza a transcrição textual retornada pelo LLM.
+    Se o LLM tiver entrado em loop de alucinação (repetição infinita da mesma linha
+    ou termos repetidos dezenas de vezes), descarta o texto defeituoso e retorna None,
+    permitindo que a camada nativa digital ou Tesseract OCR prevaleça como Ground Truth.
+    """
+    if not text or not isinstance(text, str):
+        return None
+    cleaned = text.strip()
+    if len(cleaned) < 20:
+        return None
+
+    lines = [ln.strip() for ln in cleaned.splitlines() if ln.strip()]
+    if not lines:
+        return None
+
+    # 1. Verifica repetição consecutiva da mesma linha (loop clássico de VLM)
+    max_consecutive = 1
+    current_consecutive = 1
+    for i in range(1, len(lines)):
+        if lines[i].lower() == lines[i - 1].lower() and len(lines[i]) > 3:
+            current_consecutive += 1
+            if current_consecutive > max_consecutive:
+                max_consecutive = current_consecutive
+        else:
+            current_consecutive = 1
+
+    if max_consecutive >= 4:
+        return None  # Descarta repetição em loop
+
+    # 2. Verifica dominância excessiva de uma única linha repetida
+    from collections import Counter
+    counts = Counter(ln.lower() for ln in lines if len(ln) > 4)
+    if counts:
+        _, freq = counts.most_common(1)[0]
+        if freq >= 5 and (freq / len(lines)) > 0.35:
+            return None  # Mais de 35% do documento é a mesma linha repetida
+
+    return cleaned
+
+
+def extract_names_from_document_text(text: str) -> List[str]:
+    """
+    Extrai múltiplos nomes de pessoas físicas ou jurídicas de tabelas, listagens
+    de depósitos, borderôs bancários, relações de pagamentos ou campos explícitos.
+    """
+    if not text or not isinstance(text, str) or len(text.strip()) < 10:
+        return []
+
+    STOPWORDS = {
+        'FRACAROLI', 'VALOR', 'TITULAR', 'BANCO', 'AGENCIA', 'CONTA', 'CPF', 'CNPJ',
+        'TOTAL', 'LISTAGEM', 'RECEITA', 'MINISTERIO', 'LOTE', 'CORRENTE', 'POUPANCA',
+        'AUTENTICACAO', 'MECANICA', 'HISTORICO', 'FAVORECIDO', 'BENEFICIARIO',
+        'DESCRICAO', 'DOCUMENTO', 'OPERACAO', 'SALDO', 'EXTRATO', 'DEPOSITO', 'PAGAMENTO'
+    }
+
+    def clean_cand_name(n: str) -> str:
+        n = re.sub(r'[\~\|\_\\\/\"\'\`\§\*\!\?]', '', n)
+        n = re.sub(r'\s+(?:oo|ra|va|A|da|de|do)\s*$', '', n, flags=re.IGNORECASE)
+        n = re.sub(r'^\s*(?:oo|ra|va|A)\s+', '', n, flags=re.IGNORECASE)
+        n = re.sub(r'[\s\d\W]+$', '', n)
+        n = re.sub(r'\s+', ' ', n).strip()
+        return n
+
+    detected_names: List[str] = []
+
+    for line in text.splitlines():
+        line_str = line.strip()
+        if not line_str or len(line_str) < 5:
+            continue
+
+        # 1. Linha de tabela com valor monetário inicial (ex: "1150000,00 JOSE MAGNO BUFON 1 5610 ...")
+        m_val = re.match(r'^[\*\_\s]?\d+[\.,]\d{2}\s+(.+)$', line_str)
+        if m_val:
+            rest = m_val.group(1).strip()
+            # Procura separador onde começam dados bancários, lotes ou sequências de dígitos
+            m_split = re.search(r'[\s~_|\.\'\"\`\-\,\/\§\!\*]+(?:(?:oo|ra|va|A)\s+)?(?:\d{1,4}\s+[\=\.\s]*\d{3,5}|\bAg|\bC\.?Corren|\bTED|\bDEP|\bTES|\bPoup)', rest)
+            if m_split:
+                name_part = rest[:m_split.start()]
+            else:
+                m_cpf = re.search(r'\b\d{11}\b|\b\d{14}\b', rest)
+                if m_cpf:
+                    name_part = rest[:m_cpf.start()].strip()
+                    name_part = re.sub(r'[\s\d\=\-\.\,\§\~]+$', '', name_part)
+                else:
+                    name_part = ""
+
+            cand = clean_cand_name(name_part)
+            words = [w for w in cand.split() if len(w) > 1]
+            if len(cand) >= 4 and len(words) >= 2:
+                if not any(sw in cand.upper() for sw in STOPWORDS):
+                    if cand not in detected_names:
+                        detected_names.append(cand)
+            continue
+
+        # 2. Rótulos explícitos (ex: "Titular: FULANO DE TAL", "Favorecido: BELTRANO")
+        m_pref = re.search(r'(?:Titular|Favorecido|Nome|Aluno|Benefici[aá]rio)[\s\:\-]+([A-ZÀ-Úa-zà-ú\s]{4,50})', line_str, re.IGNORECASE)
+        if m_pref:
+            cand = clean_cand_name(m_pref.group(1))
+            words = [w for w in cand.split() if len(w) > 1]
+            if len(cand) >= 4 and len(words) >= 2:
+                if not any(sw in cand.upper() for sw in STOPWORDS):
+                    if cand not in detected_names:
+                        detected_names.append(cand)
+            continue
+
+        # 3. Nome completo em caixa alta seguido diretamente de CPF ou CNPJ formatado ou puro
+        m_cpf_line = re.search(r'([A-ZÀ-Ú]{3,}(?:\s+[A-ZÀ-Ú]{2,}){1,5})\s+(?:\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11}|\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', line_str)
+        if m_cpf_line:
+            cand = clean_cand_name(m_cpf_line.group(1))
+            words = [w for w in cand.split() if len(w) > 1]
+            if len(cand) >= 4 and len(words) >= 2:
+                if not any(sw in cand.upper() for sw in STOPWORDS):
+                    if cand not in detected_names:
+                        detected_names.append(cand)
+
+    return detected_names
+
+
 def load_image_to_base64(
     image_path: Union[str, Path],
     max_dimension: int = 2048,
@@ -2331,11 +2451,17 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
     * "profissional" (para Cartão CNPJ, Comprovante de Inscrição e Situação Cadastral, currículos, carteira de trabalho, atestados de capacidade)
     * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
     * "outro" (para quaisquer outros documentos não contemplados acima)
-- "tipo_documento": Nome específico do documento (ex: "Cartão CNPJ / Situação Cadastral", "Comprovante PIX", "Recibo de Pagamento", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro"). Se não puder identificar, retorne "Não identificado".
+- "tipo_documento": Nome específico do documento. Exemplos com critérios estritos:
+    * "Listagem de Pagamentos / Depósitos" (para borderôs, listagens de depósitos bancários, relações de pagamentos com tabelas ou múltiplos favorecidos)
+    * "Comprovante PIX" (ATENÇÃO: classifique como PIX ESTRITAMENTE se o documento contiver expressamente o termo "PIX" ou identificador E2E padrão BACEN iniciado por 'E')
+    * "Comprovante de Transferência Bancária (TED/DOC)" (para transferências bancárias entre contas sem indicação de PIX)
+    * "DARF / Guia de Arrecadação Federal" (para guias de receitas federais / tributos)
+    * "Comprovante de Pagamento Bancário" (para pagamentos bancários sem menção a PIX)
+    * "Boleto Bancário", "Extrato Bancário", "Recibo de Pagamento", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
 
 2. CAMPOS UNIVERSAIS:
 - "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
-- "beneficiario": Nome do titular, aluno, favorecido do pagamento ou Razão Social da empresa. Se não encontrar, retorne null.
+- "beneficiario": Nome do titular principal, favorecido, empresa ou emitente. Se não encontrar, retorne null.
 - "cpf": CPF do titular ou recebedor identificado (ex: "000.000.000-00" ou apenas números). Se não houver menção, retorne null.
 - "rg": Número da Cédula de Identidade / RG do titular incluindo órgão emissor/UF (ex: "12.345.678-9 SSP/SP"). Se não houver, retorne null.
 - "cnpj": CNPJ da empresa, órgão ou pagador/recebedor formatado (ex: "00.000.000/0000-00") ou apenas números. Se não houver, retorne null.
@@ -2347,13 +2473,13 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "carga_horaria": Carga horária total (ex: "750 h/aulas", "360 horas", "750h"). Se não houver, retorne null.
 - "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se for Cartão CNPJ, informe "Receita Federal do Brasil (RFB)". Se não houver, retorne null.
 
-4. CAMPOS ESPECÍFICOS DE PIX / FINANCEIRO (preencha se for documento financeiro/PIX, senão retorne null):
+4. CAMPOS ESPECÍFICOS DE PIX / FINANCEIRO (preencha se for comprovante financeiro, senão retorne null):
 - "pix_pagador_nome": Nome completo do pagador da transferência.
 - "pix_pagador_cpf_cnpj": CPF ou CNPJ mascarado ou completo do pagador (ex: "***.123.456-**").
 - "pix_pagador_banco": Banco / PSP de origem do pagador.
 - "pix_recebedor_banco": Banco / PSP de destino do recebedor.
-- "pix_chave": Chave PIX utilizada (e-mail, CPF/CNPJ, telefone ou chave EVP aleatória).
-- "pix_e2e_id": Identificador fim-a-fim da transação (ID E2E com 32 a 40 caracteres iniciado por 'E', ex: "E00416968202609081430s0123456789").
+- "pix_chave": Chave PIX utilizada (e-mail, CPF/CNPJ, telefone ou chave EVP aleatória). Não confunda com número de conta ou agência!
+- "pix_e2e_id": Identificador fim-a-fim da transação (ID E2E com 32 a 40 caracteres iniciado por 'E', ex: "E00416968202609081430s0123456789"). Não confunda com CPF ou conta!
 - "pix_autenticacao": Código de autenticação bancária ou hash de controle de segurança.
 
 5. CAMPOS CADASTRAIS / PESSOA JURÍDICA (preencha se for Cartão CNPJ / Comprovante de Situação Cadastral ou documento de empresa, senão retorne null):
@@ -2377,10 +2503,15 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 7. LEITURA E TRANSCRIÇÃO INTEGRAL (OCR COMPLETO):
 - "texto_transcrito": Transcrição textual contínua e integral de TODO o conteúdo legível no documento (OCR completo de todas as páginas/imagens, incluindo parágrafos digitados, cabeçalhos, carimbos, tabelas e escrita manual). Transcreva com máxima fidelidade. Se o documento for ilegível ou sem texto visível, retorne null.
 
+8. MÚLTIPLOS NOMES / TITULARES (LISTAGENS E RELAÇÕES):
+- "nomes_detectados": Se o documento contiver uma relação, listagem, tabela de depósitos/pagamentos ou múltiplos titulares, favorecidos, alunos, clientes ou signatários, retorne um array de strings contendo TODOS os nomes completos identificados (ex: ["NOME 1", "NOME 2", ...]). Se houver apenas uma pessoa no documento, retorne [nome]. Se não houver nomes, retorne [].
+
 REGRAS:
 1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
 2. ATENÇÃO A DOCUMENTOS PREENCHIDOS À MÃO: Leia atentamente caligrafia e números manuscritos com caneta, transcrevendo com máxima fidelidade valores, nomes, CPFs, datas e emitentes para os respectivos campos.
-3. Não invente nenhuma informação. Se não estiver visível na imagem, preencha o valor como null.
+3. ATENÇÃO A LISTAGENS: Se for listagem ou tabela com vários nomes, extraia a lista completa em "nomes_detectados".
+4. REGRA DO PIX: Não classifique como Comprovante PIX a menos que a palavra "PIX" esteja claramente presente.
+5. Não invente nenhuma informação. Se não estiver visível na imagem, preencha o valor como null.
 """
 
 
@@ -2398,12 +2529,18 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 1. DOMÍNIO E CLASSIFICAÇÃO:
 - "dominio": Classifique em uma das seguintes opções estritas:
     * "academico" (para diplomas, certificados de cursos, históricos escolares, declarações de matrícula/conclusão, carteiras de estudante)
-    * "financeiro" (para comprovantes PIX, recibos de pagamento, transferências bancárias, boletos, extratos, notas fiscais)
+    * "financeiro" (para comprovantes PIX, recibos de pagamento, transferências bancárias, boletos, extratos, notas fiscais, listagens de depósito)
     * "identificacao" (para RG, CNH, CPF, Título de Eleitor, Certidão de Nascimento/Casamento, Passaporte, Registro Profissional)
     * "profissional" (para Cartão CNPJ, Comprovante de Inscrição e Situação Cadastral, currículos, carteira de trabalho, atestados de capacidade)
     * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
     * "outro" (para quaisquer outros documentos não contemplados acima)
-- "tipo_documento": Nome específico do documento (ex: "Cartão CNPJ / Situação Cadastral", "Comprovante PIX", "Recibo de Pagamento", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro"). Se não puder identificar, retorne "Não identificado".
+- "tipo_documento": Nome específico do documento. Exemplos com critérios estritos:
+    * "Listagem de Pagamentos / Depósitos" (para borderôs, listagens de depósitos bancários, relações de pagamentos com tabelas ou múltiplos favorecidos)
+    * "Comprovante PIX" (ATENÇÃO: classifique como PIX ESTRITAMENTE se o documento contiver expressamente o termo "PIX" ou identificador E2E padrão BACEN iniciado por 'E')
+    * "Comprovante de Transferência Bancária (TED/DOC)" (para transferências bancárias entre contas sem indicação de PIX)
+    * "DARF / Guia de Arrecadação Federal" (para guias de receitas federais / tributos)
+    * "Comprovante de Pagamento Bancário" (para pagamentos bancários sem menção a PIX)
+    * "Boleto Bancário", "Extrato Bancário", "Recibo de Pagamento", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
 
 2. CAMPOS UNIVERSAIS:
 - "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
@@ -2424,8 +2561,8 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "pix_pagador_cpf_cnpj": CPF ou CNPJ mascarado ou completo do pagador (ex: "***.123.456-**").
 - "pix_pagador_banco": Banco / PSP de origem do pagador.
 - "pix_recebedor_banco": Banco / PSP de destino do recebedor.
-- "pix_chave": Chave PIX utilizada (e-mail, CPF/CNPJ, telefone ou chave EVP aleatória).
-- "pix_e2e_id": Identificador fim-a-fim da transação (ID E2E com 32 a 40 caracteres iniciado por 'E', ex: "E00416968202609081430s0123456789").
+- "pix_chave": Chave PIX utilizada (e-mail, CPF/CNPJ, telefone ou chave EVP aleatória). Não confunda com conta bancária!
+- "pix_e2e_id": Identificador fim-a-fim da transação (ID E2E com 32 a 40 caracteres iniciado por 'E', ex: "E00416968202609081430s0123456789"). Não confunda com CPF ou conta!
 - "pix_autenticacao": Código de autenticação bancária ou hash de controle de segurança.
 
 5. CAMPOS CADASTRAIS / PESSOA JURÍDICA (preencha se for Cartão CNPJ / Comprovante de Situação Cadastral ou documento de empresa, senão retorne null):
@@ -2449,10 +2586,15 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 7. LEITURA E TRANSCRIÇÃO INTEGRAL:
 - "texto_transcrito": Se o documento necessitar de transcrição ou consolidação textual completa, retorne-a na íntegra. Caso contrário, retorne null.
 
+8. MÚLTIPLOS NOMES / TITULARES (LISTAGENS E RELAÇÕES):
+- "nomes_detectados": Se o documento contiver uma relação, listagem, tabela de depósitos/pagamentos ou múltiplos titulares, favorecidos, alunos, clientes ou signatários, retorne um array de strings contendo TODOS os nomes completos identificados (ex: ["NOME 1", "NOME 2", ...]). Se houver apenas uma pessoa no documento, retorne [nome]. Se não houver nomes, retorne [].
+
 REGRAS:
 1. Responda APENAS o JSON válido. Sem explicações, sem comentários e sem formatação markdown fora do JSON.
 2. ATENÇÃO A DOCUMENTOS PREENCHIDOS À MÃO: Se o texto contiver dados preenchidos manualmente com caneta, transcreva com fidelidade valores, nomes e datas.
-3. Não invente nenhuma informação. Se não estiver explícito no texto, preencha como null.
+3. ATENÇÃO A LISTAGENS: Se for listagem ou tabela com vários nomes, extraia a lista completa em "nomes_detectados".
+4. REGRA DO PIX: Não classifique como Comprovante PIX a menos que a palavra "PIX" esteja claramente presente.
+5. Não invente nenhuma informação. Se não estiver explícito no texto, preencha como null.
 """
 
 # Aliases para retrocompatibilidade
@@ -2864,15 +3006,58 @@ def process_single_pdf(
             if not pix_autenticacao:
                 pix_autenticacao = extract_pix_authentication(text)
 
+        # Validação Estrita Anti-Falso Positivo de PIX (Pilar 1)
+        full_text_corpus = f"{text or ''} {tess_text or ''}".lower()
+        has_explicit_pix_term = bool(re.search(r'\bpix\b', full_text_corpus) or re.search(r'\bpix\b', tipo_lower))
+
+        # Valida se pix_e2e_id é realmente um identificador E2E BACEN (iniciado por E e alfanumérico longo)
+        is_genuine_e2e = bool(pix_e2e_id and re.match(r'^E\d{8}[0-9A-Za-z]{15,35}$', pix_e2e_id))
+        if not is_genuine_e2e and pix_e2e_id:
+            # Se for CPF ou número de conta ou lote, descarta de pix_e2e_id
+            if re.match(r'^\d{11}$', pix_e2e_id) or len(pix_e2e_id) < 20:
+                pix_e2e_id = None
+
+        # Valida se pix_chave é realmente uma chave PIX legítima (não confunde com conta bancária ou agência)
+        if pix_chave:
+            if re.search(r'-\w$', pix_chave) or (len(pix_chave) < 9 and "@" not in pix_chave and not pix_chave.startswith("+")):
+                pix_chave = None
+
+        is_legitimate_pix = bool(has_explicit_pix_term or is_genuine_e2e)
+
+        # Detecção de outros tipos específicos de documentos financeiros
+        is_listagem = bool(
+            any(k in full_text_corpus for k in ["listagem", "depósito", "deposito", "relação", "relacao", "borderô", "bordero", "relação de depósitos", "relacao de depositos"])
+            or ("titular" in full_text_corpus and "banco" in full_text_corpus and "agência" in full_text_corpus)
+            or ("titular" in full_text_corpus and "banco" in full_text_corpus and "agencia" in full_text_corpus)
+        )
+        is_darf = bool(any(k in full_text_corpus for k in ["darf", "arrecadação", "arrecadacao", "receita federal", "ministerio da fazenda", "ministério da fazenda", "cofins", "pis/pasep"]))
+        is_ted = bool(any(k in full_text_corpus for k in ["\bted\b", "\bdoc\b", "transferência bancária", "transferencia bancaria", "transferência entre contas", "transferencia entre contas"]))
+
+        # Se foi sugerido como PIX sem conter termo 'PIX' ou E2E ID oficial, corrige a classificação
+        if "pix" in tipo_lower and not is_legitimate_pix:
+            if is_listagem:
+                tipo_doc_raw = "Listagem de Pagamentos / Depósitos"
+            elif is_darf:
+                tipo_doc_raw = "DARF / Guia de Arrecadação Federal"
+            elif is_ted:
+                tipo_doc_raw = "Comprovante de Transferência Bancária (TED/DOC)"
+            else:
+                tipo_doc_raw = "Comprovante de Pagamento Bancário"
+            tipo_lower = tipo_doc_raw.lower()
+            pix_chave = None
+            pix_e2e_id = None
+
         # Heurística inteligente para consolidação do domínio
-        tipo_lower = str(tipo_doc_raw or "").lower()
         is_non_financial_comprovante = any(k in tipo_lower for k in [
             "inscrição", "inscricao", "situação cadastral", "situacao cadastral", "cnpj",
             "residência", "residencia", "matrícula", "matricula", "rendimentos", "votação", "votacao"
         ])
 
         has_explicit_financial = bool(
-            "pix" in tipo_lower or
+            is_legitimate_pix or
+            is_listagem or
+            is_darf or
+            is_ted or
             "comprovante de pagamento" in tipo_lower or
             "comprovante de transferência" in tipo_lower or
             "comprovante de transferencia" in tipo_lower or
@@ -2883,15 +3068,21 @@ def process_single_pdf(
             ("recibo" in tipo_lower and not is_non_financial_comprovante)
         )
 
-        has_pix_signal = bool(
-            (pix_e2e_id or pix_chave or (pix_pagador_nome and pix_pagador_banco) or has_explicit_financial)
-            and not is_non_financial_comprovante
-        )
+        has_pix_signal = bool(is_legitimate_pix and (pix_e2e_id or pix_chave or has_explicit_pix_term))
 
-        if not is_non_financial_comprovante and (has_pix_signal or valor_raw or dominio_raw == "financeiro"):
+        if not is_non_financial_comprovante and (has_pix_signal or has_explicit_financial or valor_raw or dominio_raw == "financeiro"):
             dominio = "financeiro"
             if not tipo_doc_raw or tipo_lower in ["não identificado", "nao identificado", "outro", "não informado", "nao informado"]:
-                tipo_doc_raw = "Comprovante PIX" if ("pix" in tipo_lower or pix_e2e_id or pix_chave) else "Recibo de Pagamento"
+                if has_pix_signal:
+                    tipo_doc_raw = "Comprovante PIX"
+                elif is_listagem:
+                    tipo_doc_raw = "Listagem de Pagamentos / Depósitos"
+                elif is_darf:
+                    tipo_doc_raw = "DARF / Guia de Arrecadação Federal"
+                elif is_ted:
+                    tipo_doc_raw = "Comprovante de Transferência Bancária (TED/DOC)"
+                else:
+                    tipo_doc_raw = "Recibo de Pagamento"
             if not res_dict.get("faculdade") and pix_pagador_banco:
                 res_dict["faculdade"] = pix_pagador_banco
         elif is_academic_doc:
@@ -2953,17 +3144,53 @@ def process_single_pdf(
             res_dict["conteudo_manuscrito"] = conteudo_manuscrito_val
             res_dict["dados_extras"]["conteudo_manuscrito"] = conteudo_manuscrito_val
 
-        # Captura da transcrição textual integral (OCR / Leitura Completa)
-        texto_transcrito_val = _clean_str(
+        # Captura e higienização da transcrição textual integral (OCR / Leitura Completa)
+        raw_transcrito = _clean_str(
             extracted_data.get("texto_transcrito")
             or extracted_data.get("texto_ocr")
             or extracted_data.get("transcricao_completa")
         )
-        if texto_transcrito_val:
-            res_dict["texto_transcrito"] = texto_transcrito_val
-            res_dict["dados_extras"]["texto_transcrito"] = texto_transcrito_val
-        elif text and text.strip():
+        sanitized_transcrito = sanitize_llm_transcription(raw_transcrito) if raw_transcrito else None
+        if sanitized_transcrito:
+            res_dict["texto_transcrito"] = sanitized_transcrito
+            res_dict["dados_extras"]["texto_transcrito"] = sanitized_transcrito
+
+        if text and text.strip():
             res_dict["dados_extras"]["texto_digital"] = text.strip()
+        if tess_text and tess_text.strip():
+            res_dict["dados_extras"]["texto_tesseract"] = tess_text.strip()
+
+        # Extração e Consolidação de Múltiplos Nomes / Titulares (Pilar 3)
+        detected_names_list: List[str] = []
+        raw_llm_names = extracted_data.get("nomes_detectados")
+        if isinstance(raw_llm_names, list):
+            for nm in raw_llm_names:
+                if isinstance(nm, str) and len(nm.strip()) >= 3:
+                    c_nm = re.sub(r'\s+', ' ', nm).strip()
+                    if c_nm not in detected_names_list:
+                        detected_names_list.append(c_nm)
+        elif isinstance(raw_llm_names, str) and len(raw_llm_names.strip()) >= 3:
+            detected_names_list.append(raw_llm_names.strip())
+
+        heur_names = []
+        if has_text:
+            heur_names.extend(extract_names_from_document_text(text))
+        if tess_text:
+            heur_names.extend(extract_names_from_document_text(tess_text))
+
+        for hn in heur_names:
+            if hn not in detected_names_list:
+                detected_names_list.append(hn)
+
+        benef_curr = res_dict.get("beneficiario")
+        if benef_curr and benef_curr not in detected_names_list and len(benef_curr.split()) >= 2:
+            detected_names_list.insert(0, benef_curr)
+        elif not benef_curr and detected_names_list:
+            res_dict["beneficiario"] = detected_names_list[0]
+
+        if detected_names_list:
+            res_dict["nomes_detectados"] = detected_names_list
+            res_dict["dados_extras"]["nomes_detectados"] = detected_names_list
 
         # Consolidação de quaisquer atributos adicionais da LLM em dados_extras
         known_top_level = {
@@ -2974,7 +3201,7 @@ def process_single_pdf(
             "situacao_cadastral", "data_situacao", "data_abertura", "cnae_principal",
             "natureza_juridica", "endereco_completo", "telefone", "email", "manuscrito",
             "emitente", "referente_a", "conteudo_manuscrito", "texto_transcrito", "texto_ocr",
-            "transcricao_completa", "dados_extras"
+            "transcricao_completa", "nomes_detectados", "dados_extras"
         }
         for k_dyn, v_dyn in extracted_data.items():
             if k_dyn not in known_top_level and v_dyn is not None:
@@ -3292,13 +3519,21 @@ def format_single_txt(item: Dict[str, Any]) -> str:
         _add_if_val("Referente a", de.get("referente_a") or item.get("referente_a"))
         _add_if_val("Conteúdo Manuscrito", de.get("conteudo_manuscrito") or item.get("conteudo_manuscrito"))
 
+    # Múltiplos Nomes Detectados (Listagens e Relações)
+    nomes_det = item.get("nomes_detectados") or de.get("nomes_detectados")
+    if isinstance(nomes_det, list) and len(nomes_det) > 1:
+        amostra = ", ".join(str(n) for n in nomes_det[:6])
+        if len(nomes_det) > 6:
+            amostra += f" ... (+{len(nomes_det) - 6} nomes)"
+        _add_if_val("Titulares / Nomes Det.", f"{amostra} (Total: {len(nomes_det)})")
+
     # Outros campos dinâmicos em dados_extras
     ignore_keys = {
         "razao_social", "nome_fantasia", "situacao_cadastral", "data_situacao",
         "data_abertura", "cnae_principal", "natureza_juridica", "endereco_completo",
         "telefone", "email", "manuscrito", "emitente", "referente_a", "conteudo_manuscrito",
-        "texto_transcrito", "texto_ocr", "texto_digital", "transcricao_completa",
-        "dossie_paginas", "todos_dominios", "todos_tipos", "data_criacao"
+        "texto_transcrito", "texto_ocr", "texto_digital", "texto_tesseract", "transcricao_completa",
+        "nomes_detectados", "dossie_paginas", "todos_dominios", "todos_tipos", "data_criacao"
     }
     for k, v in de.items():
         if k not in ignore_keys:
@@ -3311,13 +3546,28 @@ def format_single_txt(item: Dict[str, Any]) -> str:
 
     lines.append("-" * 80)
 
-    # Se houver texto integral transcrito ou texto digital, inclui na íntegra
-    texto_puro = de.get("texto_transcrito") or de.get("texto_ocr") or item.get("texto_transcrito") or de.get("texto_digital")
-    if texto_puro and str(texto_puro).strip():
+    # Hierarquia de Verdade Textual (Ground Truth First):
+    # 1. Camada Digital Nativa -> 2. Tesseract OCR -> 3. Transcrição IA Sanitizada
+    texto_puro = None
+    if de.get("texto_digital") and len(str(de.get("texto_digital")).strip()) >= 30:
+        texto_puro = str(de.get("texto_digital")).strip()
+    elif de.get("texto_tesseract") and len(str(de.get("texto_tesseract")).strip()) >= 30:
+        texto_puro = str(de.get("texto_tesseract")).strip()
+    else:
+        raw_t = de.get("texto_transcrito") or de.get("texto_ocr") or item.get("texto_transcrito")
+        clean_t = sanitize_llm_transcription(str(raw_t)) if raw_t else None
+        if clean_t:
+            texto_puro = clean_t
+        elif de.get("texto_digital") and str(de.get("texto_digital")).strip():
+            texto_puro = str(de.get("texto_digital")).strip()
+        elif de.get("texto_tesseract") and str(de.get("texto_tesseract")).strip():
+            texto_puro = str(de.get("texto_tesseract")).strip()
+
+    if texto_puro:
         lines.append("\n" + "=" * 80)
         lines.append("TEXTO INTEGRAL / TRANSCRIÇÃO OCR")
         lines.append("=" * 80)
-        lines.append(str(texto_puro).strip())
+        lines.append(texto_puro)
         lines.append("\n" + "-" * 80)
 
     return "\n".join(lines) + "\n"

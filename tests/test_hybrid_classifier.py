@@ -243,4 +243,73 @@ def test_format_single_txt_zero_noise_and_appends_ocr():
     assert "Certificamos que Carlos Drummond" in txt
 
 
+def test_sanitize_llm_transcription_valid_and_loop_hallucination():
+    from joakindex.cli import sanitize_llm_transcription
+    # 1. Texto legítimo e limpo
+    valid_text = "FRACAROLI IMP. E EXP. DE CAFE\nListagem para depósito\nValor Total: R$ 2.358.691,00\nData: 26/11/2025"
+    assert sanitize_llm_transcription(valid_text) == valid_text
+
+    # 2. Loop de alucinação com repetição consecutiva (ex: data repetida 5 vezes)
+    loop_text = "FRACAROLI IMP. E EXP. DE CAFE\n26/11/2025\n26/11/2025\n26/11/2025\n26/11/2025\n26/11/2025"
+    assert sanitize_llm_transcription(loop_text) is None
+
+    # 3. Dominância excessiva de linha única repetida (>35% do documento)
+    repeated_line_doc = "\n".join(["Linha normal de conteúdo A", "26/11/2025"] * 5)
+    assert sanitize_llm_transcription(repeated_line_doc) is None
+
+
+def test_extract_names_from_document_text():
+    from joakindex.cli import extract_names_from_document_text
+    sample_text = """
+    FRACAROLI IMP. E EXP. DE CAFE
+    Listagem para depósito
+    Valor Titular Banco Agência Nº Conta CPF/CNPJ Conc Lote
+    1150000,00 JOSE MAGNO BUFON 1 5610 1070800 85034193787 C Corrente TES
+    20000,00 WODIELEN CARMINATI 756 3007 34711 09741174713 C.Correnta DEP
+    52000,00 LUCAS GIURIATO 756 3007 875520 16934394763 C.Corrente DEP
+    490000,00 ANACLETO DADALTO 1 19224 8090-X 47122552772 C.Correnta TED
+    Titular: ESVERALDO LOSS GAMBERT
+    Favorecido: DANILO BALLAFILHO
+    """
+    detected = extract_names_from_document_text(sample_text)
+    assert "JOSE MAGNO BUFON" in detected
+    assert "WODIELEN CARMINATI" in detected
+    assert "LUCAS GIURIATO" in detected
+    assert "ANACLETO DADALTO" in detected
+    assert "ESVERALDO LOSS GAMBERT" in detected
+    assert "DANILO BALLAFILHO" in detected
+    assert len(detected) >= 6
+
+
+def test_universal_prompt_has_nomes_detectados_and_anti_pix_rules():
+    from joakindex.cli import build_universal_prompt
+    prompt = build_universal_prompt("Texto de teste...")
+    assert "nomes_detectados" in prompt
+    assert "Listagem de Pagamentos / Depósitos" in prompt
+    assert "Comprovante de Transferência Bancária (TED/DOC)" in prompt
+    assert "DARF / Guia de Arrecadação Federal" in prompt
+    assert "REGRA DO PIX" in prompt
+
+
+def test_format_single_txt_displays_nomes_detectados():
+    from joakindex.cli import format_single_txt
+    item = {
+        "md5": "1234567890abcdef",
+        "status": "sucesso",
+        "dominio": "financeiro",
+        "tipo_documento": "Listagem de Pagamentos / Depósitos",
+        "beneficiario": "JOSE MAGNO BUFON",
+        "nomes_detectados": ["JOSE MAGNO BUFON", "WODIELEN CARMINATI", "LUCAS GIURIATO", "ANACLETO DADALTO"],
+        "dados_extras": {
+            "texto_digital": "Listagem bancária de depósitos em lote com quatro titulares."
+        }
+    }
+    txt = format_single_txt(item)
+    assert "Titulares / Nomes Det." in txt
+    assert "JOSE MAGNO BUFON" in txt
+    assert "WODIELEN CARMINATI" in txt
+    assert "Total: 4" in txt
+
+
+
 

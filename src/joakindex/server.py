@@ -52,6 +52,8 @@ try:
         format_single_txt,
         extract_file_author,
         extract_file_dublin_core,
+        sanitize_llm_transcription,
+        extract_tesseract_text_from_pdf,
         OllamaClient,
         OpenAIClient,
         run_batch_classification,
@@ -70,6 +72,8 @@ except Exception:
             format_single_txt,
             extract_file_author,
             extract_file_dublin_core,
+            sanitize_llm_transcription,
+            extract_tesseract_text_from_pdf,
             OllamaClient,
             OpenAIClient,
             run_batch_classification,
@@ -92,6 +96,8 @@ except Exception:
         process_single_pdf = joakindex.process_single_pdf
         extract_file_author = getattr(joakindex, "extract_file_author", lambda p: None)
         extract_file_dublin_core = getattr(joakindex, "extract_file_dublin_core", lambda p: {})
+        sanitize_llm_transcription = getattr(joakindex, "sanitize_llm_transcription", lambda t: t)
+        extract_tesseract_text_from_pdf = getattr(joakindex, "extract_tesseract_text_from_pdf", None)
         OllamaClient = joakindex.OllamaClient
         OpenAIClient = joakindex.OpenAIClient
         run_batch_classification = getattr(joakindex, "run_batch_classification", None)
@@ -1199,9 +1205,16 @@ def start_background_thumbnail_generator(server_ctx: "ConferenciaServer", target
 
 
 def extract_document_text_content(server_ctx: "ConferenciaServer", md5_str: str) -> Dict[str, Any]:
-    """Retorna o texto bruto integral do documento para a aba de OCR/Texto (Zero Noise)."""
-    # 1. Prioridade Máxima: Transcrição textual completa obtida via IA (OCR Multimodal / Leitura LLM)
+    """
+    Retorna o texto bruto integral do documento para a aba de OCR/Texto (Zero Noise).
+    Aplica rigorosamente a Hierarquia de Verdade Textual (Ground Truth First - Pilar 2):
+    1. Camada Digital Nativa do Arquivo (PDFium / Arquivo .txt / Word)
+    2. OCR Óptico Estruturado (Tesseract Local)
+    3. Transcrição IA (VLM / LLM) somente se higienizada (livre de repetições e loops)
+    4. Transcrição Manuscrita
+    """
     doc = get_document_by_md5(server_ctx.db_path, md5_str)
+    de = {}
     if doc:
         de = doc.get("dados_extras") if isinstance(doc.get("dados_extras"), dict) else {}
         if isinstance(de, str):
@@ -1210,12 +1223,106 @@ def extract_document_text_content(server_ctx: "ConferenciaServer", md5_str: str)
             except Exception:
                 de = {}
 
-        # Transcrição completa gerada por LLM / OCR
-        texto_llm = de.get("texto_transcrito") or de.get("texto_ocr") or doc.get("texto_transcrito")
-        if texto_llm and str(texto_llm).strip():
-            return {"status": "sucesso", "texto": str(texto_llm).strip(), "origem": "ocr_llm"}
+    pdf_file = server_ctx.md5_to_file.get(md5_str)
+    if not pdf_file or not pdf_file.exists():
+        server_ctx.build_pdf_index()
+        pdf_file = server_ctx.md5_to_file.get(md5_str)
 
-        # Se for manuscrito e tiver conteúdo manuscrito relevante transcrito
+    # -------------------------------------------------------------------------
+    # 1ª Prioridade: Camada Digital Nativa do Arquivo (Ground Truth Absoluto)
+    # -------------------------------------------------------------------------
+    if pdf_file and pdf_file.exists():
+        # Arquivo de texto puro (.txt)
+        if pdf_file.suffix.lower() == ".txt":
+            try:
+                txt_content = pdf_file.read_text(encoding="utf-8", errors="replace").strip()
+                if txt_content:
+                    return {"status": "sucesso", "texto": txt_content, "origem": "arquivo_txt"}
+            except Exception:
+                pass
+
+        # Camada digital do PDF via pdfium
+        if pdf_file.suffix.lower() == ".pdf" and pdfium is not None:
+            try:
+                texts = []
+                with _PDFIUM_LOCK:
+                    pdf = pdfium.PdfDocument(str(pdf_file))
+                    try:
+                        max_pages = min(50, len(pdf))
+                        for page_idx in range(max_pages):
+                            page = pdf.get_page(page_idx)
+                            try:
+                                textpage = page.get_textpage()
+                                try:
+                                    p_text = textpage.get_text_range()
+                                    if p_text and p_text.strip():
+                                        texts.append(f"=== PÁGINA {page_idx + 1} ===\n{p_text.strip()}")
+                                finally:
+                                    textpage.close()
+                            finally:
+                                page.close()
+                    finally:
+                        pdf.close()
+                if texts:
+                    joined = "\n\n".join(texts).strip()
+                    if len(joined) >= 30:
+                        return {"status": "sucesso", "texto": joined, "origem": "camada_digital"}
+            except Exception:
+                pass
+
+    # Texto digital previamente indexado
+    if de.get("texto_digital") and len(str(de.get("texto_digital")).strip()) >= 30:
+        return {"status": "sucesso", "texto": str(de.get("texto_digital")).strip(), "origem": "camada_digital"}
+
+    # -------------------------------------------------------------------------
+    # 2ª Prioridade: OCR Óptico Estruturado (Tesseract Local)
+    # -------------------------------------------------------------------------
+    if de.get("texto_tesseract") and len(str(de.get("texto_tesseract")).strip()) >= 30:
+        return {"status": "sucesso", "texto": str(de.get("texto_tesseract")).strip(), "origem": "ocr_tesseract"}
+
+    # Se há arquivo individual .txt com a seção OCR no disco
+    indiv_txt = server_ctx.json_path.parent / "individuais" / f"{md5_str}.txt"
+    if indiv_txt.exists():
+        try:
+            raw_file_text = indiv_txt.read_text(encoding="utf-8", errors="replace")
+            marker = "TEXTO INTEGRAL / TRANSCRIÇÃO OCR"
+            if marker in raw_file_text:
+                parts = raw_file_text.split(marker, 1)
+                if len(parts) > 1:
+                    clean_extracted = parts[1].strip().lstrip("=").lstrip("-").strip()
+                    if sanitize_llm_transcription and not sanitize_llm_transcription(clean_extracted):
+                        clean_extracted = ""
+                    if len(clean_extracted) >= 30:
+                        return {"status": "sucesso", "texto": clean_extracted, "origem": "arquivo_ocr"}
+        except Exception:
+            pass
+
+    # Executa Tesseract local sob demanda caso seja PDF/imagem sem OCR anterior
+    if pdf_file and pdf_file.exists() and pdf_file.suffix.lower() == ".pdf" and extract_tesseract_text_from_pdf:
+        try:
+            tess_extracted = extract_tesseract_text_from_pdf(pdf_file, max_pages=min(10, 50))
+            if tess_extracted and len(tess_extracted.strip()) >= 30:
+                if doc:
+                    de["texto_tesseract"] = tess_extracted.strip()
+                    doc["dados_extras"] = de
+                    upsert_document(server_ctx.db_path, doc)
+                return {"status": "sucesso", "texto": tess_extracted.strip(), "origem": "ocr_tesseract"}
+        except Exception:
+            pass
+
+    # -------------------------------------------------------------------------
+    # 3ª Prioridade: Transcrição IA (LLM / VLM) Sanitizada Antialucinação
+    # -------------------------------------------------------------------------
+    if doc:
+        raw_llm = de.get("texto_transcrito") or de.get("texto_ocr") or doc.get("texto_transcrito")
+        if raw_llm:
+            sanitized_llm = sanitize_llm_transcription(str(raw_llm)) if sanitize_llm_transcription else str(raw_llm).strip()
+            if sanitized_llm and len(sanitized_llm.strip()) >= 20:
+                return {"status": "sucesso", "texto": sanitized_llm.strip(), "origem": "ocr_llm"}
+
+        # -------------------------------------------------------------------------
+        # 4ª Prioridade: Transcrição de Conteúdo Manuscrito
+        # -------------------------------------------------------------------------
         manuscrito_txt = de.get("conteudo_manuscrito") or doc.get("conteudo_manuscrito")
         if manuscrito_txt and str(manuscrito_txt).strip():
             partes = ["[TRANSCRIÇÃO DE ESCRITA MANUAL / PREENCHIMENTO À MÃO]", "-" * 60]
@@ -1227,64 +1334,8 @@ def extract_document_text_content(server_ctx: "ConferenciaServer", md5_str: str)
             partes.append(str(manuscrito_txt).strip())
             return {"status": "sucesso", "texto": "\n".join(partes), "origem": "manuscrito_ocr"}
 
-    # 2. Se o arquivo individual .txt contiver a seção 'TEXTO INTEGRAL / TRANSCRIÇÃO OCR', utiliza
-    indiv_txt = server_ctx.json_path.parent / "individuais" / f"{md5_str}.txt"
-    if indiv_txt.exists():
-        try:
-            raw_file_text = indiv_txt.read_text(encoding="utf-8", errors="replace")
-            marker = "TEXTO INTEGRAL / TRANSCRIÇÃO OCR"
-            if marker in raw_file_text:
-                parts = raw_file_text.split(marker, 1)
-                if len(parts) > 1:
-                    clean_extracted = parts[1].strip()
-                    # Remove separadores '====' ou '----' iniciais se houver
-                    clean_extracted = clean_extracted.lstrip("=").lstrip("-").strip()
-                    if clean_extracted:
-                        return {"status": "sucesso", "texto": clean_extracted, "origem": "arquivo_ocr"}
-        except Exception:
-            pass
-
-    # 3. Prioridade Nativa: Extração direta da camada digital do arquivo PDF (via pdfium)
-    pdf_file = server_ctx.md5_to_file.get(md5_str)
-    if not pdf_file or not pdf_file.exists():
-        server_ctx.build_pdf_index()
-        pdf_file = server_ctx.md5_to_file.get(md5_str)
-
     if not pdf_file or not pdf_file.exists():
         return {"status": "erro", "mensagem": f"Arquivo físico para MD5 {md5_str} não encontrado."}
-
-    if pdf_file.suffix.lower() == ".pdf" and pdfium is not None:
-        try:
-            texts = []
-            with _PDFIUM_LOCK:
-                pdf = pdfium.PdfDocument(str(pdf_file))
-                try:
-                    max_pages = min(50, len(pdf))
-                    for page_idx in range(max_pages):
-                        page = pdf.get_page(page_idx)
-                        try:
-                            textpage = page.get_textpage()
-                            try:
-                                p_text = textpage.get_text_range()
-                                if p_text and p_text.strip():
-                                    texts.append(f"=== PÁGINA {page_idx + 1} ===\n{p_text.strip()}")
-                            finally:
-                                textpage.close()
-                        finally:
-                            page.close()
-                finally:
-                    pdf.close()
-            if texts:
-                return {"status": "sucesso", "texto": "\n\n".join(texts), "origem": "camada_digital"}
-        except Exception:
-            pass
-
-    # 4. Se for arquivo de texto (.txt) nativo
-    if pdf_file.suffix.lower() == ".txt":
-        try:
-            return {"status": "sucesso", "texto": pdf_file.read_text(encoding="utf-8", errors="replace"), "origem": "arquivo_txt"}
-        except Exception:
-            pass
 
     # 5. Se não há camada digital legível nem transcrição OCR realizada ainda
     return {
