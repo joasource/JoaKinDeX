@@ -1161,7 +1161,7 @@ def extract_pdf_text(pdf_path: str, max_pages: int = 4) -> str:
 def render_pdf_pages_to_base64(
     pdf_path: str,
     max_pages: int = 4,
-    scale: float = 2.0,
+    scale: float = 1.6,
     quality: int = 85
 ) -> List[str]:
     """
@@ -2077,7 +2077,7 @@ class OllamaClient(BaseLLMClient):
             "options": {
                 "temperature": 0.0,
                 "num_predict": 2048,
-                "num_ctx": 4096
+                "num_ctx": 8192
             }
         }
         payload_str = json.dumps(payload)
@@ -2105,13 +2105,24 @@ class OllamaClient(BaseLLMClient):
                 r = self.session.post(url, json=payload, timeout=self.timeout)
             else:
                 r = requests.post(url, json=payload, timeout=self.timeout)
-            r.raise_for_status()
+            if not r.ok:
+                err_msg = r.text
+                try:
+                    err_json = r.json()
+                    if "error" in err_json:
+                        err_msg = err_json["error"]
+                except Exception:
+                    pass
+                raise RuntimeError(f"Ollama API Error ({r.status_code}): {err_msg}")
             response_json = r.json()
             raw_response = response_json.get("response", "")
 
         return clean_and_parse_json(raw_response)
 
     def generate_json_with_images(self, prompt: str, images: List[str]) -> Dict[str, Any]:
+        # Para modelos de visão VLM (Qwen2.5-VL, Llama-3.2-Vision), cada página em imagem consome
+        # tokens de visão adicionais. Expandimos o num_ctx para 16384 (ou 32768 se mais de 2 páginas).
+        ctx_size = 16384 if len(images) <= 2 else 32768
         payload = {
             "model": self.model,
             "prompt": prompt,
@@ -2121,7 +2132,7 @@ class OllamaClient(BaseLLMClient):
             "options": {
                 "temperature": 0.0,
                 "num_predict": 2048,
-                "num_ctx": 4096
+                "num_ctx": ctx_size
             }
         }
         payload_str = json.dumps(payload)
@@ -2149,7 +2160,15 @@ class OllamaClient(BaseLLMClient):
                 r = self.session.post(url, json=payload, timeout=self.timeout)
             else:
                 r = requests.post(url, json=payload, timeout=self.timeout)
-            r.raise_for_status()
+            if not r.ok:
+                err_msg = r.text
+                try:
+                    err_json = r.json()
+                    if "error" in err_json:
+                        err_msg = err_json["error"]
+                except Exception:
+                    pass
+                raise RuntimeError(f"Ollama API Error ({r.status_code}): {err_msg}")
             response_json = r.json()
             raw_response = response_json.get("response", "")
 
