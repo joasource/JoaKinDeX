@@ -2,7 +2,12 @@ import pytest
 import tempfile
 from pathlib import Path
 from joakindex.db import get_connection, create_schema, upsert_document
-from joakindex.audit_report import get_management_statistics, generate_executive_audit_report, _parse_monetary_value
+from joakindex.audit_report import (
+    get_management_statistics,
+    generate_executive_audit_report,
+    _parse_monetary_value,
+    HAS_REPORTLAB,
+)
 
 
 def test_parse_monetary_value():
@@ -12,6 +17,7 @@ def test_parse_monetary_value():
     assert _parse_monetary_value(None) == 0.0
 
 
+@pytest.mark.skipif(not HAS_REPORTLAB, reason="ReportLab não está instalado no ambiente")
 def test_statistics_and_report_generation():
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
         db_path = Path(tf.name)
