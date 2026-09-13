@@ -1609,12 +1609,20 @@ def create_handler(server_ctx: ConferenciaServer):
                 return
 
             # API de Estatísticas Gerenciais para o Dashboard
-            if path == "/api/estatisticas_gerenciais":
+            if path.startswith("/api/estatisticas_gerenciais"):
+                query_params = urllib.parse.parse_qs(parsed.query)
+                b_str = query_params.get("brackets", [""])[0]
+                brackets = None
+                if b_str:
+                    try:
+                        brackets = [float(x.strip()) for x in b_str.split(",") if x.strip()]
+                    except Exception:
+                        brackets = None
                 try:
                     from joakindex.audit_report import get_management_statistics
-                    stats = get_management_statistics(server_ctx.db_path)
+                    stats = get_management_statistics(server_ctx.db_path, brackets=brackets)
                 except Exception as e:
-                    stats = {}
+                    stats = {"erro": str(e)}
                 body = json.dumps(stats, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -1628,7 +1636,15 @@ def create_handler(server_ctx: ConferenciaServer):
                 try:
                     from joakindex.audit_report import generate_executive_audit_report
                     temp_pdf = server_ctx.db_path.parent / "relatorio_auditoria_joakindex.pdf"
-                    generate_executive_audit_report(server_ctx.db_path, temp_pdf)
+                    query = urllib.parse.parse_qs(parsed.query)
+                    brackets_param = query.get("brackets", [None])[0]
+                    brackets = None
+                    if brackets_param:
+                        try:
+                            brackets = [float(x.strip()) for x in brackets_param.split(",") if x.strip()]
+                        except Exception:
+                            brackets = None
+                    generate_executive_audit_report(server_ctx.db_path, temp_pdf, brackets=brackets)
                     content = temp_pdf.read_bytes()
                     self.send_response(200)
                     self.send_header("Content-Type", "application/pdf")

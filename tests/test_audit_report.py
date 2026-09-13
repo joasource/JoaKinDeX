@@ -45,11 +45,24 @@ def test_statistics_and_report_generation():
     assert stats["total_docs"] == 2
     assert stats["total_financeiro_reais"] == 750.00
     assert "Boleto Bancário" in stats["classes_distribuicao"]
+    assert "dominios" in stats
+    assert "dominio_preponderante" in stats
+    assert "faixas_valor" in stats
+    assert "entidades" in stats
+    assert "qualidade_metadados" in stats
+
+    # Testa faixas customizadas de valor
+    custom_stats = get_management_statistics(db_path, brackets=[200.0, 600.0, 1000.0])
+    faixas = custom_stats["faixas_valor"]
+    assert "Até R$ 200" in faixas
+    assert "R$ 200 a 600" in faixas
+    # doc1 (500) deve estar em R$ 200 a 600, doc2 (250) deve estar em R$ 200 a 600
+    assert faixas["R$ 200 a 600"]["contagem"] == 2
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as out_pdf:
         pdf_out_path = Path(out_pdf.name)
 
-    res_path = generate_executive_audit_report(db_path, pdf_out_path)
+    res_path = generate_executive_audit_report(db_path, pdf_out_path, brackets=[200.0, 600.0, 1000.0])
     assert res_path.exists()
     assert res_path.stat().st_size > 500
 
@@ -57,3 +70,4 @@ def test_statistics_and_report_generation():
         db_path.unlink()
     if pdf_out_path.exists():
         pdf_out_path.unlink()
+
