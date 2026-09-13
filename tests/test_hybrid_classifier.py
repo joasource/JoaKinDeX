@@ -311,5 +311,78 @@ def test_format_single_txt_displays_nomes_detectados():
     assert "Total: 4" in txt
 
 
+def test_extract_boleto_signals_banking_linha_digitavel():
+    from joakindex.cli import extract_boleto_signals, classify_text_signatures
+    sample_bb = "001-9 00190.00009 03183.378003 00078.500170 6 12780001804302 PAGAVEL EM QUALQUER BANCO Vencimento 27/11/2025"
+    is_bol, linha, barras, det = extract_boleto_signals(sample_bb)
+    assert is_bol is True
+    assert linha == "00190.00009 03183.378003 00078.500170 6 12780001804302"
+    tipo, dom = classify_text_signatures(sample_bb)
+    assert tipo == "Boleto Bancário"
+    assert dom == "financeiro"
+
+    sample_sicoob = "SICOOB SICOOB 756-076691.30078 01281.485407 01489 100014 1 12910000030360 Recibo do Pagador Nosso Número: 0014891-0"
+    is_bol2, linha2, _, det2 = extract_boleto_signals(sample_sicoob)
+    assert is_bol2 is True
+    assert "76691" in linha2
+    assert det2.get("nosso_numero") == "0014891-0"
+    tipo2, dom2 = classify_text_signatures(sample_sicoob)
+    assert tipo2 == "Boleto Bancário"
+    assert dom2 == "financeiro"
+
+
+def test_extract_boleto_signals_concessionaria_and_utilities():
+    from joakindex.cli import extract_boleto_signals, classify_text_signatures
+    sample_edp = "EDP ESPÍRITO SANTO Linha Cod. de Barra 836000000099 121500513001 180131922639 000227593344 DATA 14-04-2025 VALOR R$ 412,15"
+    is_bol, linha, _, _ = extract_boleto_signals(sample_edp)
+    assert is_bol is True
+    assert "836000000099" in linha
+    tipo, dom = classify_text_signatures(sample_edp)
+    assert tipo == "Boleto Bancário"
+    assert dom == "financeiro"
+
+
+def test_extract_boleto_signals_structural_terms():
+    from joakindex.cli import extract_boleto_signals, classify_text_signatures
+    sample_termo = "Documento de Cobrança Ficha de Compensação Cedente: SICOOB Agência/Código Beneficiário 3008/0000434"
+    is_bol, _, _, _ = extract_boleto_signals(sample_termo)
+    assert is_bol is True
+    tipo, dom = classify_text_signatures(sample_termo)
+    assert tipo == "Boleto Bancário"
+    assert dom == "financeiro"
+
+
+def test_regras_aprendidas_dynamic_matching(tmp_path):
+    from joakindex.db import init_database, salvar_regra_aprendida, consultar_regra_para_texto
+    db_file = tmp_path / "test_regras.db"
+    init_database(db_file)
+
+    salvar_regra_aprendida(
+        db_path=db_file,
+        termo_chave="teste fatura especial",
+        valor_atribuido="Boleto Bancário",
+        dominio="financeiro",
+        remover_pix=True
+    )
+
+    regra = consultar_regra_para_texto(db_file, "Documento contendo Teste Fatura Especial para pagamento.")
+    assert regra is not None
+    assert regra["valor_atribuido"] == "Boleto Bancário"
+    assert regra["dominio"] == "financeiro"
+    assert regra["remover_pix"] == 1
+
+
+def test_universal_prompts_contain_boleto_rules_and_fields():
+    from joakindex.cli import build_universal_prompt, build_universal_vision_prompt
+    prompt_txt = build_universal_prompt("Texto de teste")
+    prompt_vis = build_universal_vision_prompt("Texto prévio")
+
+    for p in [prompt_txt, prompt_vis]:
+        assert "Boleto Bancário" in p
+        assert "linha_digitavel" in p
+        assert "codigo_barras" in p
+        assert "REGRA DO BOLETO" in p
+
+
 
 

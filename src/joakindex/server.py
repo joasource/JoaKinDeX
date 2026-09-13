@@ -168,7 +168,11 @@ try:
         update_conference_status,
         batch_update_conference_status,
         batch_update_tag_domain,
-        sync_to_json
+        sync_to_json,
+        salvar_regra_aprendida,
+        obter_regras_aprendidas,
+        remover_regra_aprendida,
+        consultar_regra_para_texto
     )
 except ImportError:
     try:
@@ -182,7 +186,11 @@ except ImportError:
             update_conference_status,
             batch_update_conference_status,
             batch_update_tag_domain,
-            sync_to_json
+            sync_to_json,
+            salvar_regra_aprendida,
+            obter_regras_aprendidas,
+            remover_regra_aprendida,
+            consultar_regra_para_texto
         )
     except ImportError:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -196,7 +204,11 @@ except ImportError:
             update_conference_status,
             batch_update_conference_status,
             batch_update_tag_domain,
-            sync_to_json
+            sync_to_json,
+            salvar_regra_aprendida,
+            obter_regras_aprendidas,
+            remover_regra_aprendida,
+            consultar_regra_para_texto
         )
 
 
@@ -1519,7 +1531,6 @@ def create_handler(server_ctx: ConferenciaServer):
             # API de Regras Aprendidas pelo Usuário
             if path == "/api/regras-aprendidas":
                 try:
-                    from db_manager import obter_regras_aprendidas
                     regras = obter_regras_aprendidas(server_ctx.db_path)
                 except Exception as e:
                     regras = []
@@ -1878,7 +1889,6 @@ def create_handler(server_ctx: ConferenciaServer):
                     # 4. Aprendizado Incremental se solicitado pelo usuário
                     if payload.get("aprender_regra") and item_editado.get("tipo_documento"):
                         try:
-                            from db_manager import salvar_regra_aprendida
                             termo = (item_editado.get("tipo_documento") or "").strip()
                             if termo:
                                 salvar_regra_aprendida(
@@ -1905,7 +1915,6 @@ def create_handler(server_ctx: ConferenciaServer):
             if path == "/api/regras-aprendidas":
                 action = payload.get("acao", "salvar")
                 if action == "salvar":
-                    from db_manager import salvar_regra_aprendida
                     rid = salvar_regra_aprendida(
                         server_ctx.db_path,
                         termo_chave=payload.get("termo_chave", ""),
@@ -1917,7 +1926,6 @@ def create_handler(server_ctx: ConferenciaServer):
                     )
                     resp = json.dumps({"status": "sucesso", "regra_id": rid}).encode("utf-8")
                 elif action == "remover":
-                    from db_manager import remover_regra_aprendida
                     ok = remover_regra_aprendida(server_ctx.db_path, payload.get("id"))
                     resp = json.dumps({"status": "sucesso" if ok else "erro"}).encode("utf-8")
                 else:

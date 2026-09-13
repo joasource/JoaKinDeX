@@ -785,14 +785,63 @@ def remover_regra_aprendida(db_path: Union[str, Path], regra_id: int) -> bool:
         return cur.rowcount > 0
 
 
-def consultar_regra_para_texto(db_path: Union[str, Path], texto: str) -> Optional[Dict[str, Any]]:
+def resolve_default_db_path() -> Path:
+    """Resolve o caminho do banco de dados ativo com base no ambiente, configuração ou diretório de trabalho."""
+    env_db = os.environ.get("JOAKINDEX_DB_PATH")
+    if env_db:
+        p = Path(env_db).expanduser().resolve()
+        if p.exists():
+            return p
+
+    try:
+        from joakindex.config import get_visualizer_config, get_classifier_config
+        v_cfg = get_visualizer_config()
+        if v_cfg.get("json_path"):
+            cand = get_db_path(v_cfg["json_path"])
+            if cand.exists():
+                return cand
+        c_cfg = get_classifier_config()
+        if c_cfg.get("output_dir"):
+            cand = get_db_path(c_cfg["output_dir"])
+            if cand.exists():
+                return cand
+    except Exception:
+        pass
+
+    queen_db = Path("/media/joaquim/Queen/joakindex/recepa/saida/joakindex.db")
+    if queen_db.exists():
+        return queen_db
+
+    cwd_db = Path.cwd() / "joakindex.db"
+    if cwd_db.exists():
+        return cwd_db
+
+    saida_db = Path.cwd() / "saida" / "joakindex.db"
+    if saida_db.exists():
+        return saida_db
+
+    return cwd_db
+
+
+DEFAULT_DB_PATH = resolve_default_db_path()
+
+
+def consultar_regra_para_texto(db_path: Optional[Union[str, Path]] = None, texto: str = "") -> Optional[Dict[str, Any]]:
     """Verifica se algum termo-chave de regra aprendida ocorre no texto."""
     if not texto:
         return None
-    t_lower = texto.lower()
-    regras = obter_regras_aprendidas(db_path)
-    for r in regras:
-        termo = (r.get("termo_chave") or "").strip().lower()
-        if termo and termo in t_lower:
-            return r
+    if db_path is None:
+        db_path = resolve_default_db_path()
+    try:
+        db = Path(db_path).expanduser().resolve()
+        if not db.exists():
+            return None
+        regras = obter_regras_aprendidas(db)
+        t_lower = texto.lower()
+        for r in regras:
+            termo = (r.get("termo_chave") or "").strip().lower()
+            if termo and termo in t_lower:
+                return r
+    except Exception:
+        pass
     return None

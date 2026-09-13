@@ -129,7 +129,12 @@ try:
         upsert_documents_batch,
         get_document_by_md5,
         get_all_documents,
-        sync_to_json
+        sync_to_json,
+        consultar_regra_para_texto,
+        salvar_regra_aprendida,
+        obter_regras_aprendidas,
+        resolve_default_db_path,
+        DEFAULT_DB_PATH
     )
 except ImportError:
     try:
@@ -141,7 +146,12 @@ except ImportError:
             upsert_documents_batch,
             get_document_by_md5,
             get_all_documents,
-            sync_to_json
+            sync_to_json,
+            consultar_regra_para_texto,
+            salvar_regra_aprendida,
+            obter_regras_aprendidas,
+            resolve_default_db_path,
+            DEFAULT_DB_PATH
         )
     except ImportError:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -153,7 +163,12 @@ except ImportError:
             upsert_documents_batch,
             get_document_by_md5,
             get_all_documents,
-            sync_to_json
+            sync_to_json,
+            consultar_regra_para_texto,
+            salvar_regra_aprendida,
+            obter_regras_aprendidas,
+            resolve_default_db_path,
+            DEFAULT_DB_PATH
         )
 
 
@@ -1338,6 +1353,87 @@ def render_pdf_pages_to_base64(
     return images_b64
 
 
+def extract_boleto_signals(text: str) -> Tuple[bool, Optional[str], Optional[str], Dict[str, Any]]:
+    """
+    Identifica de forma universal se o texto contém elementos de Boleto Bancário (FEBRABAN),
+    fatura de concessionária com cobrança ou títulos de compensação.
+    Retorna: (is_boleto: bool, linha_digitavel: Optional[str], codigo_barras: Optional[str], detalhes: Dict[str, Any])
+    """
+    if not text or len(text.strip()) < 8:
+        return False, None, None, {}
+
+    t_lower = text.lower()
+    details: Dict[str, Any] = {}
+
+    # 1. Linha digitável bancária (47 dígitos FEBRABAN)
+    m_bancario = re.search(
+        r'(?:\d{3}[-\s]\d)?\s*(\d{5}[\.\s]?\d{5}\s+\d{5}[\.\s]?\d{6}\s+\d{5}[\.\s]?\d{6}\s+\d\s+\d{14})\b',
+        text
+    )
+    if not m_bancario:
+        m_bancario = re.search(r'\b(\d{47})\b', text)
+
+    # 2. Linha digitável concessionária / convênios (48 dígitos ou 2x24 ou 4x12)
+    m_concess = re.search(
+        r'\b([89]\d{11}[\s\-]?\d{12}[\s\-]?\d{12}[\s\-]?\d{12})\b|'
+        r'\b([89]\d{23}\s+\d{20,24})\b|'
+        r'\b[sS]{1,2}(\d{22,23}\s+\d{20,24})\b',
+        text
+    )
+    if not m_concess:
+        m_concess = re.search(r'\b([89]\d{47})\b', text)
+
+    # 3. Código de barras numérico contínuo (44 dígitos)
+    m_barras = re.search(r'\b(\d{44})\b', text)
+
+    linha_digitavel = None
+    if m_bancario:
+        linha_digitavel = m_bancario.group(1).strip()
+    elif m_concess:
+        matched_g = [g for g in m_concess.groups() if g]
+        if matched_g:
+            raw_concess = matched_g[0].strip()
+            if raw_concess.startswith('62') or (len(raw_concess) > 38 and not raw_concess.startswith('8')):
+                raw_concess = '88' + raw_concess
+            linha_digitavel = raw_concess
+
+    codigo_barras = m_barras.group(1).strip() if m_barras else None
+
+    # 4. Termos estruturais fortes de Boleto Bancário
+    termos_fortes = [
+        'ficha de compensação', 'ficha de compensacao',
+        'recibo do pagador', 'recibo do sacado',
+        'nosso número', 'nosso numero',
+        'pagável em qualquer banco', 'pagavel em qualquer banco',
+        'código de baixa', 'codigo de baixa',
+        'agência/código do beneficiário', 'agencia/codigo do beneficiario',
+        'agência / código beneficiário', 'agencia / codigo beneficiario',
+        'agência/código beneficiário', 'agencia/codigo beneficiario',
+        'linha digitável', 'linha digitavel'
+    ]
+    has_termo_forte = any(t in t_lower for t in termos_fortes)
+
+    # 5. Faturas de concessionárias / contas de energia com cobrança / reaviso
+    is_fatura_energia = (
+        ('documento auxiliar da nota de energia' in t_lower or 'nota de energia' in t_lower or 'reaviso de debito' in t_lower or 'reaviso de débito' in t_lower)
+        and any(k in t_lower for k in ['total a pagar', 'totalapagar', 'codigo de barras', 'código de barras', 'vencimento', 'linha cod. de barra', 'distrib de energia'])
+    )
+
+    # 6. Fatura mercantil com duplicata / cobrança bancária
+    is_fatura_boleto = ('fatura' in t_lower and any(k in t_lower for k in ['mocal moageira', 'duplicata', 'banco', 'fracaroli']))
+
+    is_boleto = bool(linha_digitavel or codigo_barras or has_termo_forte or is_fatura_energia or is_fatura_boleto)
+
+    # Extração de Nosso Número
+    m_nn = re.search(r'(?:nosso\s*n[úu]mero|nosso\s*n[º°])[:\s]+([0-9\-\.\/]+)', text, re.I)
+    if m_nn:
+        c_nn = m_nn.group(1).strip()
+        if len(c_nn) >= 5 and '/' not in c_nn[:4]:
+            details['nosso_numero'] = c_nn
+
+    return is_boleto, linha_digitavel, codigo_barras, details
+
+
 def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Identifica o tipo de documento e seu domínio a partir de assinaturas textuais e palavras-chave.
@@ -1351,12 +1447,16 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
 
     # 0. Consulta dinâmica de Regras Aprendidas pelo Usuário
     try:
-        from db_manager import consultar_regra_para_texto, DEFAULT_DB_PATH
-        regra = consultar_regra_para_texto(DEFAULT_DB_PATH, text)
+        regra = consultar_regra_para_texto(resolve_default_db_path(), text)
         if regra:
             return regra["valor_atribuido"], regra["dominio"]
     except Exception:
         pass
+
+    # 0.1 Detecção Universal de Boleto Bancário / FEBRABAN
+    is_bol, bol_linha, bol_barras, _ = extract_boleto_signals(text)
+    if is_bol:
+        scores["Boleto Bancário"] = ("financeiro", 11 if (bol_linha or bol_barras) else 10)
 
     # 1. Domínio: Identificação
     if any(k in t for k in ["carteira nacional de habilita", "driver license", "permiso de conduccion", "senatran", "denatran", "1° habilita", "1ª habilita"]) or ("cnh" in t and "categoria" in t):
@@ -1412,10 +1512,10 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
     # 4. Domínio: Financeiro
     if any(k in t for k in ["comprovante pix", "transferência pix", "transferencia pix", "pagamento pix", "chave pix", "fim-a-fim", "end-to-end", "e2eid"]):
         scores["Comprovante PIX"] = ("financeiro", 10)
+    elif any(k in t for k in ["boleto bancário", "boleto bancario", "recibo do pagador", "linha digitável", "código de barras", "ficha de compensação"]):
+        scores["Boleto Bancário"] = ("financeiro", 10)
     elif any(k in t for k in ["comprovante de pagamento", "comprovante de transferência", "comprovante de transferencia", "autenticação bancária", "autenticação mecânica", "ted", "doc"]):
         scores["Comprovante de Pagamento"] = ("financeiro", 8)
-    elif any(k in t for k in ["boleto bancário", "boleto bancario", "recibo do pagador", "linha digitável", "código de barras"]):
-        scores["Boleto"] = ("financeiro", 8)
     elif any(k in t for k in ["recibo de pagamento", "recebemos de"]):
         scores["Recibo"] = ("financeiro", 7)
 
@@ -2452,12 +2552,13 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
     * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
     * "outro" (para quaisquer outros documentos não contemplados acima)
 - "tipo_documento": Nome específico do documento. Exemplos com critérios estritos:
+    * "Boleto Bancário" (ATENÇÃO: classifique categoricamente como Boleto Bancário se o documento contiver linha digitável com 47 ou 48 dígitos, código de barras FEBRABAN com 44 dígitos, termos como "ficha de compensação", "recibo do pagador/sacado", "nosso número", "pagável em qualquer banco", ou se for conta/fatura de concessionária de energia/água/serviços públicos com código de cobrança)
     * "Listagem de Pagamentos / Depósitos" (para borderôs, listagens de depósitos bancários, relações de pagamentos com tabelas ou múltiplos favorecidos)
     * "Comprovante PIX" (ATENÇÃO: classifique como PIX ESTRITAMENTE se o documento contiver expressamente o termo "PIX" ou identificador E2E padrão BACEN iniciado por 'E')
     * "Comprovante de Transferência Bancária (TED/DOC)" (para transferências bancárias entre contas sem indicação de PIX)
     * "DARF / Guia de Arrecadação Federal" (para guias de receitas federais / tributos)
     * "Comprovante de Pagamento Bancário" (para pagamentos bancários sem menção a PIX)
-    * "Boleto Bancário", "Extrato Bancário", "Recibo de Pagamento", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
+    * "Extrato Bancário", "Recibo de Pagamento", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
 
 2. CAMPOS UNIVERSAIS:
 - "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
@@ -2473,7 +2574,10 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "carga_horaria": Carga horária total (ex: "750 h/aulas", "360 horas", "750h"). Se não houver, retorne null.
 - "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se for Cartão CNPJ, informe "Receita Federal do Brasil (RFB)". Se não houver, retorne null.
 
-4. CAMPOS ESPECÍFICOS DE PIX / FINANCEIRO (preencha se for comprovante financeiro, senão retorne null):
+4. CAMPOS ESPECÍFICOS DE BOLETO / PIX / FINANCEIRO (preencha se for comprovante financeiro/boleto, senão retorne null):
+- "linha_digitavel": Linha digitável completa do boleto bancário (ex: "00190.00009 03183.378003 00078.500170 6 12780001804302" ou "836000000099 121500513001 180131922639 000227593344"). Se não houver, retorne null.
+- "codigo_barras": Código de barras numérico contínuo do boleto (44 dígitos). Se não houver, retorne null.
+- "nosso_numero": Nosso Número do boleto bancário (se presente).
 - "pix_pagador_nome": Nome completo do pagador da transferência.
 - "pix_pagador_cpf_cnpj": CPF ou CNPJ mascarado ou completo do pagador (ex: "***.123.456-**").
 - "pix_pagador_banco": Banco / PSP de origem do pagador.
@@ -2511,7 +2615,8 @@ REGRAS:
 2. ATENÇÃO A DOCUMENTOS PREENCHIDOS À MÃO: Leia atentamente caligrafia e números manuscritos com caneta, transcrevendo com máxima fidelidade valores, nomes, CPFs, datas e emitentes para os respectivos campos.
 3. ATENÇÃO A LISTAGENS: Se for listagem ou tabela com vários nomes, extraia a lista completa em "nomes_detectados".
 4. REGRA DO PIX: Não classifique como Comprovante PIX a menos que a palavra "PIX" esteja claramente presente.
-5. Não invente nenhuma informação. Se não estiver visível na imagem, preencha o valor como null.
+5. REGRA DO BOLETO: Se o documento contiver linha digitável (47 ou 48 dígitos), código de barras (44 dígitos), ficha de compensação, recibo do sacado/pagador ou for fatura de energia/água com cobrança, classifique categoricamente como "Boleto Bancário" (domínio "financeiro") e NUNCA como PIX.
+6. Não invente nenhuma informação. Se não estiver visível na imagem, preencha o valor como null.
 """
 
 
@@ -2535,12 +2640,13 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
     * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
     * "outro" (para quaisquer outros documentos não contemplados acima)
 - "tipo_documento": Nome específico do documento. Exemplos com critérios estritos:
+    * "Boleto Bancário" (ATENÇÃO: classifique categoricamente como Boleto Bancário se o documento contiver linha digitável com 47 ou 48 dígitos, código de barras FEBRABAN com 44 dígitos, termos como "ficha de compensação", "recibo do pagador/sacado", "nosso número", "pagável em qualquer banco", ou se for conta/fatura de concessionária de energia/água/serviços públicos com código de cobrança)
     * "Listagem de Pagamentos / Depósitos" (para borderôs, listagens de depósitos bancários, relações de pagamentos com tabelas ou múltiplos favorecidos)
     * "Comprovante PIX" (ATENÇÃO: classifique como PIX ESTRITAMENTE se o documento contiver expressamente o termo "PIX" ou identificador E2E padrão BACEN iniciado por 'E')
     * "Comprovante de Transferência Bancária (TED/DOC)" (para transferências bancárias entre contas sem indicação de PIX)
     * "DARF / Guia de Arrecadação Federal" (para guias de receitas federais / tributos)
     * "Comprovante de Pagamento Bancário" (para pagamentos bancários sem menção a PIX)
-    * "Boleto Bancário", "Extrato Bancário", "Recibo de Pagamento", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
+    * "Extrato Bancário", "Recibo de Pagamento", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
 
 2. CAMPOS UNIVERSAIS:
 - "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
@@ -2556,7 +2662,10 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "carga_horaria": Carga horária total (ex: "750 h/aulas", "360 horas", "750h"). Se não houver, retorne null.
 - "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se for Cartão CNPJ, informe "Receita Federal do Brasil (RFB)". Se não houver, retorne null.
 
-4. CAMPOS ESPECÍFICOS DE PIX / FINANCEIRO (preencha se for documento financeiro/PIX, senão retorne null):
+4. CAMPOS ESPECÍFICOS DE BOLETO / PIX / FINANCEIRO (preencha se for documento financeiro/PIX/boleto, senão retorne null):
+- "linha_digitavel": Linha digitável completa do boleto bancário (ex: "00190.00009 03183.378003 00078.500170 6 12780001804302" ou "836000000099 121500513001 180131922639 000227593344"). Se não houver, retorne null.
+- "codigo_barras": Código de barras numérico contínuo do boleto (44 dígitos). Se não houver, retorne null.
+- "nosso_numero": Nosso Número do boleto bancário (se presente).
 - "pix_pagador_nome": Nome completo do pagador da transferência.
 - "pix_pagador_cpf_cnpj": CPF ou CNPJ mascarado ou completo do pagador (ex: "***.123.456-**").
 - "pix_pagador_banco": Banco / PSP de origem do pagador.
@@ -2594,7 +2703,8 @@ REGRAS:
 2. ATENÇÃO A DOCUMENTOS PREENCHIDOS À MÃO: Se o texto contiver dados preenchidos manualmente com caneta, transcreva com fidelidade valores, nomes e datas.
 3. ATENÇÃO A LISTAGENS: Se for listagem ou tabela com vários nomes, extraia a lista completa em "nomes_detectados".
 4. REGRA DO PIX: Não classifique como Comprovante PIX a menos que a palavra "PIX" esteja claramente presente.
-5. Não invente nenhuma informação. Se não estiver explícito no texto, preencha como null.
+5. REGRA DO BOLETO: Se o documento contiver linha digitável (47 ou 48 dígitos), código de barras (44 dígitos), ficha de compensação, recibo do sacado/pagador ou for fatura de energia/água com cobrança, classifique categoricamente como "Boleto Bancário" (domínio "financeiro") e NUNCA como PIX.
+6. Não invente nenhuma informação. Se não estiver explícito no texto, preencha como null.
 """
 
 # Aliases para retrocompatibilidade
@@ -3024,6 +3134,53 @@ def process_single_pdf(
 
         is_legitimate_pix = bool(has_explicit_pix_term or is_genuine_e2e)
 
+        # 0. Consulta dinâmica de Regras Aprendidas pelo Usuário
+        regra_aprendida = None
+        try:
+            full_doc_raw = f"{text or ''}\n{tess_text or ''}".strip()
+            regra_aprendida = consultar_regra_para_texto(resolve_default_db_path(), full_doc_raw)
+        except Exception:
+            pass
+
+        # 0.1 Detecção Universal e Extração de Sinais de Boleto Bancário (FEBRABAN)
+        boleto_corpus = f"{text or ''}\n{tess_text or ''}".strip()
+        is_boleto, boleto_linha, boleto_barras, boleto_detalhes = extract_boleto_signals(boleto_corpus)
+
+        # Se a LLM já extraiu linha_digitavel ou codigo_barras no JSON, consolida
+        if not boleto_linha and extracted_data.get("linha_digitavel"):
+            boleto_linha = _clean_str(extracted_data.get("linha_digitavel"))
+        if not boleto_barras and extracted_data.get("codigo_barras"):
+            boleto_barras = _clean_str(extracted_data.get("codigo_barras"))
+        if not boleto_detalhes.get("nosso_numero") and extracted_data.get("nosso_numero"):
+            boleto_detalhes["nosso_numero"] = _clean_str(extracted_data.get("nosso_numero"))
+
+        if (
+            is_boleto
+            or boleto_linha
+            or boleto_barras
+            or "boleto" in tipo_lower
+            or (regra_aprendida and "boleto" in str(regra_aprendida.get("valor_atribuido") or "").lower())
+        ):
+            is_boleto = True
+            dominio_raw = "financeiro"
+            tipo_doc_raw = "Boleto Bancário"
+            tipo_lower = "boleto bancário"
+            is_legitimate_pix = False
+            has_explicit_pix_term = False
+            pix_chave = None
+            pix_e2e_id = None
+            pix_autenticacao = None
+        elif regra_aprendida:
+            tipo_doc_raw = regra_aprendida.get("valor_atribuido") or tipo_doc_raw
+            tipo_lower = str(tipo_doc_raw).lower()
+            dominio_raw = regra_aprendida.get("dominio") or dominio_raw
+            if regra_aprendida.get("remover_pix"):
+                is_legitimate_pix = False
+                has_explicit_pix_term = False
+                pix_chave = None
+                pix_e2e_id = None
+                pix_autenticacao = None
+
         # Detecção de outros tipos específicos de documentos financeiros
         is_listagem = bool(
             any(k in full_text_corpus for k in ["listagem", "depósito", "deposito", "relação", "relacao", "borderô", "bordero", "relação de depósitos", "relacao de depositos"])
@@ -3034,7 +3191,7 @@ def process_single_pdf(
         is_ted = bool(any(k in full_text_corpus for k in ["\bted\b", "\bdoc\b", "transferência bancária", "transferencia bancaria", "transferência entre contas", "transferencia entre contas"]))
 
         # Se foi sugerido como PIX sem conter termo 'PIX' ou E2E ID oficial, corrige a classificação
-        if "pix" in tipo_lower and not is_legitimate_pix:
+        if "pix" in tipo_lower and not is_legitimate_pix and not is_boleto:
             if is_listagem:
                 tipo_doc_raw = "Listagem de Pagamentos / Depósitos"
             elif is_darf:
@@ -3054,6 +3211,7 @@ def process_single_pdf(
         ])
 
         has_explicit_financial = bool(
+            is_boleto or
             is_legitimate_pix or
             is_listagem or
             is_darf or
@@ -3070,7 +3228,10 @@ def process_single_pdf(
 
         has_pix_signal = bool(is_legitimate_pix and (pix_e2e_id or pix_chave or has_explicit_pix_term))
 
-        if not is_non_financial_comprovante and (has_pix_signal or has_explicit_financial or valor_raw or dominio_raw == "financeiro"):
+        if is_boleto:
+            dominio = "financeiro"
+            tipo_doc_raw = "Boleto Bancário"
+        elif not is_non_financial_comprovante and (has_pix_signal or has_explicit_financial or valor_raw or dominio_raw == "financeiro"):
             dominio = "financeiro"
             if not tipo_doc_raw or tipo_lower in ["não identificado", "nao identificado", "outro", "não informado", "nao informado"]:
                 if has_pix_signal:
@@ -3124,6 +3285,18 @@ def process_single_pdf(
 
         if "dados_extras" not in res_dict or not isinstance(res_dict["dados_extras"], dict):
             res_dict["dados_extras"] = {}
+
+        # Atribuição e consolidação dos campos de Boleto Bancário
+        if is_boleto:
+            if boleto_linha:
+                res_dict["linha_digitavel"] = boleto_linha
+                res_dict["dados_extras"]["linha_digitavel"] = boleto_linha
+            if boleto_barras:
+                res_dict["codigo_barras"] = boleto_barras
+                res_dict["dados_extras"]["codigo_barras"] = boleto_barras
+            if boleto_detalhes.get("nosso_numero"):
+                res_dict["nosso_numero"] = boleto_detalhes["nosso_numero"]
+                res_dict["dados_extras"]["nosso_numero"] = boleto_detalhes["nosso_numero"]
 
         if is_manuscrito:
             res_dict["manuscrito"] = True
@@ -3349,18 +3522,35 @@ def process_single_pdf(
                 if (not res_dict.get("curso") or any(k in str(res_dict.get("curso")).lower() for k in ["faculdade", "universidade", "instituto", "colegio"])) and dossier.get("curso_titular"):
                     res_dict["curso"] = dossier["curso_titular"]
 
+                if is_boleto:
+                    res_dict["tipo_documento"] = "Boleto Bancário"
+                    res_dict["dominio"] = "financeiro"
+                    if "Boleto Bancário" not in todos_tipos:
+                        todos_tipos.insert(0, "Boleto Bancário")
+                    else:
+                        todos_tipos.remove("Boleto Bancário")
+                        todos_tipos.insert(0, "Boleto Bancário")
+                    if "financeiro" not in todos_dominios:
+                        todos_dominios.insert(0, "financeiro")
+
                 res_dict["todos_tipos"] = todos_tipos if todos_tipos else ([prim_tipo] if prim_tipo else [])
                 res_dict["todos_dominios"] = todos_dominios if todos_dominios else ([prim_dom] if prim_dom else [])
                 res_dict["dossie_paginas"] = dossier.get("dossie_paginas", [])
             except Exception:
                 prim_tipo = res_dict.get("tipo_documento")
                 prim_dom = res_dict.get("dominio")
+                if is_boleto:
+                    prim_tipo = "Boleto Bancário"
+                    prim_dom = "financeiro"
                 res_dict["todos_tipos"] = [prim_tipo] if prim_tipo else []
                 res_dict["todos_dominios"] = [prim_dom] if prim_dom else []
                 res_dict["dossie_paginas"] = []
         else:
             prim_tipo = res_dict.get("tipo_documento")
             prim_dom = res_dict.get("dominio")
+            if is_boleto:
+                prim_tipo = "Boleto Bancário"
+                prim_dom = "financeiro"
             res_dict["todos_tipos"] = [prim_tipo] if prim_tipo else []
             res_dict["todos_dominios"] = [prim_dom] if prim_dom else []
             res_dict["dossie_paginas"] = [{"pagina": 1, "tipo": prim_tipo or "Documento", "dominio": prim_dom or "outros"}]
@@ -3381,6 +3571,9 @@ def process_single_pdf(
             res_dict.get("faculdade"),
             res_dict.get("tipo_documento"),
             res_dict.get("valor_monetario"),
+            res_dict.get("linha_digitavel"),
+            res_dict.get("codigo_barras"),
+            res_dict.get("nosso_numero"),
             res_dict.get("pix_pagador_nome"),
             res_dict.get("pix_e2e_id"),
             res_dict.get("emitente"),

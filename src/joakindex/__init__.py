@@ -18,6 +18,7 @@ from joakindex.cli import (
     is_valid_cpf_syntax,
     extract_cpf_fallback,
     extract_rg_fallback,
+    extract_boleto_signals,
 )
 
 from joakindex.server import (
@@ -35,6 +36,12 @@ from joakindex.db import (
     get_document_by_md5,
     get_all_documents,
     update_conference_status,
+    salvar_regra_aprendida,
+    obter_regras_aprendidas,
+    remover_regra_aprendida,
+    consultar_regra_para_texto,
+    resolve_default_db_path,
+    DEFAULT_DB_PATH,
 )
 
 from joakindex.config import (
@@ -64,6 +71,7 @@ __all__ = [
     "is_valid_cpf_syntax",
     "extract_cpf_fallback",
     "extract_rg_fallback",
+    "extract_boleto_signals",
     "ConferenciaServer",
     "get_db_path",
     "get_json_path",
@@ -74,6 +82,12 @@ __all__ = [
     "get_document_by_md5",
     "get_all_documents",
     "update_conference_status",
+    "salvar_regra_aprendida",
+    "obter_regras_aprendidas",
+    "remover_regra_aprendida",
+    "consultar_regra_para_texto",
+    "resolve_default_db_path",
+    "DEFAULT_DB_PATH",
     "get_factory_defaults",
     "get_classifier_config",
     "save_classifier_config",
