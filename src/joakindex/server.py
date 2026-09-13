@@ -1542,6 +1542,119 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.wfile.write(body)
                 return
 
+            # API de Busca Avançada Full-Text (FTS5)
+            if path == "/api/busca_fts":
+                query = urllib.parse.parse_qs(parsed.query)
+                q_termo = query.get("q", [""])[0].strip()
+                limit = int(query.get("limit", [50])[0]) if query.get("limit", [""])[0].isdigit() else 50
+                try:
+                    from joakindex.db import search_fts
+                    resultados = search_fts(server_ctx.db_path, q_termo, limit=limit)
+                except Exception as e:
+                    resultados = []
+                body = json.dumps(resultados, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            # API de Duplicatas Detectadas
+            if path == "/api/duplicatas":
+                try:
+                    from joakindex.deduplication import detect_duplicates
+                    dups = detect_duplicates(server_ctx.db_path)
+                except Exception as e:
+                    dups = []
+                body = json.dumps(dups, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            # API de Dossiês Agrupados
+            if path == "/api/dossies":
+                try:
+                    from joakindex.dossier import get_all_dossiers
+                    dossiers = get_all_dossiers(server_ctx.db_path)
+                except Exception as e:
+                    dossiers = []
+                body = json.dumps(dossiers, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            # API de Estatísticas Gerenciais para o Dashboard
+            if path == "/api/estatisticas_gerenciais":
+                try:
+                    from joakindex.audit_report import get_management_statistics
+                    stats = get_management_statistics(server_ctx.db_path)
+                except Exception as e:
+                    stats = {}
+                body = json.dumps(stats, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            # API para Download do Relatório Executivo em PDF
+            if path == "/api/relatorio/pdf":
+                try:
+                    from joakindex.audit_report import generate_executive_audit_report
+                    temp_pdf = server_ctx.db_path.parent / "relatorio_auditoria_joakindex.pdf"
+                    generate_executive_audit_report(server_ctx.db_path, temp_pdf)
+                    content = temp_pdf.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/pdf")
+                    self.send_header("Content-Disposition", 'attachment; filename="relatorio_auditoria_joakindex.pdf"')
+                    self.send_header("Content-Length", str(len(content)))
+                    self.end_headers()
+                    self.wfile.write(content)
+                    return
+                except Exception as e:
+                    self.send_error(500, f"Erro ao gerar relatório de auditoria: {e}")
+                    return
+
+            # API para Inspecionar Assinaturas e Origem de um Documento
+            if path.startswith("/api/inspecionar/"):
+                md5_req = path.split("/api/inspecionar/")[-1].strip().lower()
+                pdf_file = server_ctx.md5_to_file.get(md5_req)
+                if pdf_file and pdf_file.exists():
+                    try:
+                        from joakindex.inspector import inspect_pdf
+                        res_insp = inspect_pdf(pdf_file)
+                        if server_ctx.db_path and "erro" not in res_insp:
+                            try:
+                                from joakindex.db import update_inspection_status
+                                update_inspection_status(
+                                    server_ctx.db_path,
+                                    md5_req,
+                                    eh_nativo_digital=res_insp.get("eh_nativo_digital", False),
+                                    tem_assinatura_digital=res_insp.get("tem_assinatura_digital", False),
+                                    info_assinaturas=res_insp.get("info_assinaturas") or res_insp.get("assinaturas", [])
+                                )
+                            except Exception as db_err:
+                                logging.warning("Falha ao salvar inspeção no banco: %s", db_err)
+                    except Exception as e:
+                        res_insp = {"erro": str(e)}
+                else:
+                    res_insp = {"erro": "Arquivo PDF não encontrado no disco"}
+                body = json.dumps(res_insp, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             # API de Miniaturas de Páginas (Thumbnail de Alta Definição com Cache)
             if path.startswith("/api/thumbnail/"):
                 query = urllib.parse.parse_qs(parsed.query)
@@ -2107,6 +2220,86 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.send_header("Content-Length", str(len(resp)))
                 self.end_headers()
                 self.wfile.write(resp)
+                return
+
+            # Smart Dispatcher (Organização Física de Arquivos e Pastas)
+            if path == "/api/organizar_arquivos":
+                out_dir = payload.get("output_dir")
+                if not out_dir:
+                    out_dir = str(server_ctx.db_path.parent / "saida_organizada")
+                mode = payload.get("mode", "copy")
+                dry_run = bool(payload.get("dry_run", True))
+                try:
+                    from joakindex.dispatcher import organize_files
+                    res_org = organize_files(
+                        server_ctx.db_path,
+                        output_dir=out_dir,
+                        pdf_source_dir=server_ctx.pdf_dir,
+                        mode=mode,
+                        dry_run=dry_run
+                    )
+                except Exception as e:
+                    res_org = {"status": "erro", "mensagem": str(e)}
+
+                body = json.dumps(res_org, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            # Resolução de Duplicata (Aprovar como duplicado ou Descartar falso positivo)
+            if path == "/api/duplicatas/resolver":
+                target_md5 = str(payload.get("md5") or "").strip().lower()
+                descartar = bool(payload.get("descartar", False))
+                try:
+                    from joakindex.deduplication import resolve_duplicate
+                    ok = resolve_duplicate(server_ctx.db_path, target_md5, descartar=descartar)
+                    res_dup = {"status": "sucesso" if ok else "erro"}
+                except Exception as e:
+                    res_dup = {"status": "erro", "mensagem": str(e)}
+                body = json.dumps(res_dup, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            # Geração de Dossiês por Entidades (CPF/CNPJ/Nome)
+            if path == "/api/dossies/gerar":
+                try:
+                    from joakindex.dossier import build_and_save_dossiers
+                    dossiers = build_and_save_dossiers(server_ctx.db_path)
+                    res_dos = {"status": "sucesso", "total_dossies": len(dossiers), "dossies": dossiers}
+                except Exception as e:
+                    res_dos = {"status": "erro", "mensagem": str(e)}
+                body = json.dumps(res_dos, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            # Exportação de Dossiê Unificado em PDF
+            if path == "/api/dossies/exportar":
+                dossie_id = str(payload.get("dossie_id") or "").strip()
+                out_name = f"{dossie_id}_unificado.pdf"
+                out_path = server_ctx.db_path.parent / "dossies_exportados" / out_name
+                try:
+                    from joakindex.dossier import export_dossier_pdf
+                    ok, msg = export_dossier_pdf(server_ctx.db_path, dossie_id, out_path, pdf_base_dir=server_ctx.pdf_dir)
+                    res_exp = {"status": "sucesso" if ok else "erro", "mensagem": msg, "caminho": str(out_path)}
+                except Exception as e:
+                    res_exp = {"status": "erro", "mensagem": str(e)}
+                body = json.dumps(res_exp, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
                 return
 
             # Leitura e Classificação completa sob demanda (com OCR multimodal forçado)

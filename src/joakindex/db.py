@@ -23,8 +23,11 @@ COLUMNS = [
     "conferido_em", "revisado_em", "observacoes_conferencia",
     "todos_dominios", "todos_tipos", "dossie_paginas",
     "dublin_core", "dc_title", "dc_subject", "dc_creator_tool",
+    "duplicata_de", "similaridade_duplicata", "eh_nativo_digital",
+    "tem_assinatura_digital", "info_assinaturas_json", "dossie_id", "caminho_organizado",
     "dados_extras"
 ]
+
 
 COLUMNS_SET = set(COLUMNS)
 
@@ -117,6 +120,13 @@ def create_schema(conn: sqlite3.Connection) -> None:
         dc_title TEXT,
         dc_subject TEXT,
         dc_creator_tool TEXT,
+        duplicata_de TEXT,
+        similaridade_duplicata REAL DEFAULT 0.0,
+        eh_nativo_digital INTEGER DEFAULT 0,
+        tem_assinatura_digital INTEGER DEFAULT 0,
+        info_assinaturas_json TEXT,
+        dossie_id TEXT,
+        caminho_organizado TEXT,
         dados_extras TEXT
     );
     """)
@@ -150,6 +160,20 @@ def create_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE documentos ADD COLUMN dc_subject TEXT;")
     if "dc_creator_tool" not in existing_cols:
         conn.execute("ALTER TABLE documentos ADD COLUMN dc_creator_tool TEXT;")
+    if "duplicata_de" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN duplicata_de TEXT;")
+    if "similaridade_duplicata" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN similaridade_duplicata REAL DEFAULT 0.0;")
+    if "eh_nativo_digital" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN eh_nativo_digital INTEGER DEFAULT 0;")
+    if "tem_assinatura_digital" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN tem_assinatura_digital INTEGER DEFAULT 0;")
+    if "info_assinaturas_json" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN info_assinaturas_json TEXT;")
+    if "dossie_id" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN dossie_id TEXT;")
+    if "caminho_organizado" not in existing_cols:
+        conn.execute("ALTER TABLE documentos ADD COLUMN caminho_organizado TEXT;")
 
     # Índices para consultas instantâneas
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_status ON documentos(status);")
@@ -167,6 +191,9 @@ def create_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_dc_tool ON documentos(dc_creator_tool);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_tipos ON documentos(todos_tipos);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_todos_dominios ON documentos(todos_dominios);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_duplicata ON documentos(duplicata_de);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_dossie ON documentos(dossie_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_assinatura ON documentos(tem_assinatura_digital);")
 
     # Tabela de Regras e Aprendizado Incremental do Usuário
     conn.execute("""
@@ -182,6 +209,77 @@ def create_schema(conn: sqlite3.Connection) -> None:
     );
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_regra_termo ON regras_aprendidas(termo_chave);")
+
+    # Tabela de Dossiês Agrupados
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS dossies (
+        id TEXT PRIMARY KEY,
+        tipo_entidade TEXT NOT NULL,
+        identificador TEXT NOT NULL,
+        nome_titular TEXT,
+        total_documentos INTEGER DEFAULT 0,
+        criado_em TEXT NOT NULL
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dossie_identificador ON dossies(identificador);")
+
+    # Tabela Virtual FTS5 para Busca Textual Ultra-Rápida
+    conn.execute("""
+    CREATE VIRTUAL TABLE IF NOT EXISTS documentos_fts USING fts5(
+        md5 UNINDEXED,
+        nome_arquivo,
+        tipo_documento,
+        dominio,
+        faculdade,
+        beneficiario,
+        cpf,
+        cnpj,
+        texto_conteudo,
+        tokenize = 'unicode61 remove_diacritics 2'
+    );
+    """)
+
+    # Gatilhos automáticos para manter o índice FTS5 sincronizado
+    conn.execute("""
+    CREATE TRIGGER IF NOT EXISTS trg_docs_fts_insert AFTER INSERT ON documentos BEGIN
+        INSERT INTO documentos_fts(md5, nome_arquivo, tipo_documento, dominio, faculdade, beneficiario, cpf, cnpj, texto_conteudo)
+        VALUES (
+            new.md5,
+            coalesce(new.nome_arquivo, ''),
+            coalesce(new.tipo_documento, ''),
+            coalesce(new.dominio, ''),
+            coalesce(new.faculdade, ''),
+            coalesce(new.beneficiario, ''),
+            coalesce(new.cpf, ''),
+            coalesce(new.cnpj, ''),
+            coalesce(new.dados_extras, '')
+        );
+    END;
+    """)
+
+    conn.execute("""
+    CREATE TRIGGER IF NOT EXISTS trg_docs_fts_update AFTER UPDATE ON documentos BEGIN
+        DELETE FROM documentos_fts WHERE md5 = old.md5;
+        INSERT INTO documentos_fts(md5, nome_arquivo, tipo_documento, dominio, faculdade, beneficiario, cpf, cnpj, texto_conteudo)
+        VALUES (
+            new.md5,
+            coalesce(new.nome_arquivo, ''),
+            coalesce(new.tipo_documento, ''),
+            coalesce(new.dominio, ''),
+            coalesce(new.faculdade, ''),
+            coalesce(new.beneficiario, ''),
+            coalesce(new.cpf, ''),
+            coalesce(new.cnpj, ''),
+            coalesce(new.dados_extras, '')
+        );
+    END;
+    """)
+
+    conn.execute("""
+    CREATE TRIGGER IF NOT EXISTS trg_docs_fts_delete AFTER DELETE ON documentos BEGIN
+        DELETE FROM documentos_fts WHERE md5 = old.md5;
+    END;
+    """)
 
     # Garante preenchimento de domínio retroativo nos registros antigos
     conn.execute("UPDATE documentos SET dominio = 'academico' WHERE dominio IS NULL OR dominio = '';")
@@ -289,6 +387,21 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
         if not dc_creator_tool:
             dc_creator_tool = dc_dict.get("creator_tool")
 
+    # Novos campos da Suíte Avançada
+    duplicata_de = item.get("duplicata_de")
+    similaridade_duplicata = float(item.get("similaridade_duplicata", 0.0) or 0.0)
+    eh_nativo_digital = 1 if item.get("eh_nativo_digital") else 0
+    tem_assinatura_digital = 1 if item.get("tem_assinatura_digital") else 0
+    info_assinaturas_json = item.get("info_assinaturas_json")
+    if isinstance(info_assinaturas_json, (dict, list)):
+        info_assinaturas_json = json.dumps(info_assinaturas_json, ensure_ascii=False)
+    elif isinstance(info_assinaturas_json, str) and info_assinaturas_json.strip():
+        info_assinaturas_json = info_assinaturas_json.strip()
+    else:
+        info_assinaturas_json = None
+    dossie_id = item.get("dossie_id")
+    caminho_organizado = item.get("caminho_organizado")
+
     # Campos extras não mapeados nas colunas fixas são serializados em JSON
     extras = {}
     if isinstance(item.get("dados_extras"), dict):
@@ -306,6 +419,8 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
         conferido_em, revisado_em, obs_conf,
         todos_dominios, todos_tipos, dossie_paginas,
         dublin_core, dc_title, dc_subject, dc_creator_tool,
+        duplicata_de, similaridade_duplicata, eh_nativo_digital,
+        tem_assinatura_digital, info_assinaturas_json, dossie_id, caminho_organizado,
         dados_extras
     )
 
@@ -318,8 +433,19 @@ def row_to_doc(row: sqlite3.Row) -> Dict[str, Any]:
         if col in row_keys:
             d[col] = row[col]
 
-    # Converte booleano
+    # Converte booleanos
     d["tentativa_ocr_llm"] = bool(d.get("tentativa_ocr_llm", False))
+    d["eh_nativo_digital"] = bool(d.get("eh_nativo_digital", 0))
+    d["tem_assinatura_digital"] = bool(d.get("tem_assinatura_digital", 0))
+
+    # Desserializa info_assinaturas_json
+    if "info_assinaturas_json" in row_keys and d.get("info_assinaturas_json"):
+        raw_sig = d["info_assinaturas_json"]
+        if isinstance(raw_sig, str):
+            try:
+                d["info_assinaturas_json"] = json.loads(raw_sig)
+            except Exception:
+                pass
 
     # Desserializa dublin_core JSON se necessário
     if "dublin_core" in row_keys and d.get("dublin_core"):
@@ -442,8 +568,11 @@ def upsert_document(db_path: Union[str, Path], doc: Dict[str, Any]) -> None:
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
         conferido_em, revisado_em, observacoes_conferencia,
         todos_dominios, todos_tipos, dossie_paginas,
-        dublin_core, dc_title, dc_subject, dc_creator_tool, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        dublin_core, dc_title, dc_subject, dc_creator_tool,
+        duplicata_de, similaridade_duplicata, eh_nativo_digital,
+        tem_assinatura_digital, info_assinaturas_json, dossie_id, caminho_organizado,
+        dados_extras
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
@@ -478,6 +607,13 @@ def upsert_document(db_path: Union[str, Path], doc: Dict[str, Any]) -> None:
         dc_title = COALESCE(excluded.dc_title, documentos.dc_title),
         dc_subject = COALESCE(excluded.dc_subject, documentos.dc_subject),
         dc_creator_tool = COALESCE(excluded.dc_creator_tool, documentos.dc_creator_tool),
+        duplicata_de = COALESCE(excluded.duplicata_de, documentos.duplicata_de),
+        similaridade_duplicata = COALESCE(excluded.similaridade_duplicata, documentos.similaridade_duplicata),
+        eh_nativo_digital = COALESCE(excluded.eh_nativo_digital, documentos.eh_nativo_digital),
+        tem_assinatura_digital = COALESCE(excluded.tem_assinatura_digital, documentos.tem_assinatura_digital),
+        info_assinaturas_json = COALESCE(excluded.info_assinaturas_json, documentos.info_assinaturas_json),
+        dossie_id = COALESCE(excluded.dossie_id, documentos.dossie_id),
+        caminho_organizado = COALESCE(excluded.caminho_organizado, documentos.caminho_organizado),
         dados_extras = excluded.dados_extras;
     """
     with get_connection(db) as conn:
@@ -500,8 +636,11 @@ def upsert_documents_batch(db_path: Union[str, Path], docs: List[Dict[str, Any]]
         metodo_leitura, tentativa_ocr_llm, erro, processado_em,
         conferido_em, revisado_em, observacoes_conferencia,
         todos_dominios, todos_tipos, dossie_paginas,
-        dublin_core, dc_title, dc_subject, dc_creator_tool, dados_extras
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        dublin_core, dc_title, dc_subject, dc_creator_tool,
+        duplicata_de, similaridade_duplicata, eh_nativo_digital,
+        tem_assinatura_digital, info_assinaturas_json, dossie_id, caminho_organizado,
+        dados_extras
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(md5) DO UPDATE SET
         nome_arquivo = COALESCE(excluded.nome_arquivo, documentos.nome_arquivo),
         caminho_relativo = COALESCE(excluded.caminho_relativo, documentos.caminho_relativo),
@@ -536,6 +675,13 @@ def upsert_documents_batch(db_path: Union[str, Path], docs: List[Dict[str, Any]]
         dc_title = COALESCE(excluded.dc_title, documentos.dc_title),
         dc_subject = COALESCE(excluded.dc_subject, documentos.dc_subject),
         dc_creator_tool = COALESCE(excluded.dc_creator_tool, documentos.dc_creator_tool),
+        duplicata_de = COALESCE(excluded.duplicata_de, documentos.duplicata_de),
+        similaridade_duplicata = COALESCE(excluded.similaridade_duplicata, documentos.similaridade_duplicata),
+        eh_nativo_digital = COALESCE(excluded.eh_nativo_digital, documentos.eh_nativo_digital),
+        tem_assinatura_digital = COALESCE(excluded.tem_assinatura_digital, documentos.tem_assinatura_digital),
+        info_assinaturas_json = COALESCE(excluded.info_assinaturas_json, documentos.info_assinaturas_json),
+        dossie_id = COALESCE(excluded.dossie_id, documentos.dossie_id),
+        caminho_organizado = COALESCE(excluded.caminho_organizado, documentos.caminho_organizado),
         dados_extras = excluded.dados_extras;
     """
     with get_connection(db) as conn:
@@ -845,3 +991,118 @@ def consultar_regra_para_texto(db_path: Optional[Union[str, Path]] = None, texto
     except Exception:
         pass
     return None
+
+
+def rebuild_fts_index(db_path_or_conn: Union[str, Path, sqlite3.Connection]) -> int:
+    """Reconstrói completamente o índice FTS5 a partir da tabela documentos."""
+    is_conn = isinstance(db_path_or_conn, sqlite3.Connection)
+    conn = db_path_or_conn if is_conn else get_connection(db_path_or_conn)
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM documentos_fts;")
+        cur.execute("""
+        INSERT INTO documentos_fts(md5, nome_arquivo, tipo_documento, dominio, faculdade, beneficiario, cpf, cnpj, texto_conteudo)
+        SELECT md5, coalesce(nome_arquivo, ''), coalesce(tipo_documento, ''), coalesce(dominio, ''),
+               coalesce(faculdade, ''), coalesce(beneficiario, ''), coalesce(cpf, ''), coalesce(cnpj, ''),
+               coalesce(dados_extras, '')
+        FROM documentos;
+        """)
+        count = cur.rowcount
+        conn.commit()
+        return count
+    finally:
+        if not is_conn:
+            conn.close()
+
+
+def search_fts(db_path: Union[str, Path], query_str: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    Executa busca avançada FTS5 com BM25 ranking e trechos (snippets) contextuais.
+    """
+    if not query_str or not str(query_str).strip():
+        return []
+
+    q = str(query_str).strip()
+    words = [w.strip() for w in q.split() if w.strip()]
+    if not words:
+        return []
+
+    # Se a query não tiver operadores booleanos nem aspas, usa busca por prefixo em cada palavra
+    has_operator = any(op in q for op in ["AND", "OR", "NOT", '"', "*"])
+    if not has_operator:
+        match_query = " ".join(f"{w}*" for w in words)
+    else:
+        match_query = q
+
+    sql = """
+    SELECT
+        d.*,
+        bm25(documentos_fts) AS fts_score,
+        snippet(documentos_fts, -1, '<mark>', '</mark>', '...', 15) AS fts_snippet
+    FROM documentos_fts
+    JOIN documentos d ON d.md5 = documentos_fts.md5
+    WHERE documentos_fts MATCH ?
+    ORDER BY fts_score ASC
+    LIMIT ?;
+    """
+
+    db = Path(db_path).expanduser().resolve()
+    if not db.exists():
+        return []
+
+    with get_connection(db) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute(sql, (match_query, limit))
+            rows = cur.fetchall()
+        except sqlite3.OperationalError:
+            # Fallback seguro caso haja sintaxe inválida na query: busca literal
+            clean_literal = '"' + q.replace('"', '""') + '"'
+            try:
+                cur.execute(sql, (clean_literal, limit))
+                rows = cur.fetchall()
+            except Exception:
+                return []
+
+        results = []
+        for r in rows:
+            doc = row_to_doc(r)
+            doc["fts_score"] = float(r["fts_score"])
+            doc["fts_snippet"] = str(r["fts_snippet"])
+            results.append(doc)
+        return results
+
+
+def update_inspection_status(
+    db_path: Union[str, Path],
+    md5: str,
+    eh_nativo_digital: bool,
+    tem_assinatura_digital: bool,
+    info_assinaturas: Optional[List[Dict[str, Any]]] = None,
+) -> bool:
+    """Atualiza metadados de integridade, assinatura digital e origem (nativo vs OCR)."""
+    db = Path(db_path).expanduser().resolve()
+    if not db.exists():
+        return False
+    with get_connection(db) as conn:
+        cur = conn.cursor()
+        info_json = json.dumps(info_assinaturas or [], ensure_ascii=False)
+        cur.execute(
+            """
+            UPDATE documentos
+            SET eh_nativo_digital = ?,
+                tem_assinatura_digital = ?,
+                info_assinaturas_json = ?
+            WHERE md5 = ?
+            """,
+            (
+                1 if eh_nativo_digital else 0,
+                1 if tem_assinatura_digital else 0,
+                info_json,
+                md5.strip().lower()
+            )
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
