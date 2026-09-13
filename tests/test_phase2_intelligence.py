@@ -56,6 +56,14 @@ def test_detect_and_apply_duplicates(temp_db):
     updated = apply_detected_duplicates(temp_db, pairs)
     assert updated == 1
 
+    # Testa comparação detalhada para conferência humana
+    from joakindex.deduplication import compare_duplicate_pair
+    comp = compare_duplicate_pair(temp_db, "md5_original", "md5_copia")
+    assert comp["status"] == "sucesso"
+    assert comp["similaridade_pct"] >= 90.0
+    assert "doc_a" in comp and "doc_b" in comp
+    assert "texto_a" in comp and "texto_b" in comp
+
     # Testa resolução
     ok = resolve_duplicate(temp_db, "md5_copia", descartar=True)
     assert ok is True

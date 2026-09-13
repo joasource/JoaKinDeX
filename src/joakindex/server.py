@@ -1575,6 +1575,24 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.wfile.write(body)
                 return
 
+            # API de Comparação Detalhada de Duplicata (Base vs Cópia)
+            if path.startswith("/api/duplicatas/comparar"):
+                query_params = urllib.parse.parse_qs(parsed.query)
+                base_md5 = query_params.get("base", [""])[0].strip().lower()
+                copia_md5 = query_params.get("copia", [""])[0].strip().lower()
+                try:
+                    from joakindex.deduplication import compare_duplicate_pair
+                    comp_res = compare_duplicate_pair(server_ctx.db_path, base_md5, copia_md5)
+                except Exception as e:
+                    comp_res = {"erro": str(e)}
+                body = json.dumps(comp_res, ensure_ascii=False).encode("utf-8")
+                self.send_response(200 if "erro" not in comp_res else 400)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             # API de Dossiês Agrupados
             if path == "/api/dossies":
                 try:
