@@ -53,6 +53,36 @@
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
     .split-pane { flex: 1 1 0%; min-height: 0; }
 
+    /* Suporte a Safe Areas móveis (Notch do iPhone e barras gestuais do Android) */
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sar: env(safe-area-inset-right, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left, 0px);
+    }
+    .pb-safe {
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Touch targets ergonômicos e preveção de zoom indesejado em iOS/Android */
+    @media (max-width: 767px) {
+      button, a, select, input[type="checkbox"] {
+        touch-action: manipulation;
+      }
+      input[type="text"], select, textarea {
+        font-size: 13.5px !important;
+      }
+    }
+
+    /* Utilitário no-scrollbar suave */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
     /* Garantia estrita de layout para as visões mestras e toolbars contextuais */
     #viewConferencia.hidden { display: none !important; }
     #viewConferencia:not(.hidden) { display: flex !important; flex: 1 1 0%; min-height: 0; }
@@ -67,6 +97,31 @@
     #galeriaToolbar:not(.hidden) { display: flex !important; }
     #biToolbar.hidden { display: none !important; }
     #biToolbar:not(.hidden) { display: flex !important; }
+
+    @media (max-width: 767px) {
+      #viewConferencia:not(.hidden) {
+        flex-direction: column !important;
+      }
+    }
+
+    /* Estilização Bottom-Sheet dos Popovers de Filtro no Mobile (< 640px) */
+    @media (max-width: 640px) {
+      #filterPopoversBar [id^="popover"],
+      #galleryFilterPopoversBar [id^="g-popover"] {
+        position: fixed !important;
+        left: 8px !important;
+        right: 8px !important;
+        top: auto !important;
+        bottom: 12px !important;
+        max-height: 82vh !important;
+        max-width: calc(100vw - 16px) !important;
+        width: auto !important;
+        overflow-y: auto !important;
+        z-index: 70 !important;
+        border-radius: 1rem !important;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85) !important;
+      }
+    }
 
     /* Estilos de Impressão para o Painel de BI */
     @media print {
@@ -457,27 +512,27 @@
   <!-- TOPO: Barra de Navegação Superior (Identidade, Abas Principais & Ações Globais) -->
   <header class="bg-slate-950 border-b border-slate-800 z-20 shrink-0 select-none">
     <!-- LINHA 1: Identidade, Créditos, Abas e Ações do Sistema -->
-    <div class="px-4 py-2 flex items-center justify-between gap-4 border-b border-slate-900">
+    <div class="px-2.5 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-4 border-b border-slate-900">
       
       <!-- Esquerda: Logo + Título + Versão + Autoria Joaquim -->
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="bg-emerald-500/10 text-emerald-400 p-2 rounded-lg border border-emerald-500/20 shrink-0">
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div class="bg-emerald-500/10 text-emerald-400 p-1.5 sm:p-2 rounded-lg border border-emerald-500/20 shrink-0">
           <i class="fa-solid fa-layer-group text-base sm:text-lg"></i>
         </div>
         <div class="min-w-0">
-          <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <h1 class="text-sm sm:text-base font-bold tracking-tight text-white flex items-center gap-1.5">
               JoaKinDeX
             </h1>
             <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700 font-mono shrink-0">v2.2</span>
-            <span class="text-xs text-slate-400 hidden lg:inline truncate">| Central de Indexação & Conferência Documental</span>
+            <span class="text-xs text-slate-400 hidden lg:inline truncate">| Central de Indexação & Conferência</span>
           </div>
-          <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-            <span class="truncate">
+          <div class="flex items-center gap-2 text-[11px] sm:text-xs text-slate-400 mt-0.5">
+            <span class="truncate hidden sm:inline">
               Criado por <strong class="text-slate-200 font-medium">Joaquim Ferreira Silva Neto</strong> 
               <a href="mailto:joaquimfsneto@gmail.com" class="text-emerald-400 hover:text-emerald-300 hover:underline transition">&lt;joaquimfsneto@gmail.com&gt;</a>
             </span>
-            <span id="serverInfoBadge" class="hidden xl:inline-flex items-center gap-1.5 text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono truncate max-w-[280px]">
+            <span id="serverInfoBadge" class="hidden xl:inline-flex items-center gap-1.5 text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono truncate max-w-[240px]">
               <i class="fa-solid fa-folder-open text-amber-400/80"></i>
               <span id="serverInfoText" class="truncate">Carregando pastas...</span>
             </span>
@@ -488,63 +543,68 @@
       <!-- Centro: SELETOR DE ABAS PRINCIPAIS (GALERIA vs CONFERÊNCIA vs PAINEL DE BI) -->
       <div class="flex items-center bg-slate-900/90 p-1 rounded-lg border border-slate-800 shadow-inner shrink-0">
         <button id="tabMainGaleria" onclick="switchMainTab('galeria')"
-                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-amber-600 text-white shadow">
+                class="px-2 sm:px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition bg-amber-600 text-white shadow">
           <i class="fa-solid fa-grip text-amber-200"></i>
-          <span>Galeria</span>
+          <span class="hidden sm:inline">Galeria</span>
           <span id="tabBadgeGaleriaCount" class="text-[10px] bg-amber-900/60 text-amber-200 border border-amber-400/40 px-1.5 py-0.2 rounded-full font-mono">0</span>
         </button>
         <button id="tabMainConferencia" onclick="switchMainTab('conferencia')"
-                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+                class="px-2 sm:px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
           <i class="fa-solid fa-table-columns text-emerald-400"></i>
-          <span>Conferência</span>
+          <span class="hidden sm:inline">Conferência</span>
         </button>
         <button id="tabMainBI" onclick="switchMainTab('bi')"
-                class="px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+                class="px-2 sm:px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
           <i class="fa-solid fa-chart-pie text-cyan-400"></i>
-          <span>Painel de BI</span>
-          <span class="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded-full font-mono">Estatísticas</span>
+          <span class="hidden sm:inline">Painel de BI</span>
+          <span class="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded-full font-mono hidden md:inline">Estatísticas</span>
         </button>
       </div>
 
       <!-- Direita: Ações Globais (Lote, Configuração & Exportar) -->
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
         <!-- Indicador animado de lote rodando -->
         <button id="batchHeaderBadge" onclick="openConfigModal('batch')" style="display: none;" title="Processamento em lote em andamento - Clique para ver detalhes"
-                class="px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 rounded-lg border border-amber-500/40 text-xs flex items-center gap-1.5 transition animate-pulse font-medium">
+                class="px-2.5 sm:px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 rounded-lg border border-amber-500/40 text-xs flex items-center gap-1.5 transition animate-pulse font-medium">
           <i class="fa-solid fa-spinner fa-spin text-amber-400"></i>
-          <span id="batchHeaderBadgeText">Lote: 0%</span>
+          <span id="batchHeaderBadgeText" class="hidden sm:inline">Lote: 0%</span>
         </button>
 
-        <!-- BOTÕES DA SUÍTE AVANÇADA (GOVERNANÇA & INTELIGÊNCIA) -->
-        <div class="flex items-center gap-1.5">
+        <!-- BOTÕES DA SUÍTE AVANÇADA (EXPANDIDOS EM DESKTOP >= XL) -->
+        <div class="hidden xl:flex items-center gap-1.5">
           <button type="button" onclick="openGovernanceDashboard()" title="Dashboard Gerencial & Baixar Relatório Executivo em PDF"
                   class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
             <i class="fa-solid fa-chart-line text-emerald-400"></i>
-            <span class="hidden md:inline text-[11px]">Dashboard & PDF</span>
+            <span class="text-[11px]">Dashboard & PDF</span>
           </button>
           <button type="button" onclick="openDossiersModal()" title="Visualizar Dossiês Agrupados por CPF / CNPJ / Nome"
                   class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
             <i class="fa-solid fa-folder-tree text-indigo-400"></i>
-            <span class="hidden md:inline text-[11px]">Dossiês</span>
+            <span class="text-[11px]">Dossiês</span>
           </button>
           <button type="button" onclick="openDuplicatesModal()" title="Gerenciar Duplicatas e Quase-Duplicatas"
                   class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
             <i class="fa-solid fa-copy text-rose-400"></i>
-            <span class="hidden md:inline text-[11px]">Duplicatas</span>
+            <span class="text-[11px]">Duplicatas</span>
           </button>
           <button type="button" onclick="openDispatcherModal()" title="Organizar Arquivos e Pastas no Disco (Smart Dispatcher)"
                   class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
             <i class="fa-solid fa-boxes-packing text-amber-400"></i>
-            <span class="hidden md:inline text-[11px]">Organizar</span>
+            <span class="text-[11px]">Organizar</span>
+          </button>
+          <button onclick="openConfigModal()" title="Configurações & Processamento em Lote"
+                  class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
+            <i class="fa-solid fa-sliders text-emerald-400"></i>
+            <span>Configuração</span>
           </button>
         </div>
 
         <!-- SELETOR DE TEMA (CLARO / ESCURO / SISTEMA) -->
         <div class="relative" id="themeDropdownContainer">
           <button type="button" onclick="toggleThemeDropdown(event)" id="themeDropdownBtn" title="Alterar Tema: Claro, Escuro ou Sistema"
-                  class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
+                  class="px-2 sm:px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
             <i id="themeCurrentIcon" class="fa-solid fa-circle-half-stroke text-sky-400 text-xs"></i>
-            <span id="themeCurrentLabel" class="hidden sm:inline text-[11px]">Sistema</span>
+            <span id="themeCurrentLabel" class="hidden md:inline text-[11px]">Sistema</span>
             <i class="fa-solid fa-chevron-down text-[9px] text-slate-400 ml-0.5"></i>
           </button>
           
@@ -577,47 +637,87 @@
           </div>
         </div>
 
-        <!-- Botão Painel de Configurações & Lote -->
-        <button onclick="openConfigModal()" title="Configurações & Processamento em Lote"
-                class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
-          <i class="fa-solid fa-sliders text-emerald-400"></i>
-          <span class="hidden sm:inline">Configuração & Lote</span>
-        </button>
+        <!-- MENU GAVETA / DROPDOWN MOBILE DE AÇÕES (< XL) -->
+        <div class="relative xl:hidden" id="mobileActionsContainer">
+          <button type="button" onclick="toggleMobileActionsMenu(event)" id="btnMobileActionsMenu" title="Menu de Ferramentas e Governança"
+                  class="px-2 sm:px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 hover:border-slate-600 text-xs flex items-center gap-1.5 transition font-medium">
+            <i class="fa-solid fa-ellipsis-vertical text-cyan-400 text-sm"></i>
+            <span class="hidden sm:inline text-[11px]">Ações</span>
+          </button>
+
+          <div id="mobileActionsDropdownMenu" class="hidden absolute right-0 mt-1.5 w-60 bg-slate-900 border border-slate-700/90 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1 select-none">
+            <div class="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 mb-1 flex items-center justify-between">
+              <span>Ferramentas & Governança</span>
+              <i class="fa-solid fa-cubes text-cyan-400"></i>
+            </div>
+            <button type="button" onclick="toggleMobileActionsMenu(); openGovernanceDashboard();" class="w-full text-left px-2.5 py-2 rounded-lg flex items-center gap-2.5 text-slate-200 hover:bg-slate-800 transition">
+              <i class="fa-solid fa-chart-line text-emerald-400 w-4 text-center"></i>
+              <span>Dashboard & PDF</span>
+            </button>
+            <button type="button" onclick="toggleMobileActionsMenu(); openDossiersModal();" class="w-full text-left px-2.5 py-2 rounded-lg flex items-center gap-2.5 text-slate-200 hover:bg-slate-800 transition">
+              <i class="fa-solid fa-folder-tree text-indigo-400 w-4 text-center"></i>
+              <span>Dossiês Agrupados</span>
+            </button>
+            <button type="button" onclick="toggleMobileActionsMenu(); openDuplicatesModal();" class="w-full text-left px-2.5 py-2 rounded-lg flex items-center gap-2.5 text-slate-200 hover:bg-slate-800 transition">
+              <i class="fa-solid fa-copy text-rose-400 w-4 text-center"></i>
+              <span>Duplicatas & Similaridade</span>
+            </button>
+            <button type="button" onclick="toggleMobileActionsMenu(); openDispatcherModal();" class="w-full text-left px-2.5 py-2 rounded-lg flex items-center gap-2.5 text-slate-200 hover:bg-slate-800 transition">
+              <i class="fa-solid fa-boxes-packing text-amber-400 w-4 text-center"></i>
+              <span>Organizar Pastas (Dispatcher)</span>
+            </button>
+            <button type="button" onclick="toggleMobileActionsMenu(); openConfigModal();" class="w-full text-left px-2.5 py-2 rounded-lg flex items-center gap-2.5 text-slate-200 hover:bg-slate-800 transition">
+              <i class="fa-solid fa-sliders text-emerald-400 w-4 text-center"></i>
+              <span>Configurações & Lote</span>
+            </button>
+            <div class="border-t border-slate-800 my-1"></div>
+            <div class="px-2 py-1 text-[10px] text-slate-500">
+              JoaKinDeX v2.2 • Joaquim F. S. Neto
+            </div>
+          </div>
+        </div>
 
         <!-- Botão Exportar JSON e CSV -->
         <button onclick="exportJSON()" title="Exportar dados em JSON e planilha CSV completa com todas as informações extraídas"
-                class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition shrink-0">
+                class="px-2.5 sm:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition shrink-0">
           <i class="fa-solid fa-download"></i>
-          <span>Exportar (JSON + CSV)</span>
+          <span class="hidden sm:inline">Exportar</span>
         </button>
       </div>
     </div>
 
     <!-- LINHA 2: Barra Secundária de Controles & Progresso (Toolbar Contextual) -->
-    <div class="bg-slate-900/95 border-t border-slate-900 px-4 py-1.5 flex items-center justify-between gap-4 text-xs">
+    <div class="bg-slate-900/95 border-t border-slate-900 px-3 sm:px-4 py-1.5 flex items-center justify-between gap-2 sm:gap-4 text-xs">
       
       <!-- TOOLBAR CONFERÊNCIA -->
-      <div id="conferenciaToolbar" class="hidden w-full items-center justify-between gap-4">
+      <div id="conferenciaToolbar" class="hidden w-full items-center justify-between gap-2 sm:gap-4 overflow-x-auto no-scrollbar py-0.5">
         
         <!-- Esquerda: Navegação entre Documentos -->
-        <div id="conferenciaNavControls" class="flex items-center gap-2 shrink-0">
+        <div id="conferenciaNavControls" class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <!-- Botão Desktop: Recolher/Expandir Sidebar -->
+          <button id="btnToggleSidebar" onclick="toggleSidebarDesktop()" title="Ocultar/Exibir Lista Lateral (Mais espaço para o documento)"
+                  class="hidden md:flex px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-xs items-center gap-1.5 transition font-medium">
+            <i id="iconToggleSidebar" class="fa-solid fa-bars-staggered text-emerald-400"></i>
+            <span id="labelToggleSidebar" class="hidden lg:inline text-[11px]">Lista</span>
+          </button>
+
           <button id="btnPrev" onclick="navigateDoc(-1)" title="Documento Anterior (Atalho: Seta Esquerda)"
-                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+                  class="px-2 sm:px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1 sm:gap-1.5 transition font-medium">
             <i class="fa-solid fa-chevron-left"></i>
-            <span>Anterior</span>
+            <span class="hidden sm:inline">Anterior</span>
             <kbd class="text-[9px] text-slate-400 bg-slate-900 px-1 py-0.2 rounded border border-slate-700 font-mono hidden md:inline">←</kbd>
           </button>
 
-          <span id="navCounter" class="text-xs font-mono font-bold text-slate-100 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800 min-w-[75px] text-center">0 de 0</span>
+          <span id="navCounter" class="text-xs font-mono font-bold text-slate-100 bg-slate-950 px-2 sm:px-3 py-1 rounded-lg border border-slate-800 min-w-[65px] sm:min-w-[75px] text-center">0 de 0</span>
 
           <button id="btnNext" onclick="navigateDoc(1)" title="Próximo Documento (Atalho: Seta Direita)"
-                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
-            <span>Próximo</span>
+                  class="px-2 sm:px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1 sm:gap-1.5 transition font-medium">
+            <span class="hidden sm:inline">Próximo</span>
             <kbd class="text-[9px] text-slate-400 bg-slate-900 px-1 py-0.2 rounded border border-slate-700 font-mono hidden md:inline">→</kbd>
             <i class="fa-solid fa-chevron-right"></i>
           </button>
 
-          <div class="hidden lg:flex items-center gap-2 text-[11px] text-slate-400 pl-3 border-l border-slate-800">
+          <div class="hidden xl:flex items-center gap-2 text-[11px] text-slate-400 pl-3 border-l border-slate-800">
             <span class="inline-flex items-center gap-1">
               <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-300 font-mono">Ctrl+Enter</kbd>
               <span>Aprovar</span>
@@ -631,24 +731,24 @@
         </div>
 
         <!-- Direita: Indicadores de Progresso (IA e Revisão Humana) -->
-        <div class="flex items-center gap-3 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800 text-xs shrink-0">
+        <div class="flex items-center gap-2 sm:gap-3 bg-slate-950 px-2 sm:px-3 py-1 rounded-lg border border-slate-800 text-xs shrink-0">
           <!-- Indicador IA -->
-          <div class="flex items-center gap-1.5" title="Total de documentos classificados com sucesso pela IA / Total de PDFs no lote">
+          <div class="hidden sm:flex items-center gap-1.5" title="Total de documentos classificados com sucesso pela IA / Total de PDFs no lote">
             <i class="fa-solid fa-robot text-cyan-400 text-xs"></i>
-            <span class="text-slate-400">Classificados (IA):</span>
+            <span class="text-slate-400 hidden lg:inline">Classificados (IA):</span>
             <span id="aiClassifiedText" class="font-semibold text-cyan-300 font-mono">0 / 0 (0%)</span>
           </div>
 
-          <div class="h-3.5 w-px bg-slate-700"></div>
+          <div class="hidden sm:block h-3.5 w-px bg-slate-700"></div>
 
           <!-- Indicador Revisão Humana -->
-          <div class="flex items-center gap-2.5" title="Total de documentos revisados e conferidos por você">
-            <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 sm:gap-2.5" title="Total de documentos revisados e conferidos por você">
+            <div class="flex items-center gap-1 sm:gap-1.5">
               <i class="fa-solid fa-user-check text-emerald-400 text-xs"></i>
-              <span class="text-slate-400">Revisão Humana:</span>
-              <span id="progressText" class="font-semibold text-emerald-400 font-mono">0 / 0 (0%)</span>
+              <span class="text-slate-400 hidden lg:inline">Revisão Humana:</span>
+              <span id="progressText" class="font-semibold text-emerald-400 font-mono">0 / 0</span>
             </div>
-            <div class="w-24 sm:w-36 bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700/80" title="Progresso da conferência humana aprovada">
+            <div class="w-16 sm:w-24 md:w-36 bg-slate-800 rounded-full h-2 sm:h-2.5 overflow-hidden border border-slate-700/80" title="Progresso da conferência humana aprovada">
               <div id="progressBar" class="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full transition-all duration-300" style="width: 0%"></div>
             </div>
           </div>
@@ -656,59 +756,60 @@
       </div>
 
       <!-- TOOLBAR PAINEL DE BI -->
-      <div id="biToolbar" class="hidden w-full items-center justify-between gap-4">
+      <div id="biToolbar" class="hidden w-full items-center justify-between gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
         <!-- Esquerda: Título do contexto -->
-        <div class="flex items-center gap-2 text-xs text-slate-300 font-medium">
+        <div class="flex items-center gap-2 text-xs text-slate-300 font-medium shrink-0">
           <i class="fa-solid fa-chart-column text-cyan-400 text-sm"></i>
-          <span class="font-semibold text-slate-200">Painel Estatístico & Business Intelligence</span>
+          <span class="font-semibold text-slate-200">Painel de BI</span>
           <span class="text-slate-600 hidden sm:inline">•</span>
-          <span class="text-slate-400 text-[11px] hidden sm:inline">Distribuição e métricas consolidadas de cursos, instituições e documentos</span>
+          <span class="text-slate-400 text-[11px] hidden lg:inline">Distribuição e métricas consolidadas</span>
         </div>
 
         <!-- Direita: Ações do BI -->
-        <div id="biNavControls" class="flex items-center gap-2 shrink-0">
+        <div id="biNavControls" class="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button onclick="refreshBIDashboard(true)" title="Recalcular e atualizar gráficos"
-                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+                  class="px-2.5 sm:px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1 sm:gap-1.5 transition font-medium">
             <i class="fa-solid fa-rotate text-cyan-400"></i>
-            <span>Atualizar BI</span>
+            <span class="hidden sm:inline">Atualizar BI</span>
           </button>
           <button onclick="exportBIReport()" title="Exportar Relatório Estatístico Consolidado (TXT)"
-                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+                  class="px-2 sm:px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1 sm:gap-1.5 transition font-medium">
             <i class="fa-solid fa-file-lines text-emerald-400"></i>
-            <span>Relatório TXT</span>
+            <span class="hidden md:inline">Relatório TXT</span>
+            <span class="md:hidden">TXT</span>
           </button>
           <button onclick="exportBICSV()" title="Exportar Tabela de Estatísticas (CSV)"
-                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+                  class="px-2 sm:px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1 sm:gap-1.5 transition font-medium">
             <i class="fa-solid fa-file-csv text-amber-400"></i>
             <span>CSV</span>
           </button>
           <button onclick="window.print()" title="Imprimir ou Salvar Painel de BI em PDF"
-                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+                  class="px-2 sm:px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1 sm:gap-1.5 transition font-medium">
             <i class="fa-solid fa-print text-indigo-400"></i>
-            <span>Imprimir</span>
+            <span class="hidden sm:inline">Imprimir</span>
           </button>
         </div>
       </div>
 
       <!-- TOOLBAR GALERIA DE DOCUMENTOS (PAPERLESS-NGX MOSAIC) -->
-      <div id="galeriaToolbar" class="w-full flex items-center justify-between gap-4">
+      <div id="galeriaToolbar" class="w-full flex items-center justify-between gap-2 sm:gap-4">
         <!-- Esquerda: Título do contexto e contador rápido -->
-        <div class="flex items-center gap-2.5 text-xs text-slate-300 font-medium">
+        <div class="flex items-center gap-2 sm:gap-2.5 text-xs text-slate-300 font-medium truncate">
           <i class="fa-solid fa-grip text-amber-400 text-sm"></i>
-          <span class="font-semibold text-slate-200">Galeria Visual de Documentos</span>
+          <span class="font-semibold text-slate-200 truncate">Galeria Visual</span>
           <span class="text-slate-600 hidden sm:inline">•</span>
           <span id="galeriaSubheaderCounter" class="text-slate-400 text-[11px] font-mono hidden sm:inline">Exibindo catálogo...</span>
         </div>
 
         <!-- Direita: Ações Rápidas da Galeria -->
-        <div id="galeriaNavControls" class="flex items-center gap-2 shrink-0 text-xs">
+        <div id="galeriaNavControls" class="flex items-center gap-1.5 sm:gap-2 shrink-0 text-xs">
           <button onclick="switchMainTab('conferencia')" title="Abrir o documento selecionado na Conferência Humana"
-                  class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+                  class="px-2 sm:px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1 sm:gap-1.5 transition font-medium">
             <i class="fa-solid fa-table-columns text-emerald-400"></i>
-            <span class="hidden sm:inline">Ir para Conferência</span>
+            <span class="hidden sm:inline">Conferência</span>
           </button>
           <button onclick="renderGalleryView()" title="Recarregar grade de miniaturas"
-                  class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition font-medium">
+                  class="px-2 sm:px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs flex items-center gap-1 sm:gap-1.5 transition font-medium">
             <i class="fa-solid fa-rotate text-amber-400"></i>
             <span>Atualizar</span>
           </button>
@@ -719,10 +820,30 @@
   </header>
 
   <!-- CORPO PRINCIPAL: Lista Lateral + Divisão Lado a Lado (Conferência) -->
-  <main id="viewConferencia" class="hidden flex-1 min-h-0 flex overflow-hidden split-pane">
+  <main id="viewConferencia" class="hidden flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden split-pane relative">
+
+    <!-- SELETOR SEGMENTADO MOBILE DE CONFERÊNCIA (Apenas telas < 768px) -->
+    <div id="mobileConferenceSegmentedNav" class="flex md:hidden bg-slate-900/98 border-b border-slate-800 p-1 shrink-0 select-none z-20">
+      <button type="button" id="btnMobSegLista" onclick="setMobileConferenceView('lista')"
+              class="flex-1 py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white shadow-sm">
+        <i class="fa-solid fa-list-ul text-[11px]"></i>
+        <span>Lista</span>
+        <span id="mobBadgeCount" class="text-[10px] bg-emerald-900/60 text-emerald-200 border border-emerald-400/30 px-1.5 py-0.2 rounded-full font-mono">0</span>
+      </button>
+      <button type="button" id="btnMobSegDoc" onclick="setMobileConferenceView('doc')"
+              class="flex-1 py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-slate-200">
+        <i class="fa-regular fa-file-pdf text-rose-400 text-[11px]"></i>
+        <span>Documento</span>
+      </button>
+      <button type="button" id="btnMobSegDados" onclick="setMobileConferenceView('dados')"
+              class="flex-1 py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-slate-200">
+        <i class="fa-solid fa-list-check text-cyan-400 text-[11px]"></i>
+        <span>Conferência</span>
+      </button>
+    </div>
 
     <!-- 1. BARRA LATERAL ESQUERDA: LISTA DE DOCUMENTOS E FILTROS -->
-    <aside id="sidebar" class="w-84 sm:w-96 bg-slate-950/70 border-r border-slate-800 flex flex-col shrink-0">
+    <aside id="sidebar" class="w-full md:w-80 lg:w-96 bg-slate-950/70 border-r border-slate-800 flex flex-col shrink-0 flex-1 md:flex-initial overflow-hidden">
       
       <div class="p-2.5 border-b border-slate-800 space-y-2">
         <!-- Campo de Busca Principal com suporte a FTS5 -->
@@ -971,21 +1092,22 @@
     </aside>
 
     <!-- 2. PAINEL CENTRAL ESQUERDO: VISUALIZADOR DE DOCUMENTO (PDF / IMAGEM) -->
-    <section class="flex-1 flex flex-col border-r border-slate-800 bg-slate-950 overflow-hidden">
-      <div class="bg-slate-900/90 border-b border-slate-800 px-4 py-2 flex items-center justify-between shrink-0">
-        <div class="flex items-center gap-2.5 overflow-hidden text-xs">
+    <section id="pdfViewerPane" class="flex-1 flex flex-col border-r border-slate-800 bg-slate-950 overflow-hidden relative">
+      <div class="bg-slate-900/90 border-b border-slate-800 px-3 sm:px-4 py-2 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-1.5 sm:gap-2.5 overflow-hidden text-xs">
           <i id="docTypeHeaderIcon" class="fa-regular fa-file-pdf text-rose-400"></i>
-          <span id="docTypeHeaderLabel" class="text-slate-400">Visualização do PDF:</span>
-          <span id="pdfMd5Title" class="font-mono text-emerald-400 truncate max-w-[160px] sm:max-w-xs md:max-w-sm">Nenhum selecionado</span>
-          <div id="currentStatusBadge" class="text-[11px] px-2.5 py-0.5 rounded-full font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20 shrink-0 shadow-sm">
+          <span id="docTypeHeaderLabel" class="text-slate-400 hidden sm:inline">Visualização do PDF:</span>
+          <span id="pdfMd5Title" class="font-mono text-emerald-400 truncate max-w-[120px] sm:max-w-xs md:max-w-sm">Nenhum selecionado</span>
+          <div id="currentStatusBadge" class="text-[11px] px-2 sm:px-2.5 py-0.5 rounded-full font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20 shrink-0 shadow-sm">
             Pendente
           </div>
           <div id="currentHybridBadge" class="hidden text-[11px] px-2 py-0.5 rounded-full font-semibold border bg-amber-500/20 text-amber-300 border-amber-500/40 shrink-0 shadow-sm flex items-center gap-1" title="Classificado via Fallback Híbrido (Ollama ➔ OpenAI)">
             <i class="fa-solid fa-bolt text-amber-400 text-[10px]"></i>
-            <span>Híbrido (Ollama ➔ Nuvem)</span>
+            <span class="hidden md:inline">Híbrido (Ollama ➔ Nuvem)</span>
+            <span class="md:hidden">Híbrido</span>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5 sm:gap-2">
           <!-- Controles de Imagem (quando documento for imagem nativa) -->
           <div id="imageControls" class="hidden items-center gap-1 mr-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
             <button onclick="zoomImage(0.2)" title="Aumentar Zoom (+)" class="text-slate-400 hover:text-emerald-400 text-xs px-1.5 py-0.5 rounded hover:bg-slate-800">
@@ -1033,28 +1155,41 @@
           <p class="text-xs text-slate-400">Nenhum documento selecionado</p>
         </div>
       </div>
+
+      <!-- Botão Flutuante Mobile: Ir para Conferência de Dados -->
+      <button type="button" onclick="setMobileConferenceView('dados')"
+              class="md:hidden fixed bottom-5 right-5 z-30 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full shadow-2xl flex items-center gap-2 text-xs font-bold border border-emerald-400/40 transition active:scale-95">
+        <i class="fa-solid fa-list-check"></i>
+        <span>Conferir Dados</span>
+      </button>
     </section>
 
     <!-- 3. PAINEL CENTRAL DIREITO: DADOS EXTRAÍDOS, DOSSIÊ & CONFERÊNCIA -->
-    <section class="w-[480px] lg:w-[540px] flex flex-col bg-slate-950 shrink-0 overflow-hidden">
+    <section id="inspectorPane" class="w-full md:w-[440px] lg:w-[500px] xl:w-[540px] flex flex-col bg-slate-950 shrink-0 flex-1 md:flex-initial overflow-hidden relative">
       <!-- Abas superiores do Inspetor (4 Abas Limpas e Espaçosas) -->
-      <div class="bg-slate-900/95 border-b border-slate-800 px-3 py-2 flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
-        <button onclick="switchInspectorTab('dados')" id="tabBtnDados" class="flex-1 min-w-[95px] px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-emerald-400 border border-slate-700/80 transition flex items-center justify-center gap-1.5 shadow-sm" title="Dados cadastrais e classificação">
+      <div class="bg-slate-900/95 border-b border-slate-800 px-2.5 sm:px-3 py-2 flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
+        <!-- Botão Mobile: Voltar ao PDF -->
+        <button type="button" onclick="setMobileConferenceView('doc')"
+                class="md:hidden px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-300 bg-rose-950/40 border border-rose-500/30 transition flex items-center gap-1.5 shrink-0" title="Ver arquivo original">
+          <i class="fa-solid fa-file-pdf text-[11px]"></i>
+          <span>PDF</span>
+        </button>
+        <button onclick="switchInspectorTab('dados')" id="tabBtnDados" class="flex-1 min-w-[75px] sm:min-w-[95px] px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-emerald-400 border border-slate-700/80 transition flex items-center justify-center gap-1 sm:gap-1.5 shadow-sm" title="Dados cadastrais e classificação">
           <i class="fa-solid fa-list-check text-[11px]"></i>
           <span>Dados</span>
         </button>
-        <button onclick="switchInspectorTab('dossie')" id="tabBtnDossie" class="flex-1 min-w-[130px] px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1.5" title="Visualização de páginas e documentos do dossiê">
+        <button onclick="switchInspectorTab('dossie')" id="tabBtnDossie" class="flex-1 min-w-[100px] sm:min-w-[130px] px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1 sm:gap-1.5" title="Visualização de páginas e documentos do dossiê">
           <i class="fa-solid fa-layer-group text-[11px]"></i>
-          <span>Dossiê & Páginas</span>
+          <span class="truncate">Dossiê</span>
           <span id="tabBadgePaginas" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-cyan-400 font-mono hidden">1p</span>
         </button>
-        <button onclick="switchInspectorTab('texto')" id="tabBtnTexto" class="flex-1 min-w-[105px] px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1.5" title="Texto integral extraído e OCR com busca local">
+        <button onclick="switchInspectorTab('texto')" id="tabBtnTexto" class="flex-1 min-w-[80px] sm:min-w-[105px] px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1 sm:gap-1.5" title="Texto integral extraído e OCR com busca local">
           <i class="fa-solid fa-align-left text-[11px]"></i>
-          <span>Texto OCR</span>
+          <span class="truncate">OCR</span>
         </button>
-        <button onclick="switchInspectorTab('ficha')" id="tabBtnFicha" class="flex-1 min-w-[110px] px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1.5" title="Ficha técnica, metadados do arquivo e auditoria">
+        <button onclick="switchInspectorTab('ficha')" id="tabBtnFicha" class="flex-1 min-w-[80px] sm:min-w-[110px] px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition flex items-center justify-center gap-1 sm:gap-1.5" title="Ficha técnica, metadados do arquivo e auditoria">
           <i class="fa-solid fa-circle-info text-[11px]"></i>
-          <span>Ficha Técnica</span>
+          <span class="truncate">Ficha</span>
         </button>
       </div>
 
@@ -1526,32 +1661,33 @@
         </div>
       </div>
 
-      <!-- RODAPÉ FIXO DE AÇÕES -->
-      <div class="bg-slate-900/95 border-t border-slate-800 px-3.5 py-2.5 shrink-0 space-y-2">
+      <!-- RODAPÉ FIXO DE AÇÕES (COM SAFE-AREA NO MOBILE) -->
+      <div class="bg-slate-900/95 border-t border-slate-800 px-3 sm:px-3.5 py-2 sm:py-2.5 shrink-0 space-y-2 pb-safe">
         <!-- Linha 1: Ferramentas Complementares (Copiar Ficha Visual Law e OCR) -->
         <div class="flex items-center gap-2">
           <button type="button" id="btnCopyAllFooter" onclick="copyAllExtractedData(this)" title="Copiar ficha de qualificação em padrão Visual Law para colar diretamente no Word ou em petições"
-                  class="flex-1 py-1.5 px-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 hover:text-emerald-300 border border-slate-700/80 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm">
+                  class="flex-1 py-1.5 px-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 hover:text-emerald-300 border border-slate-700/80 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm min-h-[34px]">
             <i class="fa-solid fa-paste text-emerald-400"></i>
-            <span>Copiar Ficha (Visual Law)</span>
+            <span class="truncate">Copiar Ficha (Visual Law)</span>
           </button>
 
           <button type="button" id="btnProcessarDoc" onclick="triggerProcessarDocumento()" title="Ler texto integral e classificar dados deste documento com OCR multimodal via LLM ou API externa"
-                  class="py-1.5 px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0">
+                  class="py-1.5 px-2.5 sm:px-3 bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 rounded text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm shrink-0 min-h-[34px]">
             <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
-            <span>Ler e Classificar (OCR)</span>
+            <span class="hidden sm:inline">Ler e Classificar (OCR)</span>
+            <span class="sm:hidden">OCR</span>
           </button>
         </div>
 
         <!-- Barra de Aprendizado Incremental da IA -->
-        <div class="flex items-center justify-between px-2.5 py-1.5 bg-slate-950/60 rounded-lg border border-slate-800/80 text-[11px]">
+        <div class="flex items-center justify-between px-2.5 py-1 sm:py-1.5 bg-slate-950/60 rounded-lg border border-slate-800/80 text-[11px]">
           <label class="flex items-center gap-1.5 cursor-pointer select-none" title="Gravar este padrão na memória do JoaKinDeX para que a IA aprenda a classificar documentos semelhantes automaticamente">
             <input type="checkbox" id="chkAprenderRegra" checked class="rounded border-slate-700 bg-slate-900 text-teal-500 focus:ring-teal-500 h-3.5 w-3.5 cursor-pointer">
-            <span class="flex items-center gap-1.5 text-slate-300 font-medium">
-              <i class="fa-solid fa-brain text-teal-400 text-[10.5px]"></i> Aprender com esta conferência
+            <span class="flex items-center gap-1.5 text-slate-300 font-medium truncate">
+              <i class="fa-solid fa-brain text-teal-400 text-[10.5px]"></i> <span class="hidden sm:inline">Aprender com esta conferência</span><span class="sm:hidden">Aprender</span>
             </span>
           </label>
-          <button type="button" onclick="openLearnedRulesModal()" class="text-[10.5px] text-teal-400 hover:text-teal-300 hover:underline flex items-center gap-1 font-mono transition" title="Ver catálogo de regras aprendidas pela IA">
+          <button type="button" onclick="openLearnedRulesModal()" class="text-[10.5px] text-teal-400 hover:text-teal-300 hover:underline flex items-center gap-1 font-mono transition shrink-0" title="Ver catálogo de regras aprendidas pela IA">
             <i class="fa-solid fa-list-check text-[10px]"></i> Regras (<span id="learnedRulesCount">0</span>)
           </button>
         </div>
@@ -1560,20 +1696,20 @@
         <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-800/60">
           <div class="flex items-center gap-1.5">
             <button id="btnSalvar" onclick="saveCurrentDoc()" title="Salvar alterações deste documento (Ctrl+S)"
-                    class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm">
+                    class="px-2.5 sm:px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition shadow-sm min-h-[36px]">
               <i class="fa-solid fa-floppy-disk"></i>
               <span>Salvar</span>
               <kbd class="hidden sm:inline text-[9px] bg-blue-700/80 px-1 py-0.5 rounded text-blue-200 font-mono">^S</kbd>
             </button>
             <button onclick="resetDocChanges()" title="Reverter alterações deste documento"
-                    class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-slate-100 rounded text-xs transition border border-slate-700 flex items-center gap-1">
+                    class="px-2 sm:px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-slate-100 rounded text-xs transition border border-slate-700 flex items-center gap-1 min-h-[36px]">
               <i class="fa-solid fa-rotate-left text-slate-400"></i>
-              <span>Reverter</span>
+              <span class="hidden sm:inline">Reverter</span>
             </button>
           </div>
 
           <button id="btnAprovar" onclick="approveAndNext()" title="Aprovar conferência deste documento e avançar (Ctrl+Enter)"
-                  class="flex-1 max-w-[210px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm">
+                  class="flex-1 max-w-[220px] px-3 sm:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm min-h-[36px]">
             <i class="fa-solid fa-circle-check"></i>
             <span>Aprovar & Próximo</span>
             <kbd class="hidden sm:inline text-[9px] bg-emerald-700/80 px-1 py-0.5 rounded text-emerald-200 font-mono">↵</kbd>
@@ -3903,6 +4039,7 @@
       if (!menu) return;
       const isHidden = menu.classList.contains('hidden');
       closeAllFilterPopovers();
+      closeMobileActionsMenu();
       if (isHidden) {
         menu.classList.remove('hidden');
       } else {
@@ -3916,6 +4053,121 @@
         menu.classList.add('hidden');
       }
     }
+
+    // =========================================================================
+    // RESPONSIVIDADE & GERENCIAMENTO MOBILE JOAKINDEX
+    // =========================================================================
+    let currentMobileConfView = 'lista';
+    let isSidebarCollapsedDesktop = false;
+
+    function toggleMobileActionsMenu(event) {
+      if (event) event.stopPropagation();
+      const menu = document.getElementById('mobileActionsDropdownMenu');
+      if (!menu) return;
+      const isHidden = menu.classList.contains('hidden');
+      closeAllFilterPopovers();
+      closeThemeDropdown();
+      if (isHidden) {
+        menu.classList.remove('hidden');
+      } else {
+        menu.classList.add('hidden');
+      }
+    }
+
+    function closeMobileActionsMenu() {
+      const menu = document.getElementById('mobileActionsDropdownMenu');
+      if (menu && !menu.classList.contains('hidden')) {
+        menu.classList.add('hidden');
+      }
+    }
+
+    function toggleSidebarDesktop() {
+      isSidebarCollapsedDesktop = !isSidebarCollapsedDesktop;
+      const sidebar = document.getElementById('sidebar');
+      const btn = document.getElementById('btnToggleSidebar');
+      const label = document.getElementById('labelToggleSidebar');
+      const icon = document.getElementById('iconToggleSidebar');
+      if (sidebar) {
+        sidebar.style.display = isSidebarCollapsedDesktop ? 'none' : 'flex';
+      }
+      if (btn) {
+        if (isSidebarCollapsedDesktop) {
+          btn.classList.add('bg-emerald-900/40', 'border-emerald-500/50', 'text-emerald-300');
+          if (label) label.innerText = 'Mostrar Lista';
+          if (icon) icon.className = 'fa-solid fa-list text-emerald-400';
+        } else {
+          btn.classList.remove('bg-emerald-900/40', 'border-emerald-500/50', 'text-emerald-300');
+          if (label) label.innerText = 'Lista';
+          if (icon) icon.className = 'fa-solid fa-bars-staggered text-emerald-400';
+        }
+      }
+    }
+
+    function setMobileConferenceView(view) {
+      currentMobileConfView = view;
+      const isMobile = window.innerWidth < 768;
+      const sidebar = document.getElementById('sidebar');
+      const pdfPane = document.getElementById('pdfViewerPane');
+      const inspector = document.getElementById('inspectorPane');
+      const btnLista = document.getElementById('btnMobSegLista');
+      const btnDoc = document.getElementById('btnMobSegDoc');
+      const btnDados = document.getElementById('btnMobSegDados');
+
+      if (!isMobile) {
+        if (sidebar) sidebar.style.display = isSidebarCollapsedDesktop ? 'none' : 'flex';
+        if (pdfPane) pdfPane.style.display = 'flex';
+        if (inspector) inspector.style.display = 'flex';
+        return;
+      }
+
+      [btnLista, btnDoc, btnDados].forEach(b => {
+        if (b) {
+          b.classList.remove('bg-emerald-600', 'text-white', 'shadow-sm');
+          b.classList.add('text-slate-400');
+        }
+      });
+
+      if (view === 'lista') {
+        if (btnLista) {
+          btnLista.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+          btnLista.classList.remove('text-slate-400');
+        }
+        if (sidebar) sidebar.style.display = 'flex';
+        if (pdfPane) pdfPane.style.display = 'none';
+        if (inspector) inspector.style.display = 'none';
+      } else if (view === 'doc') {
+        if (btnDoc) {
+          btnDoc.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+          btnDoc.classList.remove('text-slate-400');
+        }
+        if (sidebar) sidebar.style.display = 'none';
+        if (pdfPane) pdfPane.style.display = 'flex';
+        if (inspector) inspector.style.display = 'none';
+      } else if (view === 'dados') {
+        if (btnDados) {
+          btnDados.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+          btnDados.classList.remove('text-slate-400');
+        }
+        if (sidebar) sidebar.style.display = 'none';
+        if (pdfPane) pdfPane.style.display = 'none';
+        if (inspector) inspector.style.display = 'flex';
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      if (typeof currentMainTab !== 'undefined' && currentMainTab === 'conferencia') {
+        if (window.innerWidth >= 768) {
+          const sidebar = document.getElementById('sidebar');
+          const pdfPane = document.getElementById('pdfViewerPane');
+          const inspector = document.getElementById('inspectorPane');
+          if (sidebar) sidebar.style.display = isSidebarCollapsedDesktop ? 'none' : 'flex';
+          if (pdfPane) pdfPane.style.display = 'flex';
+          if (inspector) inspector.style.display = 'flex';
+        } else {
+          setMobileConferenceView(currentMobileConfView);
+        }
+      }
+    });
 
     function initTheme() {
       currentThemeSetting = localStorage.getItem('joakindex_theme') || 'system';
@@ -3947,12 +4199,17 @@
       if (themeContainer && !themeContainer.contains(e.target)) {
         closeThemeDropdown();
       }
+      const mobileContainer = document.getElementById('mobileActionsContainer');
+      if (mobileContainer && !mobileContainer.contains(e.target)) {
+        closeMobileActionsMenu();
+      }
     });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         if (openFilterPopoverId) closeAllFilterPopovers();
         closeThemeDropdown();
+        closeMobileActionsMenu();
       }
     });
 
@@ -6895,6 +7152,8 @@
       if (cntNaoProc) cntNaoProc.innerText = naoProcessados;
 
       document.getElementById('filterResultCount').innerText = `${filteredDocs.length} de ${total}`;
+      const mobBadge = document.getElementById('mobBadgeCount');
+      if (mobBadge) mobBadge.innerText = filteredDocs.length;
       updateBulkUI();
       
       const label = [];
@@ -7542,6 +7801,10 @@
       currentIndex = index;
       const doc = filteredDocs[currentIndex];
       currentSelectedMd5 = doc.md5;
+
+      if (window.innerWidth < 768 && currentMobileConfView === 'lista') {
+        setMobileConferenceView('doc');
+      }
 
       document.getElementById('navCounter').innerText = `${currentIndex + 1} de ${filteredDocs.length}`;
 
@@ -12532,9 +12795,9 @@
       const biToolbar = document.getElementById('biToolbar');
 
       // Reseta todos os botões de abas para o estado inativo
-      if (btnConf) btnConf.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
-      if (btnGal) btnGal.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
-      if (btnBI) btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+      if (btnConf) btnConf.className = 'px-2 sm:px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+      if (btnGal) btnGal.className = 'px-2 sm:px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
+      if (btnBI) btnBI.className = 'px-2 sm:px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60';
 
       // Esconde todas as visões principais e toolbars
       if (viewConf) { viewConf.classList.add('hidden'); viewConf.classList.remove('flex'); }
@@ -12545,9 +12808,16 @@
       if (biToolbar) { biToolbar.classList.add('hidden'); biToolbar.classList.remove('flex'); }
 
       if (tabName === 'conferencia') {
-        if (btnConf) btnConf.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-emerald-600 text-white shadow';
+        if (btnConf) btnConf.className = 'px-2 sm:px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition bg-emerald-600 text-white shadow';
         if (viewConf) { viewConf.classList.remove('hidden'); viewConf.classList.add('flex'); }
         if (confToolbar) { confToolbar.classList.remove('hidden'); confToolbar.classList.add('flex'); }
+        if (typeof setMobileConferenceView === 'function') {
+          if (window.innerWidth < 768) {
+            setMobileConferenceView(currentMobileConfView || 'lista');
+          } else {
+            setMobileConferenceView('desktop');
+          }
+        }
         if (typeof filteredDocs !== 'undefined' && filteredDocs.length > 0 && typeof currentIndex !== 'undefined' && currentIndex >= 0) {
           const curDoc = filteredDocs[currentIndex];
           if (curDoc && curDoc.md5) {
@@ -12555,12 +12825,12 @@
           }
         }
       } else if (tabName === 'galeria') {
-        if (btnGal) btnGal.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-amber-600 text-white shadow';
+        if (btnGal) btnGal.className = 'px-2 sm:px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition bg-amber-600 text-white shadow';
         if (viewGal) { viewGal.classList.remove('hidden'); viewGal.classList.add('flex'); }
         if (galToolbar) { galToolbar.classList.remove('hidden'); galToolbar.classList.add('flex'); }
         renderGalleryView();
       } else if (tabName === 'bi') {
-        if (btnBI) btnBI.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition bg-cyan-600 text-white shadow';
+        if (btnBI) btnBI.className = 'px-2 sm:px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition bg-cyan-600 text-white shadow';
         if (viewBI) { viewBI.classList.remove('hidden'); }
         if (biToolbar) { biToolbar.classList.remove('hidden'); biToolbar.classList.add('flex'); }
         renderBIDashboard();
