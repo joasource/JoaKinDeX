@@ -232,12 +232,7 @@ try:
         upsert_documents_batch,
         get_document_by_md5,
         get_all_documents,
-        update_conference_status,
         sync_to_json,
-        salvar_regra_aprendida,
-        aprender_com_paginas_dossie,
-        obter_regras_aprendidas,
-        remover_regra_aprendida
     )
 except ImportError:
     try:
@@ -248,12 +243,7 @@ except ImportError:
             upsert_documents_batch,
             get_document_by_md5,
             get_all_documents,
-            update_conference_status,
             sync_to_json,
-            salvar_regra_aprendida,
-            aprender_com_paginas_dossie,
-            obter_regras_aprendidas,
-            remover_regra_aprendida
         )
     except ImportError:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -264,12 +254,7 @@ except ImportError:
             upsert_documents_batch,
             get_document_by_md5,
             get_all_documents,
-            update_conference_status,
             sync_to_json,
-            salvar_regra_aprendida,
-            aprender_com_paginas_dossie,
-            obter_regras_aprendidas,
-            remover_regra_aprendida
         )
 
 try:
@@ -346,6 +331,31 @@ except ImportError:
         handle_get_estatisticas_gerenciais,
         handle_get_relatorio_pdf,
         handle_get_inspecionar
+    )
+
+try:
+    from joakindex.api_documentos import (
+        handle_get_documentos,
+        handle_get_documento,
+        handle_get_regras_aprendidas,
+        handle_get_busca_fts,
+        handle_post_salvar,
+        handle_post_regras_aprendidas,
+        handle_post_aprovar,
+        handle_post_organizar_arquivos,
+        handle_post_uniformizar_instituicoes
+    )
+except ImportError:
+    from .api_documentos import (
+        handle_get_documentos,
+        handle_get_documento,
+        handle_get_regras_aprendidas,
+        handle_get_busca_fts,
+        handle_post_salvar,
+        handle_post_regras_aprendidas,
+        handle_post_aprovar,
+        handle_post_organizar_arquivos,
+        handle_post_uniformizar_instituicoes
     )
 
 
@@ -1430,88 +1440,22 @@ def create_handler(server_ctx: ConferenciaServer):
 
             # API para listar todos os documentos
             if path == "/api/documentos":
-                dados = server_ctx.load_data()
-                for item in dados:
-                    if "status_conferencia" not in item:
-                        item["status_conferencia"] = "pendente"
-                    for k in ["curso", "beneficiario", "faculdade", "natureza_curso", "tipo_documento", "carga_horaria", "cpf", "rg", "data", "valor_monetario", "dominio"]:
-                        v = item.get(k)
-                        if isinstance(v, list):
-                            item[k] = ", ".join(str(x) for x in v if x)
-                body = json.dumps(dados, ensure_ascii=False).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                handle_get_documentos(self, server_ctx)
                 return
 
             # API para obter metadados de um único documento por MD5
             if path.startswith("/api/documento/") or path.startswith("/api/document/"):
-                prefix = "/api/documento/" if path.startswith("/api/documento/") else "/api/document/"
-                md5_req = path.split(prefix)[-1].strip().lower()
-                dados = server_ctx.load_data()
-                doc_found = next((item for item in dados if item.get("md5", "").lower() == md5_req), None)
-                if not doc_found and server_ctx.db_path and server_ctx.db_path.exists():
-                    try:
-                        import sqlite3
-                        with sqlite3.connect(server_ctx.db_path) as conn:
-                            conn.row_factory = sqlite3.Row
-                            cur = conn.cursor()
-                            row = cur.execute("SELECT * FROM documentos WHERE LOWER(md5) = ?", (md5_req,)).fetchone()
-                            if row:
-                                doc_found = dict(row)
-                                for col in ["metadados_adicionais", "assinaturas", "dados_extras", "todos_tipos", "todos_dominios", "paginas_detalhes"]:
-                                    if col in doc_found and isinstance(doc_found[col], str):
-                                        try:
-                                            doc_found[col] = json.loads(doc_found[col])
-                                        except Exception:
-                                            pass
-                    except Exception:
-                        pass
-                if doc_found:
-                    body = json.dumps(doc_found, ensure_ascii=False).encode("utf-8")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json; charset=utf-8")
-                    self.send_header("Content-Length", str(len(body)))
-                    self.end_headers()
-                    self.wfile.write(body)
-                    return
-                else:
-                    self.send_error(404, f"Documento com MD5 {md5_req} não encontrado.")
-                    return
-
+                handle_get_documento(self, server_ctx, path)
+                return
 
             # API de Regras Aprendidas pelo Usuário
             if path == "/api/regras-aprendidas":
-                try:
-                    regras = obter_regras_aprendidas(server_ctx.db_path)
-                except Exception:
-                    regras = []
-                body = json.dumps(regras, ensure_ascii=False).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                handle_get_regras_aprendidas(self, server_ctx)
                 return
 
             # API de Busca Avançada Full-Text (FTS5)
             if path == "/api/busca_fts":
-                query = urllib.parse.parse_qs(parsed.query)
-                q_termo = query.get("q", [""])[0].strip()
-                limit = int(query.get("limit", [50])[0]) if query.get("limit", [""])[0].isdigit() else 50
-                try:
-                    from joakindex.db import search_fts
-                    resultados = search_fts(server_ctx.db_path, q_termo, limit=limit)
-                except Exception:
-                    resultados = []
-                body = json.dumps(resultados, ensure_ascii=False).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                handle_get_busca_fts(self, server_ctx, parsed)
                 return
 
             # API de Duplicatas Detectadas
@@ -1678,165 +1622,17 @@ def create_handler(server_ctx: ConferenciaServer):
 
             # Salvar edição de um documento
             if path == "/api/salvar":
-                item_editado = payload.get("item")
-                if item_editado and "md5" in item_editado:
-                    item_editado.pop("data_criacao", None)
-                    if item_editado.get("faculdade"):
-                        item_editado["faculdade"] = normalizar_instituicao(item_editado.get("faculdade"))
-                    target_md5 = str(item_editado["md5"]).strip().lower()
-                    item_editado["md5"] = target_md5
-                    item_editado["revisado_em"] = datetime.now().isoformat()
-
-                    # 1. Gravação instantânea no SQLite WAL
-                    upsert_document(server_ctx.db_path, item_editado)
-
-                    # 2. Se existir pasta 'individuais' correspondente, atualiza o arquivo individual também
-                    indiv_dir = server_ctx.json_path.parent / "individuais"
-                    if indiv_dir.exists():
-                        indiv_file = indiv_dir / f"{target_md5}.json"
-                        try:
-                            with open(indiv_file, "w", encoding="utf-8") as fi:
-                                json.dump(item_editado, fi, ensure_ascii=False, indent=2)
-                        except Exception:
-                            pass
-
-                    # 3. Sincronização atômica para JSON e TXT consolidado
-                    sync_to_json(server_ctx.db_path, server_ctx.json_path, only_processed=True)
-                    all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
-                    server_ctx.update_txt_report(all_processed)
-
-                    # 4. Aprendizado Incremental se solicitado pelo usuário (Nível de Página e Documento)
-                    if payload.get("aprender_regra"):
-                        try:
-                            dossie_pgs = item_editado.get("dossie_paginas", [])
-                            if dossie_pgs:
-                                aprender_com_paginas_dossie(
-                                    server_ctx.db_path,
-                                    target_md5,
-                                    dossie_pgs,
-                                    item_editado=item_editado
-                                )
-
-                            termo = (item_editado.get("tipo_documento") or "").strip()
-                            if termo:
-                                salvar_regra_aprendida(
-                                    server_ctx.db_path,
-                                    termo_chave=termo,
-                                    valor_atribuido=termo,
-                                    dominio=item_editado.get("dominio", "academico"),
-                                    campo_alvo="tipo_documento",
-                                    remover_pix=(item_editado.get("dominio") != "financeiro"),
-                                    origem_md5=target_md5
-                                )
-                        except Exception as e:
-                            print(f"[Aviso] Falha ao registrar regra aprendida: {e}")
-
-                    resp = json.dumps({"status": "sucesso", "mensagem": "Documento salvo com sucesso!"}).encode("utf-8")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json; charset=utf-8")
-                    self.send_header("Content-Length", str(len(resp)))
-                    self.end_headers()
-                    self.wfile.write(resp)
+                if handle_post_salvar(self, server_ctx, payload):
                     return
 
             # Gerenciamento de Regras Aprendidas (Adicionar / Excluir)
             if path == "/api/regras-aprendidas":
-                action = payload.get("acao", "salvar")
-                if action == "salvar":
-                    rid = salvar_regra_aprendida(
-                        server_ctx.db_path,
-                        termo_chave=payload.get("termo_chave", ""),
-                        valor_atribuido=payload.get("valor_atribuido", ""),
-                        dominio=payload.get("dominio", "academico"),
-                        campo_alvo=payload.get("campo_alvo", "tipo_documento"),
-                        remover_pix=bool(payload.get("remover_pix")),
-                        origem_md5=payload.get("origem_md5")
-                    )
-                    resp = json.dumps({"status": "sucesso", "regra_id": rid}).encode("utf-8")
-                elif action == "remover":
-                    ok = remover_regra_aprendida(server_ctx.db_path, payload.get("id"))
-                    resp = json.dumps({"status": "sucesso" if ok else "erro"}).encode("utf-8")
-                else:
-                    resp = json.dumps({"status": "erro", "mensagem": "Ação desconhecida"}).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(resp)))
-                self.end_headers()
-                self.wfile.write(resp)
+                handle_post_regras_aprendidas(self, server_ctx, payload)
                 return
 
             # Aprovação de conferência
             if path == "/api/aprovar":
-                target_md5 = str(payload.get("md5") or "").strip().lower()
-                obs = payload.get("observacoes_conferencia")
-
-                # 1. Atualização instantânea no SQLite WAL (< 0.1ms)
-                updated = update_conference_status(server_ctx.db_path, target_md5, "aprovado", obs)
-
-                if updated:
-                    # 2. Se existir pasta 'individuais' correspondente, atualiza o arquivo individual também
-                    indiv_dir = server_ctx.json_path.parent / "individuais"
-                    if indiv_dir.exists():
-                        indiv_file = indiv_dir / f"{target_md5}.json"
-                        if indiv_file.exists():
-                            try:
-                                with open(indiv_file, "r", encoding="utf-8") as fi:
-                                    indiv_data = json.load(fi)
-                                if isinstance(indiv_data, dict):
-                                    indiv_data["status_conferencia"] = "aprovado"
-                                    indiv_data["conferido_em"] = datetime.now().isoformat()
-                                    if obs is not None:
-                                        indiv_data["observacoes_conferencia"] = obs
-                                    with open(indiv_file, "w", encoding="utf-8") as fi:
-                                        json.dump(indiv_data, fi, ensure_ascii=False, indent=2)
-                            except Exception:
-                                pass
-
-                    # 3. Sincronização atômica para JSON e TXT consolidado
-                    sync_to_json(server_ctx.db_path, server_ctx.json_path, only_processed=True)
-                    all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
-                    server_ctx.update_txt_report(all_processed)
-
-                    # 4. Aprendizado Incremental se solicitado na aprovação
-                    if payload.get("aprender_regra"):
-                        try:
-                            doc_appr = get_document_by_md5(server_ctx.db_path, target_md5)
-                            if doc_appr:
-                                dossie_pgs = doc_appr.get("dossie_paginas", [])
-                                if isinstance(dossie_pgs, str):
-                                    try:
-                                        dossie_pgs = json.loads(dossie_pgs)
-                                    except Exception:
-                                        dossie_pgs = []
-                                if dossie_pgs:
-                                    aprender_com_paginas_dossie(
-                                        server_ctx.db_path,
-                                        target_md5,
-                                        dossie_pgs,
-                                        item_editado=doc_appr
-                                    )
-                                termo = (doc_appr.get("tipo_documento") or "").strip()
-                                if termo:
-                                    salvar_regra_aprendida(
-                                        server_ctx.db_path,
-                                        termo_chave=termo,
-                                        valor_atribuido=termo,
-                                        dominio=doc_appr.get("dominio", "academico"),
-                                        campo_alvo="tipo_documento",
-                                        remover_pix=(doc_appr.get("dominio") != "financeiro"),
-                                        origem_md5=target_md5
-                                    )
-                        except Exception as e:
-                            print(f"[Aviso] Falha ao registrar regra aprendida na aprovação: {e}")
-
-                    resp = json.dumps({"status": "sucesso", "mensagem": "Conferência aprovada com sucesso!"}).encode("utf-8")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json; charset=utf-8")
-                    self.send_header("Content-Length", str(len(resp)))
-                    self.end_headers()
-                    self.wfile.write(resp)
-                else:
-                    self.send_error(404, f"Documento MD5 {target_md5} não encontrado.")
+                handle_post_aprovar(self, server_ctx, payload)
                 return
 
             # Exportação de ZIP em lote via POST
@@ -1856,29 +1652,7 @@ def create_handler(server_ctx: ConferenciaServer):
 
             # Smart Dispatcher (Organização Física de Arquivos e Pastas)
             if path == "/api/organizar_arquivos":
-                out_dir = payload.get("output_dir")
-                if not out_dir:
-                    out_dir = str(server_ctx.db_path.parent / "saida_organizada")
-                mode = payload.get("mode", "copy")
-                dry_run = bool(payload.get("dry_run", True))
-                try:
-                    from joakindex.dispatcher import organize_files
-                    res_org = organize_files(
-                        server_ctx.db_path,
-                        output_dir=out_dir,
-                        pdf_source_dir=server_ctx.pdf_dir,
-                        mode=mode,
-                        dry_run=dry_run
-                    )
-                except Exception as e:
-                    res_org = {"status": "erro", "mensagem": str(e)}
-
-                body = json.dumps(res_org, ensure_ascii=False).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                handle_post_organizar_arquivos(self, server_ctx, payload)
                 return
 
             # Resolução de Duplicata (Aprovar como duplicado ou Descartar falso positivo)
@@ -2081,27 +1855,8 @@ def create_handler(server_ctx: ConferenciaServer):
 
             # Uniformizar nomes de instituições em toda a base sem reprocessar PDFs
             if path == "/api/uniformizar_instituicoes":
-                try:
-                    res = uniformizar_base_dados(
-                        str(server_ctx.json_path),
-                        atualizar_individuais=True
-                    )
-                    server_ctx.load_data()
-                    resp = json.dumps(res, ensure_ascii=False).encode("utf-8")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json; charset=utf-8")
-                    self.send_header("Content-Length", str(len(resp)))
-                    self.end_headers()
-                    self.wfile.write(resp)
-                    return
-                except Exception as ex_uni:
-                    err_resp = json.dumps({"status": "erro", "mensagem": str(ex_uni)}, ensure_ascii=False).encode("utf-8")
-                    self.send_response(500)
-                    self.send_header("Content-Type", "application/json; charset=utf-8")
-                    self.send_header("Content-Length", str(len(err_resp)))
-                    self.end_headers()
-                    self.wfile.write(err_resp)
-                    return
+                handle_post_uniformizar_instituicoes(self, server_ctx)
+                return
 
             self.send_error(404, "Endpoint não encontrado")
 
