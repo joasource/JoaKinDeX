@@ -17,6 +17,7 @@ import json
 import time
 import hmac
 import hashlib
+import logging
 import argparse
 import threading
 import socket
@@ -196,7 +197,6 @@ try:
         reset_visualizer_config,
         get_classifier_config,
         save_classifier_config,
-        reset_classifier_config,
         reset_all_config,
         has_custom_config,
         get_factory_defaults
@@ -209,7 +209,6 @@ except ImportError:
             reset_visualizer_config,
             get_classifier_config,
             save_classifier_config,
-            reset_classifier_config,
             reset_all_config,
             has_custom_config,
             get_factory_defaults
@@ -222,7 +221,6 @@ except ImportError:
             reset_visualizer_config,
             get_classifier_config,
             save_classifier_config,
-            reset_classifier_config,
             reset_all_config,
             has_custom_config,
             get_factory_defaults
@@ -252,8 +250,7 @@ try:
         salvar_regra_aprendida,
         aprender_com_paginas_dossie,
         obter_regras_aprendidas,
-        remover_regra_aprendida,
-        consultar_regra_para_texto
+        remover_regra_aprendida
     )
 except ImportError:
     try:
@@ -271,8 +268,7 @@ except ImportError:
             salvar_regra_aprendida,
             aprender_com_paginas_dossie,
             obter_regras_aprendidas,
-            remover_regra_aprendida,
-            consultar_regra_para_texto
+            remover_regra_aprendida
         )
     except ImportError:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -290,8 +286,7 @@ except ImportError:
             salvar_regra_aprendida,
             aprender_com_paginas_dossie,
             obter_regras_aprendidas,
-            remover_regra_aprendida,
-            consultar_regra_para_texto
+            remover_regra_aprendida
         )
 
 
@@ -1192,7 +1187,6 @@ def get_or_create_thumbnail(server_ctx: "ConferenciaServer", md5_str: str, page_
     except Exception:
         pass
 
-    page_idx = max(0, page_num - 1)
     target_width = max(120, min(1600, int(target_width)))
     cache_name = f"{md5_str}_p{page_num}_w{target_width}.jpg"
     cache_file = thumb_dir / cache_name
@@ -1693,7 +1687,7 @@ def create_handler(server_ctx: ConferenciaServer):
                                             doc_found[col] = json.loads(doc_found[col])
                                         except Exception:
                                             pass
-                    except Exception as e:
+                    except Exception:
                         pass
                 if doc_found:
                     body = json.dumps(doc_found, ensure_ascii=False).encode("utf-8")
@@ -1712,7 +1706,7 @@ def create_handler(server_ctx: ConferenciaServer):
             if path == "/api/regras-aprendidas":
                 try:
                     regras = obter_regras_aprendidas(server_ctx.db_path)
-                except Exception as e:
+                except Exception:
                     regras = []
                 body = json.dumps(regras, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
@@ -1730,7 +1724,7 @@ def create_handler(server_ctx: ConferenciaServer):
                 try:
                     from joakindex.db import search_fts
                     resultados = search_fts(server_ctx.db_path, q_termo, limit=limit)
-                except Exception as e:
+                except Exception:
                     resultados = []
                 body = json.dumps(resultados, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
@@ -1745,7 +1739,7 @@ def create_handler(server_ctx: ConferenciaServer):
                 try:
                     from joakindex.deduplication import detect_duplicates
                     dups = detect_duplicates(server_ctx.db_path)
-                except Exception as e:
+                except Exception:
                     dups = []
                 body = json.dumps(dups, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
@@ -1778,7 +1772,7 @@ def create_handler(server_ctx: ConferenciaServer):
                 try:
                     from joakindex.dossier import get_all_dossiers
                     dossiers = get_all_dossiers(server_ctx.db_path)
-                except Exception as e:
+                except Exception:
                     dossiers = []
                 body = json.dumps(dossiers, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
@@ -3184,7 +3178,7 @@ def main(argv: Optional[List[str]] = None):
         print(f"\n[✨] Processando arquivo em: {target_json}")
         res = uniformizar_base_dados(target_json, atualizar_individuais=True)
         if res.get("status") == "sucesso":
-            print(f"[✓] Base de dados consolidada com sucesso!")
+            print("[✓] Base de dados consolidada com sucesso!")
             print(f"    • Total de registros analisados : {res.get('total_registros')}")
             print(f"    • Documentos normalizados       : {res.get('total_modificados')}")
             print(f"    • Fichas individuais salvas     : {res.get('individuais_atualizados')}")

@@ -7,20 +7,19 @@ Gera relatórios executivos em formato PDF e dados analíticos consolidados
 para o dashboard com métricas de conformidade, valores financeiros e status de conferência.
 """
 
-import os
 import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, List, Optional, Union
 from collections import Counter
 from datetime import datetime
 
-from joakindex.db import get_connection, get_all_documents, row_to_doc
+from joakindex.db import get_all_documents
 
 try:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, KeepTogether
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
     )
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     HAS_REPORTLAB = True
@@ -28,7 +27,7 @@ except ImportError:
     HAS_REPORTLAB = False
 
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 
 def _parse_monetary_value(val_str: Optional[str]) -> float:

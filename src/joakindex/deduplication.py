@@ -10,9 +10,8 @@ para detectar documentos idênticos ou escaneados em diferentes resoluções/ver
 import re
 import difflib
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union, Tuple, Set
-from collections import defaultdict
-from joakindex.db import get_connection, get_all_documents, get_document_by_md5, row_to_doc
+from typing import Dict, Any, List, Union, Set
+from joakindex.db import get_connection, get_all_documents, get_document_by_md5
 
 
 def _normalize_text_for_comparison(text: str) -> str:

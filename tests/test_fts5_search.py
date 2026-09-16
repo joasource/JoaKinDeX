@@ -1,6 +1,4 @@
 import pytest
-import sqlite3
-import json
 import tempfile
 from pathlib import Path
 from joakindex.db import (
@@ -10,7 +8,6 @@ from joakindex.db import (
     upsert_documents_batch,
     rebuild_fts_index,
     search_fts,
-    get_document_by_md5,
 )
 
 

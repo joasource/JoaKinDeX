@@ -7,12 +7,11 @@ Organiza fisicamente os arquivos PDF em diretórios estruturados com
 renomeação semântica padronizada, suporte a dry-run (simulação) e manifesto CSV.
 """
 
-import os
 import re
 import csv
 import shutil
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, Optional, Union, Tuple
 from datetime import datetime
 from joakindex.db import get_connection, get_all_documents
 

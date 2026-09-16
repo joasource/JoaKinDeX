@@ -1,7 +1,5 @@
-import pytest
-import argparse
 from joakindex.cli import should_trigger_hybrid_fallback, OpenAIClient, clean_and_parse_json, build_universal_vision_prompt, build_universal_prompt
-from joakindex.config import get_factory_defaults, load_all_config, save_classifier_config, reset_classifier_config
+from joakindex.config import get_factory_defaults
 
 
 def test_hybrid_factory_defaults():

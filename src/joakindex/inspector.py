@@ -7,11 +7,9 @@ Analisa estruturas criptográficas PAdES/ICP-Brasil em arquivos PDF e
 determina se o documento é Nativo Digital ou Digitalizado/Escaneado.
 """
 
-import os
 import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
-from datetime import datetime
+from typing import Dict, Any, Union
 
 try:
     import pypdf

@@ -128,14 +128,9 @@ try:
         init_database,
         upsert_document,
         upsert_documents_batch,
-        get_document_by_md5,
         get_all_documents,
-        sync_to_json,
         consultar_regra_para_texto,
-        salvar_regra_aprendida,
-        obter_regras_aprendidas,
-        resolve_default_db_path,
-        DEFAULT_DB_PATH
+        resolve_default_db_path
     )
 except ImportError:
     try:
@@ -145,14 +140,9 @@ except ImportError:
             init_database,
             upsert_document,
             upsert_documents_batch,
-            get_document_by_md5,
             get_all_documents,
-            sync_to_json,
             consultar_regra_para_texto,
-            salvar_regra_aprendida,
-            obter_regras_aprendidas,
-            resolve_default_db_path,
-            DEFAULT_DB_PATH
+            resolve_default_db_path
         )
     except ImportError:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -162,14 +152,9 @@ except ImportError:
             init_database,
             upsert_document,
             upsert_documents_batch,
-            get_document_by_md5,
             get_all_documents,
-            sync_to_json,
             consultar_regra_para_texto,
-            salvar_regra_aprendida,
-            obter_regras_aprendidas,
-            resolve_default_db_path,
-            DEFAULT_DB_PATH
+            resolve_default_db_path
         )
 
 
@@ -1088,9 +1073,9 @@ def convert_office_to_pdf(
         c_dir = Path(tempfile.gettempdir()) / "joakindex_pdf_cache"
         c_dir.mkdir(parents=True, exist_ok=True)
 
-    # Nome do arquivo de cache pelo MD5
+    # Nome do arquivo de cache pelo MD5 do conteúdo do arquivo
     try:
-        md5_val = calculate_md5(p).strip().lower()
+        md5_val = hashlib.md5(p.read_bytes()).hexdigest()
     except Exception:
         md5_val = hashlib.md5(p.name.encode("utf-8")).hexdigest()
 
@@ -1122,7 +1107,7 @@ def convert_office_to_pdf(
                 "--outdir", str(c_dir),
                 str(p)
             ]
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
 
             # O LibreOffice gera o PDF com o mesmo stem do arquivo de origem na pasta outdir
             lo_output = c_dir / f"{p.stem}.pdf"
@@ -2318,7 +2303,6 @@ def analyze_pdf_dossier(
             pdf = pdfium.PdfDocument(str(p))
             total_pages = len(pdf)
             last_tipo = None
-            last_dom = None
 
             for i in range(total_pages):
                 page = None
@@ -2439,7 +2423,6 @@ def analyze_pdf_dossier(
 
                 if tipo and tipo != "Documento Diverso":
                     last_tipo = tipo
-                    last_dom = dom
 
                 if is_chk_p or (tipo and "cheque" in tipo.lower()):
                     for n in chk_det_p.get("numeros_cheque", ([chk_num_p] if chk_num_p else [])):
@@ -5069,7 +5052,7 @@ def prompt_interactive_menu(args: argparse.Namespace) -> argparse.Namespace:
     print("   2) OpenAI (Modelos em nuvem via API)")
     while True:
         try:
-            resp_prov = input(f"Escolha o provedor (1 ou 2) [1]: ").strip()
+            resp_prov = input("Escolha o provedor (1 ou 2) [1]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n[Operação cancelada pelo usuário]")
             sys.exit(0)
@@ -6064,7 +6047,7 @@ def main():
         print(f"\n[✨] Processando arquivo e fichas em: {out_target}")
         res = uniformizar_base_dados(out_target, atualizar_individuais=not args.no_individual)
         if res.get("status") == "sucesso":
-            print(f"[✓] Base de dados consolidada com sucesso!")
+            print("[✓] Base de dados consolidada com sucesso!")
             print(f"    • Total de registros analisados : {res.get('total_registros')}")
             print(f"    • Documentos normalizados       : {res.get('total_modificados')}")
             print(f"    • Fichas individuais salvas     : {res.get('individuais_atualizados')}")

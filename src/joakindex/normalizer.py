@@ -17,12 +17,11 @@ __email__ = "joaquimfsneto@gmail.com"
 __version__ = "1.0.0"
 
 import json
-import os
 import re
 import sys
 import unicodedata
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any
 
 try:
     from joakindex.db import get_db_path, upsert_documents_batch

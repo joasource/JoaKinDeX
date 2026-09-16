@@ -1,6 +1,4 @@
-import pytest
 import zipfile
-from pathlib import Path
 from joakindex import extract_file_dublin_core
 
 

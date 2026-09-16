@@ -8,7 +8,6 @@ documentos esparsos em dossiês consolidados com suporte a exportação unificad
 """
 
 import re
-import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Tuple
 from collections import defaultdict
@@ -192,7 +191,7 @@ def export_dossier_pdf(
             try:
                 merger.append(str(full_p))
                 added_count += 1
-            except Exception as e:
+            except Exception:
                 pass
 
     if added_count == 0:

@@ -55,6 +55,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "ruff>=0.4.0",
 ]
 
 [project.urls]
@@ -68,3 +69,14 @@ joakindex-server = "joakindex.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+# Baseline enxuto e de alto sinal: erros de sintaxe/runtime (E9) e Pyflakes (F) -
+# nomes indefinidos, imports/variáveis não usados, f-strings sem placeholder etc.
+# Regras de estilo (E501, UP, S, BLE, SIM, ...) ficam de fora por ora para não gerar
+# um diff gigante numa base de código que nunca teve lint; podem ser adotadas depois,
+# incrementalmente.
+select = ["E9", "F"]

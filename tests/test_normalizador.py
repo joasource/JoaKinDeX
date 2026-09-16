@@ -1,4 +1,3 @@
-import pytest
 from joakindex.normalizer import (
     remover_acentos,
     formatar_titulo_pt,

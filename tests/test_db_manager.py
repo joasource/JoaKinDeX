@@ -1,7 +1,3 @@
-import pytest
-import sqlite3
-import json
-from pathlib import Path
 from joakindex.db import (
     get_db_path,
     get_json_path,

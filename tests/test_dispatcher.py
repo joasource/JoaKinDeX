@@ -3,7 +3,7 @@ import tempfile
 import csv
 from pathlib import Path
 from joakindex.db import get_connection, create_schema, upsert_document
-from joakindex.dispatcher import sanitize_filename_part, build_organized_path, organize_files
+from joakindex.dispatcher import sanitize_filename_part, organize_files
 
 
 @pytest.fixture

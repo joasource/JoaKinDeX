@@ -14,7 +14,6 @@ __email__ = "joaquimfsneto@gmail.com"
 __version__ = "1.0.0"
 
 import json
-import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 

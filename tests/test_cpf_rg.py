@@ -1,4 +1,3 @@
-import pytest
 from joakindex import (
     format_cpf,
     validate_cpf_checksum,
