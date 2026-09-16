@@ -370,6 +370,22 @@ Para acessar o visualizador de outros dispositivos (ou máquinas Windows na rede
    ```
 3. No painel da Cloudflare (Zero Trust ➔ Networks ➔ Tunnels), aponte o subdomínio desejado (ex: `documentos.seu-dominio.com.br`) para `http://localhost:8088`.
 
+> ⚠️ **Importante:** o túnel do Cloudflare cuida apenas do transporte HTTPS — ele **não** exige login para acessar o servidor. Sempre defina `JOAKINDEX_AUTH_TOKEN` (veja abaixo) antes de expor o `joakindex server` fora da sua máquina, já que os documentos podem conter CPF, RG e dados financeiros.
+
+### 🔒 Autenticação por Token do Servidor
+
+O `joakindex server` aceita um token de acesso opcional. Enquanto ele não for definido, o servidor continua funcionando sem exigir login (uso local, comportamento padrão). Ao configurá-lo, toda a interface e API passam a exigir autenticação:
+
+```bash
+# No arquivo .env
+JOAKINDEX_AUTH_TOKEN=um-token-forte-e-secreto
+
+# Ou via linha de comando
+joakindex server --auth-token um-token-forte-e-secreto
+```
+
+Com o token definido, ao abrir a URL do servidor você será redirecionado para `/login`, onde deve informar o token configurado. O acesso é mantido via cookie de sessão (`HttpOnly`, `SameSite=Lax`); chamadas de API automatizadas também podem enviar o token pelo header `X-Auth-Token: <token>`.
+
 ---
 
 ## ⌨️ Atalhos na Interface:

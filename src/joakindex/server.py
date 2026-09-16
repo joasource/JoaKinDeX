@@ -15,10 +15,12 @@ import os
 import sys
 import json
 import time
+import hmac
 import hashlib
 import argparse
 import threading
 import socket
+import http.cookies
 from pathlib import Path
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
@@ -45,6 +47,84 @@ except ImportError:
 class ReusableThreadingHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True
+
+
+# --- Autenticação por token (protege o servidor ao expor via túnel/rede) ---
+AUTH_COOKIE_NAME = "joakindex_token"
+AUTH_HEADER_NAME = "X-Auth-Token"
+PUBLIC_PATHS = {"/favicon.ico", "/login", "/api/login"}
+
+LOGIN_PAGE_HTML = """<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<title>JoaKinDeX - Acesso</title>
+<style>
+body{font-family:system-ui,Arial,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+form{background:#1e293b;padding:2rem;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.4);width:min(90vw,360px)}
+h1{font-size:1.1rem;margin:0 0 1rem}
+input{width:100%;padding:.6rem;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;box-sizing:border-box;margin-bottom:.8rem}
+button{width:100%;padding:.6rem;border-radius:6px;border:none;background:#6366f1;color:#fff;font-weight:600;cursor:pointer}
+button:hover{background:#4f46e5}
+#erro{color:#f87171;font-size:.85rem;margin-bottom:.8rem;display:none}
+</style></head>
+<body>
+<form id="loginForm">
+  <h1>🔒 JoaKinDeX - Acesso Protegido</h1>
+  <div id="erro">Token inválido.</div>
+  <input type="password" id="token" placeholder="Token de acesso" autofocus autocomplete="current-password">
+  <button type="submit">Entrar</button>
+</form>
+<script>
+document.getElementById("loginForm").addEventListener("submit", async function (ev) {
+  ev.preventDefault();
+  const erro = document.getElementById("erro");
+  erro.style.display = "none";
+  try {
+    const resp = await fetch("/api/login", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({token: document.getElementById("token").value})
+    });
+    if (resp.ok) {
+      window.location.href = "/";
+    } else {
+      erro.style.display = "block";
+    }
+  } catch (e) {
+    erro.style.display = "block";
+  }
+});
+</script>
+</body></html>"""
+
+
+def token_matches(provided: Optional[str], expected: Optional[str]) -> bool:
+    """Compara o token informado com o configurado em tempo constante.
+    Sem token configurado, a autenticação fica desativada (comportamento local padrão)."""
+    if not expected:
+        return True
+    if not provided:
+        return False
+    return hmac.compare_digest(str(provided), str(expected))
+
+
+def extract_provided_token(headers, cookie_header: Optional[str] = None) -> Optional[str]:
+    """Extrai o token enviado via header dedicado, Authorization Bearer ou cookie de sessão."""
+    header_token = headers.get(AUTH_HEADER_NAME)
+    if header_token:
+        return header_token.strip()
+    auth_header = headers.get("Authorization", "") or ""
+    if auth_header.startswith("Bearer "):
+        return auth_header[len("Bearer "):].strip()
+    raw_cookie = cookie_header if cookie_header is not None else headers.get("Cookie", "")
+    if raw_cookie:
+        jar = http.cookies.SimpleCookie()
+        try:
+            jar.load(raw_cookie)
+        except Exception:
+            return None
+        if AUTH_COOKIE_NAME in jar:
+            return jar[AUTH_COOKIE_NAME].value
+    return None
 
 try:
     from joakindex.cli import (
@@ -723,8 +803,10 @@ class ConferenciaServer:
         openai_key: str = None,
         openai_base_url: str = None,
         hybrid: bool = False,
-        hybrid_cloud_model: str = "gpt-4o-mini"
+        hybrid_cloud_model: str = "gpt-4o-mini",
+        auth_token: Optional[str] = None
     ):
+        self.auth_token = (auth_token or os.environ.get("JOAKINDEX_AUTH_TOKEN") or "").strip() or None
         self.json_path = Path(resolve_json_path(json_path)).resolve()
         self.pdf_dir = Path(resolve_pdf_dir(pdf_dir)).resolve()
         if self.json_path.is_dir():
@@ -1409,9 +1491,55 @@ def create_handler(server_ctx: ConferenciaServer):
             self.send_response(200)
             self.end_headers()
 
+        def _is_authenticated(self) -> bool:
+            provided = extract_provided_token(self.headers)
+            return token_matches(provided, server_ctx.auth_token)
+
+        def _send_json_body(self, status: int, obj: dict):
+            body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_unauthorized(self):
+            self._send_json_body(401, {"erro": "Não autenticado. Acesse /login e informe o token de acesso."})
+
+        def _serve_login_page(self):
+            body = LOGIN_PAGE_HTML.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _handle_login(self, post_body: bytes):
+            try:
+                payload = json.loads(post_body.decode("utf-8"))
+            except Exception:
+                payload = {}
+            provided = str(payload.get("token", "")).strip()
+            if token_matches(provided, server_ctx.auth_token):
+                self.send_response(200)
+                self.send_header(
+                    "Set-Cookie",
+                    f"{AUTH_COOKIE_NAME}={provided}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000"
+                )
+                body = json.dumps({"ok": True}).encode("utf-8")
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self._send_json_body(401, {"ok": False, "erro": "Token inválido."})
+
         def do_HEAD(self):
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
+            if path not in PUBLIC_PATHS and not self._is_authenticated():
+                self.send_error(401, "Não autenticado.")
+                return
             if path in ["/", "/index.html", "/visualizador", "/visualizador.html"]:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -1479,6 +1607,19 @@ def create_handler(server_ctx: ConferenciaServer):
             if path == "/favicon.ico":
                 self.send_response(204)
                 self.end_headers()
+                return
+
+            if path == "/login":
+                self._serve_login_page()
+                return
+
+            if not self._is_authenticated():
+                if path.startswith("/api/"):
+                    self._send_unauthorized()
+                else:
+                    self.send_response(302)
+                    self.send_header("Location", "/login")
+                    self.end_headers()
                 return
 
             # Rota da página principal
@@ -2036,6 +2177,14 @@ def create_handler(server_ctx: ConferenciaServer):
             path = parsed.path
             length = int(self.headers.get("Content-Length", 0))
             post_body = self.rfile.read(length)
+
+            if path == "/api/login":
+                self._handle_login(post_body)
+                return
+
+            if not self._is_authenticated():
+                self._send_unauthorized()
+                return
 
             try:
                 payload = json.loads(post_body.decode("utf-8"))
@@ -2978,6 +3127,14 @@ def main(argv: Optional[List[str]] = None):
         default="gpt-4o-mini",
         help="Modelo cloud de fallback para o modo híbrido (padrão: %(default)s)."
     )
+    parser.add_argument(
+        "--auth-token", "--token",
+        dest="auth_token",
+        type=str,
+        default=None,
+        help="Token secreto exigido para acessar o servidor. Recomendado ao expor via túnel/rede pública. "
+             "Também pode ser definido pela variável de ambiente JOAKINDEX_AUTH_TOKEN (inclusive via arquivo .env)."
+    )
 
     # Carrega configurações salvas prévias como padrões do parser
     saved_cfg = get_visualizer_config()
@@ -3091,7 +3248,8 @@ def main(argv: Optional[List[str]] = None):
         openai_key=args.openai_key,
         openai_base_url=args.openai_base_url,
         hybrid=getattr(args, "hybrid", False),
-        hybrid_cloud_model=getattr(args, "hybrid_cloud_model", "gpt-4o-mini")
+        hybrid_cloud_model=getattr(args, "hybrid_cloud_model", "gpt-4o-mini"),
+        auth_token=args.auth_token
     )
     handler = create_handler(ctx)
 
@@ -3112,6 +3270,12 @@ def main(argv: Optional[List[str]] = None):
     print(f"💾 Banco de Dados SQLite   : {ctx.db_path} (WAL mode ativo)")
     print(f"📄 Arquivo JSON espelhado  : {ctx.json_path}")
     print(f"📁 Pasta de PDFs indexada  : {ctx.pdf_dir} ({len(ctx.md5_to_file)} PDFs)")
+    if ctx.auth_token:
+        print("🔒 Autenticação por token  : ATIVA (acesse /login e informe o token configurado)")
+    else:
+        print("⚠️  Autenticação por token  : DESATIVADA")
+        print("    Qualquer pessoa com acesso a esta URL pode ver e editar os documentos.")
+        print("    Defina JOAKINDEX_AUTH_TOKEN no arquivo .env (ou use --auth-token) antes de expor via túnel/rede.")
     print("=" * 70)
     start_background_thumbnail_generator(ctx, target_width=720)
     print("⚡ Miniaturas HD: gerador em alta definição (720px) ativo em segundo plano.")
