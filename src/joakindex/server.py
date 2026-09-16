@@ -21,6 +21,7 @@ import argparse
 import threading
 import socket
 import http.cookies
+import mimetypes
 from pathlib import Path
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
@@ -1333,11 +1334,39 @@ def create_handler(server_ctx: ConferenciaServer):
             else:
                 self._send_json_body(401, {"ok": False, "erro": "Token inválido."})
 
+        def _resolve_static_asset(self, path: str) -> Optional[Path]:
+            """Resolve um caminho /static/<arquivo> pra dentro de ui/static/, sem permitir path traversal."""
+            if not path.startswith("/static/"):
+                return None
+            static_dir = (server_ctx.html_path.parent / "static").resolve()
+            candidate = (static_dir / path[len("/static/"):]).resolve()
+            if static_dir not in candidate.parents and candidate != static_dir:
+                return None
+            if not candidate.is_file():
+                return None
+            return candidate
+
+        def _serve_static_asset(self, path: str, body: bool = True) -> bool:
+            asset = self._resolve_static_asset(path)
+            if asset is None:
+                return False
+            content_type, _ = mimetypes.guess_type(str(asset))
+            content = asset.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type or "application/octet-stream")
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            if body:
+                self.wfile.write(content)
+            return True
+
         def do_HEAD(self):
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
             if path not in PUBLIC_PATHS and not self._is_authenticated():
                 self.send_error(401, "Não autenticado.")
+                return
+            if self._serve_static_asset(path, body=False):
                 return
             if path in ["/", "/index.html", "/visualizador", "/visualizador.html"]:
                 self.send_response(200)
@@ -1419,6 +1448,10 @@ def create_handler(server_ctx: ConferenciaServer):
                     self.send_response(302)
                     self.send_header("Location", "/login")
                     self.end_headers()
+                return
+
+            # Arquivos estáticos da UI (CSS/JS do visualizador)
+            if self._serve_static_asset(path):
                 return
 
             # Rota da página principal

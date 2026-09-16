@@ -1,0 +1,459 @@
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .split-pane { flex: 1 1 0%; min-height: 0; }
+
+    /* Suporte a Safe Areas móveis (Notch do iPhone e barras gestuais do Android) */
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sar: env(safe-area-inset-right, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left, 0px);
+    }
+    .pb-safe {
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Touch targets ergonômicos e preveção de zoom indesejado em iOS/Android */
+    @media (max-width: 767px) {
+      button, a, select, input[type="checkbox"] {
+        touch-action: manipulation;
+      }
+      input[type="text"], select, textarea {
+        font-size: 13.5px !important;
+      }
+    }
+
+    /* Utilitário no-scrollbar suave */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Garantia estrita de layout para as visões mestras e toolbars contextuais */
+    #viewConferencia.hidden { display: none !important; }
+    #viewConferencia:not(.hidden) { display: flex !important; flex: 1 1 0%; min-height: 0; }
+    #viewGaleria.hidden { display: none !important; }
+    #viewGaleria:not(.hidden) { display: flex !important; flex-direction: column !important; flex: 1 1 0%; min-height: 0; }
+    #viewBI.hidden { display: none !important; }
+    #viewBI:not(.hidden) { display: block !important; flex: 1 1 0%; min-height: 0; }
+
+    #conferenciaToolbar.hidden { display: none !important; }
+    #conferenciaToolbar:not(.hidden) { display: flex !important; }
+    #galeriaToolbar.hidden { display: none !important; }
+    #galeriaToolbar:not(.hidden) { display: flex !important; }
+    #biToolbar.hidden { display: none !important; }
+    #biToolbar:not(.hidden) { display: flex !important; }
+
+    @media (max-width: 767px) {
+      #viewConferencia:not(.hidden) {
+        flex-direction: column !important;
+      }
+    }
+
+    /* Estilização Bottom-Sheet dos Popovers de Filtro no Mobile (< 640px) */
+    @media (max-width: 640px) {
+      #filterPopoversBar [id^="popover"],
+      #galleryFilterPopoversBar [id^="g-popover"] {
+        position: fixed !important;
+        left: 8px !important;
+        right: 8px !important;
+        top: auto !important;
+        bottom: 12px !important;
+        max-height: 82vh !important;
+        max-width: calc(100vw - 16px) !important;
+        width: auto !important;
+        overflow-y: auto !important;
+        z-index: 70 !important;
+        border-radius: 1rem !important;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85) !important;
+      }
+    }
+
+    /* Estilos de Impressão para o Painel de BI */
+    @media print {
+      body { overflow: auto !important; background: #ffffff !important; color: #000000 !important; }
+      header, #viewConferencia, #configModal, #folderPickerModal, .no-print { display: none !important; }
+      #viewBI { display: block !important; height: auto !important; overflow: visible !important; padding: 0 !important; background: #ffffff !important; color: #000000 !important; }
+      .bi-card { border: 1px solid #cbd5e1 !important; background: #ffffff !important; color: #0f172a !important; break-inside: avoid; box-shadow: none !important; }
+      .bi-table-text { color: #0f172a !important; }
+    }
+
+    /* =========================================================
+       TEMA CLARO (LIGHT THEME) - POLIMENTO COMPLETO JOAKINDEX
+       ========================================================= */
+    html.theme-light {
+      color-scheme: light;
+    }
+
+    html.theme-light, 
+    html.theme-light body {
+      background-color: #f8fafc !important; /* slate-50 */
+      color: #0f172a !important;            /* slate-900 */
+    }
+
+    /* Scrollbars no tema claro */
+    html.theme-light ::-webkit-scrollbar-track { background: #f1f5f9; }
+    html.theme-light ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    html.theme-light ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Superfícies principais (slate-950 -> branco puro) */
+    html.theme-light .bg-slate-950,
+    html.theme-light .bg-slate-950\/95,
+    html.theme-light .bg-slate-950\/90,
+    html.theme-light .bg-slate-950\/80,
+    html.theme-light .bg-slate-950\/70,
+    html.theme-light .bg-slate-950\/60,
+    html.theme-light .bg-slate-950\/50,
+    html.theme-light .bg-slate-950\/40 {
+      background-color: #ffffff !important;
+    }
+
+    /* Superfícies secundárias (slate-900 -> slate-50 ou branco suave) */
+    html.theme-light .bg-slate-900,
+    html.theme-light .bg-slate-900\/95,
+    html.theme-light .bg-slate-900\/90,
+    html.theme-light .bg-slate-900\/80,
+    html.theme-light .bg-slate-900\/70,
+    html.theme-light .bg-slate-900\/60,
+    html.theme-light .bg-slate-900\/50,
+    html.theme-light .bg-slate-900\/40 {
+      background-color: #f8fafc !important;
+    }
+
+    /* Superfícies de cards e elementos (slate-800 -> slate-100) */
+    html.theme-light .bg-slate-800,
+    html.theme-light .bg-slate-800\/95,
+    html.theme-light .bg-slate-800\/90,
+    html.theme-light .bg-slate-800\/80,
+    html.theme-light .bg-slate-800\/70,
+    html.theme-light .bg-slate-800\/60,
+    html.theme-light .bg-slate-800\/50,
+    html.theme-light .bg-slate-800\/40 {
+      background-color: #f1f5f9 !important;
+    }
+
+    html.theme-light .bg-slate-700 {
+      background-color: #e2e8f0 !important;
+    }
+
+    /* Bordas no tema claro */
+    html.theme-light .border-slate-950,
+    html.theme-light .border-slate-900,
+    html.theme-light .border-slate-800,
+    html.theme-light .border-slate-800\/90,
+    html.theme-light .border-slate-800\/80,
+    html.theme-light .border-slate-800\/70,
+    html.theme-light .border-slate-800\/60,
+    html.theme-light .border-slate-800\/50 {
+      border-color: #e2e8f0 !important; /* slate-200 */
+    }
+
+    html.theme-light .border-slate-700,
+    html.theme-light .border-slate-700\/90,
+    html.theme-light .border-slate-700\/80,
+    html.theme-light .border-slate-700\/60,
+    html.theme-light .border-slate-600 {
+      border-color: #cbd5e1 !important; /* slate-300 */
+    }
+
+    html.theme-light .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+    html.theme-light .divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+      border-color: #e2e8f0 !important;
+    }
+
+    /* Cores de texto no tema claro */
+    html.theme-light .text-slate-100 { color: #0f172a !important; }
+    html.theme-light .text-slate-200 { color: #1e293b !important; }
+    html.theme-light .text-slate-300 { color: #334155 !important; }
+    html.theme-light .text-slate-400 { color: #64748b !important; }
+    html.theme-light .text-slate-500 { color: #64748b !important; }
+    html.theme-light .text-slate-600 { color: #94a3b8 !important; }
+
+    /* Títulos e cabeçalhos em branco convertidos para preto/grafite elegante */
+    html.theme-light h1,
+    html.theme-light h2,
+    html.theme-light h3,
+    html.theme-light h4,
+    html.theme-light h1.text-white,
+    html.theme-light h2.text-white,
+    html.theme-light h3.text-white,
+    html.theme-light #pdfMd5Title,
+    html.theme-light #kpiTotalDocs,
+    html.theme-light #folderPickerTitle,
+    html.theme-light #batchLiveStatusTitle,
+    html.theme-light .font-semibold.text-slate-100 {
+      color: #0f172a !important;
+    }
+
+    /* Efeitos de Hover no tema claro */
+    html.theme-light .hover\:bg-slate-800:hover,
+    html.theme-light .hover\:bg-slate-800\/80:hover,
+    html.theme-light .hover\:bg-slate-800\/60:hover,
+    html.theme-light .hover\:bg-slate-800\/50:hover {
+      background-color: #e2e8f0 !important;
+    }
+
+    html.theme-light .hover\:bg-slate-700:hover {
+      background-color: #cbd5e1 !important;
+    }
+
+    html.theme-light .hover\:bg-slate-900:hover {
+      background-color: #f1f5f9 !important;
+    }
+
+    html.theme-light .hover\:text-slate-200:hover,
+    html.theme-light .hover\:text-slate-100:hover,
+    html.theme-light .hover\:text-white:hover {
+      color: #0f172a !important;
+    }
+
+    /* Preserva texto branco em botões de ação com fundo sólido colorido */
+    html.theme-light .bg-emerald-600,
+    html.theme-light .bg-emerald-500,
+    html.theme-light .bg-teal-600,
+    html.theme-light .bg-cyan-600,
+    html.theme-light .bg-indigo-600,
+    html.theme-light .bg-rose-600,
+    html.theme-light .bg-blue-600,
+    html.theme-light .bg-purple-600,
+    html.theme-light button.bg-emerald-600 *,
+    html.theme-light button.bg-indigo-600 *,
+    html.theme-light button.bg-rose-600 * {
+      color: #ffffff !important;
+    }
+
+    /* Inputs, selects e textareas no tema claro */
+    html.theme-light input[type="text"],
+    html.theme-light input[type="password"],
+    html.theme-light input[type="number"],
+    html.theme-light select,
+    html.theme-light textarea {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+
+    html.theme-light input[type="text"]::placeholder,
+    html.theme-light textarea::placeholder {
+      color: #94a3b8 !important;
+    }
+
+    html.theme-light input[type="text"]:focus,
+    html.theme-light input[type="password"]:focus,
+    html.theme-light input[type="number"]:focus,
+    html.theme-light select:focus,
+    html.theme-light textarea:focus {
+      border-color: #10b981 !important;
+      box-shadow: 0 0 0 1px #10b981 !important;
+    }
+
+    /* Quick Views ativas e pílulas no tema claro */
+    html.theme-light #qv-todos.bg-emerald-500\/20,
+    html.theme-light button[id^="qv-"].bg-emerald-500\/20 {
+      background-color: #d1fae5 !important;
+      color: #065f46 !important;
+      border-color: #6ee7b7 !important;
+    }
+
+    html.theme-light #pillDominio.bg-cyan-500\/20,
+    html.theme-light #g-pillDominio.bg-cyan-500\/20 {
+      background-color: #cffafe !important;
+      color: #155e75 !important;
+      border-color: #67e8f9 !important;
+    }
+    html.theme-light #pillInstituicao.bg-amber-500\/20,
+    html.theme-light #g-pillInstituicao.bg-amber-500\/20 {
+      background-color: #fef3c7 !important;
+      color: #78350f !important;
+      border-color: #fcd34d !important;
+    }
+    html.theme-light #pillTipo.bg-teal-500\/20,
+    html.theme-light #g-pillTipo.bg-teal-500\/20 {
+      background-color: #ccfbf1 !important;
+      color: #115e59 !important;
+      border-color: #5eead4 !important;
+    }
+    html.theme-light #pillNatureza.bg-indigo-500\/20,
+    html.theme-light #g-pillNatureza.bg-indigo-500\/20 {
+      background-color: #e0e7ff !important;
+      color: #3730a3 !important;
+      border-color: #a5b4fc !important;
+    }
+    html.theme-light #pillStatus.bg-emerald-500\/20,
+    html.theme-light #g-pillStatus.bg-emerald-500\/20 {
+      background-color: #d1fae5 !important;
+      color: #065f46 !important;
+      border-color: #6ee7b7 !important;
+    }
+
+    /* Badges de Status e Tipos em tema claro */
+    html.theme-light .bg-emerald-500\/10 {
+      background-color: #ecfdf5 !important;
+      color: #047857 !important;
+      border-color: #a7f3d0 !important;
+    }
+    html.theme-light .bg-amber-500\/10 {
+      background-color: #fffbeb !important;
+      color: #b45309 !important;
+      border-color: #fde68a !important;
+    }
+    html.theme-light .bg-rose-500\/10 {
+      background-color: #fff1f2 !important;
+      color: #be123c !important;
+      border-color: #fecdd3 !important;
+    }
+    html.theme-light .bg-cyan-500\/10 {
+      background-color: #ecfeff !important;
+      color: #0e7490 !important;
+      border-color: #a5f3fc !important;
+    }
+    html.theme-light .bg-purple-500\/10 {
+      background-color: #faf5ff !important;
+      color: #7e22ce !important;
+      border-color: #e9d5ff !important;
+    }
+    html.theme-light .bg-sky-500\/10 {
+      background-color: #f0f9ff !important;
+      color: #0369a1 !important;
+      border-color: #bae6fd !important;
+    }
+
+    /* Popovers, Menus e Dropdowns */
+    html.theme-light #themeDropdownMenu,
+    html.theme-light #popoverDominio,
+    html.theme-light #popoverInstituicao,
+    html.theme-light #popoverTipo,
+    html.theme-light #popoverNatureza,
+    html.theme-light #popoverStatus {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* Cards de Documento na Sidebar */
+    html.theme-light #docList > div {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+    }
+    html.theme-light #docList > div:hover {
+      background-color: #f8fafc !important;
+      border-color: #cbd5e1 !important;
+    }
+    html.theme-light #docList > div.bg-slate-800\/95 {
+      background-color: #f0fdf4 !important; /* emerald-50 */
+      border-color: #34d399 !important;     /* emerald-400 */
+      box-shadow: 0 2px 4px rgba(16, 185, 129, 0.12) !important;
+    }
+    html.theme-light #docList > div.bg-emerald-950\/25 {
+      background-color: #ecfdf5 !important;
+      border-color: #10b981 !important;
+    }
+
+    /* Pre de Texto OCR e JSON */
+    html.theme-light #docTextRawPre,
+    html.theme-light #jsonViewer {
+      background-color: #f8fafc !important;
+      border-color: #e2e8f0 !important;
+      color: #1e293b !important;
+    }
+
+    /* BI Dashboard */
+    html.theme-light .bi-card {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+    html.theme-light #viewBI {
+      background-color: #f8fafc !important;
+    }
+    html.theme-light #viewBI table {
+      background-color: #ffffff !important;
+    }
+    html.theme-light #viewBI th {
+      background-color: #f1f5f9 !important;
+      color: #0f172a !important;
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light #viewBI td {
+      border-color: #e2e8f0 !important;
+      color: #334155 !important;
+    }
+    html.theme-light #viewBI tr:hover td {
+      background-color: #f8fafc !important;
+    }
+
+    /* Estilos Gerais da Galeria (Mosaico Paperless-ngx) */
+    .gallery-card {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .gallery-card:hover {
+      transform: translateY(-2px);
+    }
+    .gallery-thumbnail-container {
+      aspect-ratio: 3 / 4;
+    }
+
+    /* Galeria no Tema Claro */
+    html.theme-light #viewGaleria {
+      background-color: #f8fafc !important;
+    }
+    html.theme-light #galleryControlsBar {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light #galleryPaginationBar {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light .gallery-card {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+    html.theme-light .gallery-card:hover {
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.08) !important;
+    }
+    html.theme-light .gallery-thumbnail-container {
+      background-color: #f1f5f9 !important;
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light .gallery-card.is-selected {
+      background-color: #ecfdf5 !important;
+      border-color: #10b981 !important;
+      box-shadow: 0 0 0 1px #10b981 !important;
+    }
+    html.theme-light #galleryFilterPopoversBar {
+      border-color: #e2e8f0 !important;
+    }
+    html.theme-light #g-popoverDominio,
+    html.theme-light #g-popoverInstituicao,
+    html.theme-light #g-popoverTipo,
+    html.theme-light #g-popoverNatureza,
+    html.theme-light #g-popoverStatus,
+    html.theme-light #popoverDominio,
+    html.theme-light #popoverInstituicao,
+    html.theme-light #popoverTipo,
+    html.theme-light #popoverNatureza,
+    html.theme-light #popoverStatus {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* Modais */
+    html.theme-light #configModal > div:last-child,
+    html.theme-light #folderPickerModal > div:last-child,
+    html.theme-light #modalBulkTag > div:last-child,
+    html.theme-light #modalCustomTag > div:last-child {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+    }
