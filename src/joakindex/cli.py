@@ -58,9 +58,10 @@ except ImportError:
     pdfium = None
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageEnhance
 except ImportError:
     Image = None
+    ImageEnhance = None
 
 IMAGE_EXTENSIONS: Set[str] = {".png", ".jpg", ".jpeg", ".webp"}
 WORD_EXTENSIONS: Set[str] = {".docx", ".doc", ".odt", ".rtf"}
@@ -1434,6 +1435,485 @@ def extract_boleto_signals(text: str) -> Tuple[bool, Optional[str], Optional[str
     return is_boleto, linha_digitavel, codigo_barras, details
 
 
+def extract_cheque_signals(text: str) -> Tuple[bool, Optional[str], Optional[str], Dict[str, Any]]:
+    """
+    Identifica de forma universal se o texto contém elementos característicos de
+    Folha de Cheque ou Talão de Cheques (compensação bancária, canhotos, talonários).
+    Retorna: (is_cheque: bool, numero_cheque: Optional[str], banco: Optional[str], detalhes: Dict[str, Any])
+    """
+    if not text or len(text.strip()) < 8:
+        return False, None, None, {}
+
+    t_lower = text.lower()
+    details: Dict[str, Any] = {}
+    score = 0
+
+    # 1. Termos estruturais fortes (linguagem típica e exclusiva de cheques e canhotos)
+    termos_fortes = [
+        'pague por este cheque', 'pague por este', 'a quantia de', 'à quantia de',
+        'ou à sua ordem', 'ou a sua ordem', 'à sua ordem', 'a sua ordem',
+        'centavos acima', 'centavos a cima', 'e centavos',
+        'saldo anterior', 'saldo atual', 'lançamentos anterior', 'lancamentos anterior',
+        'este cheque', 'valor deste cheque',
+        'talão de cheque', 'talao de cheque', 'talão de cheques', 'talao de cheques',
+        'folha de cheque', 'folhas de cheque', 'talao', 'talão',
+        'canhoto', 'compensação bancária', 'compensacao bancaria',
+        'ficha de compensação de cheque', 'confecção:', 'confeccao:'
+    ]
+    for termo in termos_fortes:
+        if termo in t_lower:
+            score += 4
+
+    # 2. Termos secundários de apoio
+    termos_apoio = [
+        'cheque', 'cheques', 'emitente', 'c/c', 'conta corrente',
+        'cooperativa', 'agência', 'agencia', 'banco', 'série', 'serie',
+        'compensação', 'compensacao', 'alínea', 'alinea'
+    ]
+    for termo in termos_apoio:
+        if termo in t_lower:
+            score += 1
+
+    # 3. Expressão explícita "Cheque No" ou "Cheque Nº"
+    m_cheque_label = re.search(r'\bcheque\s*(?:n[º°o\.]|numero)?\b', text, re.I)
+    if m_cheque_label:
+        score += 3
+
+    # 4. Detecção de Banco
+    banco = None
+    bancos_map = [
+        (r'sicoob', 'SICOOB'),
+        (r'sicredi', 'SICREDI'),
+        (r'banco do brasil|\bbb\b', 'Banco do Brasil'),
+        (r'bradesco', 'Bradesco'),
+        (r'ita[úu]', 'Itaú'),
+        (r'santander', 'Santander'),
+        (r'caixa\s+econ[ôo]mica|\bcef\b', 'Caixa Econômica Federal'),
+        (r'banestes', 'BANESTES'),
+        (r'brb\b|banco de bras[íi]lia', 'BRB'),
+        (r'safra\b', 'Safra'),
+        (r'banco inter|\binter\b', 'Inter'),
+        (r'nubank', 'Nubank')
+    ]
+    for pat, b_name in bancos_map:
+        if re.search(pat, t_lower):
+            banco = b_name
+            details['banco_cheque'] = banco
+            score += 2
+            break
+
+    # 5. Extração de Números de Cheque (6 dígitos padrão FEBRABAN)
+    numeros_encontrados = []
+    for m in re.finditer(r'(?:cheque\s*(?:n[º°o\.]|numero)?[\s\:\-\n\r]{1,30}|ch[º°o\.]?[\s\:\-\n\r]{1,30})\b([0-9]{6})\b', text, re.I):
+        c_num = m.group(1).strip()
+        if c_num not in numeros_encontrados:
+            numeros_encontrados.append(c_num)
+
+    if not numeros_encontrados and (score >= 4 or 'cheque' in t_lower):
+        for m in re.finditer(r'\b([0-9]{6})\b', text):
+            c_num = m.group(1).strip()
+            if c_num not in numeros_encontrados and not c_num.startswith('000000'):
+                numeros_encontrados.append(c_num)
+
+    # 6. Extração de Série
+    m_serie = re.search(r'(?:s[ée]rie|ser)[\s\:\-\n\r]{1,15}\b([0-9]{1,4})\b', text, re.I)
+    if not m_serie:
+        m_serie = re.search(r'(?:s[ée]rie|ser)[\s\:\-\n\r]{1,15}\b([0-9A-Z]{1,4})\b', text, re.I)
+    if m_serie:
+        details['serie_cheque'] = m_serie.group(1).strip()
+
+    # 7. Extração de Conta Corrente
+    m_conta = re.search(r'(?:c\/c|conta(?:\s*corrente)?|coya)[\s\:\-\n\r]{1,15}\b([0-9]{5,12}(?:[\-\.][0-9Xx])?)\b', text, re.I)
+    if not m_conta and '00038' in text:
+        m_c = re.search(r'\b(000\d{6,8})\b', text)
+        if m_c:
+            m_conta = m_c
+    if m_conta:
+        details['conta_corrente'] = m_conta.group(1).strip()
+
+    # 8. Extração de Agência / Cooperativa
+    m_ag = re.search(r'(?:ag[êe]ncia|cooperativa)[\s\:\-\n\r]{1,15}\b([0-9]{3,5}(?:[\-][0-9Xx])?)\b', text, re.I)
+    if m_ag:
+        details['agencia_cheque'] = m_ag.group(1).strip()
+
+    numero_cheque = numeros_encontrados[0] if numeros_encontrados else None
+    if numeros_encontrados:
+        details['numeros_cheque'] = numeros_encontrados
+        details['numero_cheque'] = numero_cheque
+
+    # Decisão final de is_cheque
+    is_cheque = bool(
+        score >= 5
+        or (score >= 3 and numero_cheque)
+        or any(k in t_lower for k in ['pague por este cheque', 'talão de cheque', 'talao de cheque', 'folha de cheque', 'folhas de cheque'])
+    )
+
+    if is_cheque and len(numeros_encontrados) > 1:
+        details['is_talao'] = True
+
+    return is_cheque, numero_cheque, banco, details
+
+
+def extract_irpf_signals(text: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """
+    Identifica de forma precisa se o texto pertence a uma Declaração de Ajuste Anual do IRPF
+    ou Recibo de Entrega da Declaração emitido pela Secretaria da Receita Federal.
+    Retorna: (is_irpf: bool, tipo_documento: Optional[str], metadados: Dict[str, Any])
+    """
+    if not text or len(text.strip()) < 20:
+        return False, None, {}
+
+    t = text.lower()
+
+    # Se tiver título explícito de informe/comprovante de rendimentos financeiros, pertence ao informe e não à declaração
+    if re.search(r"(?:informe|comprovante)\s+de\s+rendimentos\s*(?:financeiros)?", t):
+        return False, None, {}
+
+    # 1. Marcadores de IRPF / Declaração de Ajuste Anual (tolerante a variações OCR como c, ç, g)
+    has_ajuste = bool(
+        re.search(r"declara[cçg][aã]o\s+de\s+ajuste\s+anual", t)
+        or ("ajuste anual" in t and ("exercício" in t or "exercicio" in t or "ano-calend" in t or "receita federal" in t))
+    )
+    has_imposto_renda = bool(
+        re.search(r"imposto\s+(?:sobre\s+a\s+)?renda", t)
+        and ("pessoa f[ií]sica" in t or "pessoa fisica" in t or "irpf" in t or "receita federal" in t)
+    )
+
+    # 2. Marcadores de Recibo de Entrega
+    has_recibo_entrega = bool(
+        re.search(r"recibo\s+de\s+entrega", t)
+        or (re.search(r"(?:o\s+)?n[úu]mero\s+do\s+recibo\b", t) and ("declara" in t or "receita federal" in t))
+    )
+
+    # 3. Seções típicas de IRPF
+    has_sections = any(s in t for s in [
+        "declaração de bens e direitos", "declaracao de bens e direitos", "declaragao de bens e direitos",
+        "rendimentos tributáveis", "rendimentos tributaveis", "rendimentos isentos", "resumo tributação",
+        "resumo tributacao", "resumo tributagao", "demonstrativo de atividade rural", "renda variável",
+        "renda variavel", "evolução patrimonial", "evolucao patrimonial", "desconto simplificado",
+        "deduções legais", "deducoes legais", "identificação do declarante", "identificacao do declarante",
+        "identificação do contribuinte", "identificacao do contribuinte", "imposto a restituir",
+        "saldo imposto a pagar"
+    ])
+
+    is_irpf = False
+    if (has_recibo_entrega and (has_ajuste or has_imposto_renda or "receita federal" in t or "ministério da fazenda" in t or "ministerio da economia" in t)) or \
+       (has_ajuste and (has_imposto_renda or has_sections or "exerc" in t)):
+        is_irpf = True
+    elif has_imposto_renda and has_sections:
+        is_irpf = True
+
+    if is_irpf:
+        tipo = "Recibo de Entrega da Declaração de Ajuste Anual" if has_recibo_entrega else "Declaração de Imposto de Renda"
+        meta = {}
+        ex_m = re.search(r"exerc[ií]cio\s*[:\s]*(\d{4})", text, re.IGNORECASE)
+        ano_m = re.search(r"ano[- ]calend[aá]rio\s*[:\s]*(?:de\s*)?(\d{4})", text, re.IGNORECASE)
+        if ex_m: meta["exercicio"] = ex_m.group(1)
+        if ano_m: meta["ano_calendario"] = ano_m.group(1)
+
+        rec_m = re.search(r"(?:n[úu]mero\s+do\s+recibo[^\n]*?|\b)(\d{2}\.\d{2}\.\d{2}\.\d{2}\.\d{2}\s*-\s*\d{2})", text, re.IGNORECASE)
+        if rec_m: meta["numero_recibo"] = rec_m.group(1).strip()
+
+        tot_m = re.search(r"total\s+(?:de\s+)?rendimentos\s+tribut[aá]veis\s*[:\s]*([0-9\.\,]+)", text, re.IGNORECASE)
+        if tot_m: meta["total_rendimentos_tributaveis"] = tot_m.group(1).strip()
+
+        return True, tipo, meta
+
+    return False, None, {}
+
+
+def extract_informe_rendimentos_signals(text: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """
+    Identifica de forma precisa se o texto pertence a um Informe de Rendimentos Financeiros
+    (emitido por instituições financeiras como Caixa, BB, Itaú, Bradesco, etc.)
+    ou Comprovante de Rendimentos Pagos e de Retenção de Imposto de Renda na Fonte.
+    Retorna: (is_informe: bool, tipo_documento: Optional[str], metadados: Dict[str, Any])
+    """
+    if not text or len(text.strip()) < 20:
+        return False, None, {}
+
+    t = text.lower()
+
+    # Se for comprovadamente o recibo de entrega da declaração da Receita Federal
+    if "recibo de entrega da declara" in t:
+        return False, None, {}
+
+    has_informe_title = bool(re.search(r"(?:informe|comprovante)\s+de\s+rendimentos\s*(?:financeiros)?", t))
+    has_rend_fin = bool("rendimentos financeiros" in t or ("rendimentos" in t and any(b in t for b in ["aplicações financeiras", "aplicacoes financeiras", "tributação exclusiva", "tributacao exclusiva"])))
+    has_fonte = bool("fonte pagadora" in t or "beneficiária dos rendimentos" in t or "beneficiaria dos rendimentos" in t or "pessoa física beneficiária" in t or "pessoa fisica beneficiaria" in t)
+    has_bank_continuation = bool(
+        any(b in t for b in ["sac caixa", "help desk caixa", "ouvidoria caixa", "sac bb", "sac banco"]) and
+        any(w in t for w in ["tributação exclusiva", "tributacao exclusiva", "restituição de ir", "restituicao de ir", "contas vinculadas", "contas correntes"])
+    )
+
+    if (has_informe_title and (has_rend_fin or has_fonte or "ano-calend" in t)) or has_bank_continuation:
+        tipo = "Informe de Rendimentos Financeiros"
+        meta = {}
+        if "caixa econ" in t or "cef" in t or "sac caixa" in t:
+            meta["fonte_pagadora"] = "CAIXA ECONÔMICA FEDERAL"
+        elif "banco do brasil" in t:
+            meta["fonte_pagadora"] = "BANCO DO BRASIL"
+        elif "itau" in t or "itaú" in t:
+            meta["fonte_pagadora"] = "ITAÚ UNIBANCO"
+        elif "bradesco" in t:
+            meta["fonte_pagadora"] = "BANCO BRADESCO"
+        elif "santander" in t:
+            meta["fonte_pagadora"] = "BANCO SANTANDER"
+
+        ano_m = re.search(r"ano[- ]calend[aá]rio\s*[:\s]*(?:de\s*)?(\d{4})", text, re.IGNORECASE)
+        if ano_m: meta["ano_calendario"] = ano_m.group(1)
+
+        cnpj_m = re.search(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b", text)
+        if cnpj_m: meta["cnpj_fonte_pagadora"] = cnpj_m.group(0)
+
+        return True, tipo, meta
+
+    return False, None, {}
+
+
+def extract_veicular_signals(text: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """
+    Identifica de forma universal se o texto pertence ao domínio veicular
+    (CRV, CRLV, ATPV, Comunicação de Venda, Laudo de Vistoria, Guia de Remoção,
+    Nota de Arrematação, Agendamento DETRAN).
+    Retorna: (is_veicular: bool, tipo_documento: Optional[str], metadados: Dict[str, Any])
+    """
+    if not text or len(text.strip()) < 15:
+        return False, None, {}
+
+    t = text.lower()
+    meta: Dict[str, Any] = {}
+
+    # Extração universal de entidades veiculares
+    placa_m = re.search(r'\b([A-Z]{3}-?[0-9]{4}|[A-Z]{3}[0-9][A-Z][0-9]{2})\b', text)
+    if placa_m:
+        meta["placa"] = placa_m.group(1).upper()
+
+    renavam_m = re.search(r'\b(?:renavam|c[oó]d(?:igo)?\.?\s*renavam)[:\s\.\-]*([0-9]{9,11})\b', text, re.IGNORECASE)
+    if renavam_m:
+        meta["renavam"] = renavam_m.group(1).strip()
+
+    chassi_m = re.search(r'\b(?:chassi|chassis|n[ºo°\.\s]*chassi)[:\s\.\-]*([A-HJ-NPR-Z0-9]{17})\b', text, re.IGNORECASE)
+    if chassi_m:
+        meta["chassi"] = chassi_m.group(1).upper()
+
+    # 1. CRLV - Certificado de Registro e Licenciamento de Veículo (porte/circulação anual)
+    # Não diferenciar físico de digital
+    is_crlv = (
+        "certificado de registro e licenciamento" in t or
+        "licenciamento de ve" in t or
+        "crlv" in t or
+        ("licenciamento" in t and ("veículo" in t or "veiculo" in t or "detran" in t or "senatran" in t)) or
+        (re.search(r'\bexerc[ií]cio\s*[:\.\s]*20[0-9]{2}\b', t) and any(w in t for w in ["detran", "senatran", "denatran", "ipva", "dpvat", "porte"]))
+    )
+    # Proteção: se expressamente for apenas CRV de registro sem licenciamento
+    if is_crlv and not ("certificado de registro de ve" in t and "licenciamento" not in t and "crlv" not in t):
+        return True, "Certificado de Registro e Licenciamento de Veículo (CRLV)", meta
+
+    # 2. ATPV - Autorização para Transferência de Propriedade de Veículo
+    # Não diferenciar física de digital
+    is_atpv = (
+        "autorização para transferência de propriedade de veículo" in t or
+        "autorizacao para transferencia de propriedade de veiculo" in t or
+        "autorização para transferência de propriedade" in t or
+        "autorizacao para transferencia de propriedade" in t or
+        "atpv" in t or
+        "declaro que transferi a propriedade deste veículo" in t or
+        "declaro que transferi a propriedade" in t or
+        ("intenção de venda" in t and any(w in t for w in ["detran", "veículo", "veiculo", "comprador"]))
+    )
+    if is_atpv:
+        return True, "Autorização para Transferência de Propriedade de Veículo (ATPV)", meta
+
+    # 3. CRV - Certificado de Registro de Veículo (propriedade e transferência, antigo DUT)
+    # Não diferenciar físico de digital
+    is_crv = (
+        "certificado de registro de ve" in t or
+        "crv" in t or
+        "documento único de transferência" in t or
+        "documento unico de transferencia" in t or
+        ("via anterior" in t and any(w in t for w in ["renavam", "chassi", "placa"])) or
+        (any(w in t for w in ["detran", "denatran", "senatran"]) and "renavam" in t and "chassi" in t and not is_crlv)
+    )
+    if is_crv:
+        return True, "Certificado de Registro de Veículo (CRV)", meta
+
+    # 4. Comunicação de Venda ao DETRAN
+    if any(k in t for k in ["comunicação de venda", "comunicacao de venda", "certidão de comunicação de venda", "certidao de comunicacao de venda"]):
+        return True, "Comunicação de Venda ao DETRAN", meta
+
+    # 5. Agendamento DETRAN (Comprovante / Intenção de Vistoria)
+    if any(k in t for k in ["agendamento", "comprovante de agendamento", "fazer agendamento"]) and ("detran" in t or "intenção de venda" in t or "intencao de venda" in t):
+        return True, "Comprovante de Agendamento DETRAN", meta
+
+    # 6. Laudo / Documento de Vistoria de Veículo
+    if (any(k in t for k in ["vistoria de veículo", "vistoria de veiculo", "vistoria veicular", "inspeção veicular", "inspecao veicular"]) or \
+       ("laudo de vistoria" in t and any(w in t for w in ["veículo", "veiculo", "chassi", "motor", "detran"]))) and not any(k in t for k in ["agendamento", "agendar"]):
+        return True, "Laudo de Vistoria Veicular", meta
+
+    # 7. Guia de Remoção de Veículo (Pátio / Guincho)
+    if any(k in t for k in ["guia de remoção", "guia de remocao", "remoção de veículo", "remocao de veiculo", "termo de recolhimento de veículo", "termo de recolhimento de veiculo"]) or \
+       (any(w in t for w in ["pátio", "patio", "guincho"]) and any(w in t for w in ["remoção", "remocao", "apreensão", "apreensao", "guia n"])):
+        return True, "Guia de Remoção de Veículo", meta
+
+    # 8. Nota de Arrematação (Leilão)
+    if any(k in t for k in ["nota de arrematação", "nota de arrematacao", "arrematação em leilão", "arrematacao em leilao"]) or \
+       (any(w in t for w in ["leilão", "leilao", "leiloeiro"]) and any(w in t for w in ["arrematante", "arrematação", "arrematacao", "lote", "chassi"])):
+        return True, "Nota de Arrematação (Leilão)", meta
+
+    # 9. Busca e Apreensão / Citação
+    if any(k in t for k in ["busca e apreensão", "busca e apreensao"]) and any(w in t for w in ["mandado", "citação", "citacao", "oficial de justiça"]):
+        return True, "Citação de Mandado de Busca e Apreensão", meta
+
+    return False, None, {}
+
+
+def extract_contrato_compra_venda_signals(text: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """
+    Identifica se o texto pertence a um Contrato / Compromisso / Promessa de Compra e Venda
+    (imóvel, terreno, bens comerciais) ou cláusulas contratuais de compra e venda.
+    Retorna: (is_cv: bool, tipo_documento: Optional[str], metadados: Dict[str, Any])
+    """
+    if not text or len(text.strip()) < 20:
+        return False, None, {}
+
+    t = text.lower()
+
+    # Regra estrita: Documentos veiculares oficiais (CRV, CRLV, ATPV, Vistoria, Remoção, DETRAN)
+    # NÃO devem ser classificados como Contrato de Compra e Venda
+    is_veicular_context = any(k in t for k in [
+        "certificado de registro", "crv", "crlv", "atpv",
+        "transferência de propriedade de veículo", "transferencia de propriedade de veiculo",
+        "comunicação de venda", "comunicacao de venda", "vistoria veicular", "laudo de vistoria",
+        "guia de remoção", "guia de remocao", "nota de arrematação", "nota de arrematacao",
+        "detran", "senatran", "denatran"
+    ]) and not any(k in t for k in [
+        "contrato particular de promessa", "instrumento particular de promessa",
+        "compromisso de compra e venda de imóvel", "contrato de compra e venda de imóvel"
+    ])
+    if is_veicular_context:
+        return False, None, {}
+    
+    # Marcadores explícitos de compra e venda
+    has_cv_title = any(k in t for k in [
+        "compra e venda", "compromisso de compra", "promessa de compra",
+        "promitente vendedor", "promitentes-vendedor", "promitentes vendedores",
+        "promitente comprador", "promitentes-comprador", "promitentes compradores",
+        "promitente compradora", "venda de imóvel", "venda de imovel"
+    ])
+    
+    # Marcadores de cláusulas contratuais de compra e venda ou instrumento contratual
+    has_contract_context = any(k in t for k in ["contrato", "instrumento particular", "cláusula", "clausula"])
+    has_cv_terms = any(w in t for w in [
+        "imóvel", "imovel", "vendedor", "comprador", "evicção", "eviccao",
+        "irrevogável", "irrevogavel", "foro da situação", "foro da situacao",
+        "sinal e princípio de pagamento", "sinal e principio de pagamento",
+        "escritura definitiva"
+    ])
+    
+    if has_cv_title or (has_contract_context and has_cv_terms):
+        tipo = "Contrato de Compra e Venda"
+        meta = {}
+        if "comercial" in t:
+            meta["subtipo_contrato"] = "Imóvel Comercial"
+        elif "residencial" in t:
+            meta["subtipo_contrato"] = "Imóvel Residencial"
+        return True, tipo, meta
+        
+    return False, None, {}
+
+
+def extract_nota_promissoria_signals(text: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """
+    Identifica de forma universal se o texto pertence a uma Nota Promissória
+    (título de crédito comercial, padrão São Domingos, blocos comerciais, etc.).
+    Retorna: (is_promissoria: bool, tipo_documento: Optional[str], metadados: Dict[str, Any])
+    """
+    if not text or len(text.strip()) < 15:
+        return False, None, {}
+
+    t = text.lower()
+    
+    has_title = any(k in t for k in ["nota promissoria", "nota promissória", "promissoria", "promissória"])
+    has_classic_phrases = any(k in t for k in [
+        "por esta única via", "por esta unica via", "por esta via",
+        "pagar por esta", "pagará por esta", "pagarei por esta", "pagaremos por esta",
+        "em moeda corrente deste país", "em moeda corrente deste pais",
+        "à sua ordem", "a sua ordem", "à nossa ordem", "a nossa ordem", "a quantia de", "à ordem de"
+    ])
+    has_form_markers = any(k in t for k in ["são domingos", "sao domingos", "cód. 6091", "cod. 6091", "6091"])
+    has_credit_parties = ("vencimento" in t or "venc" in t) and any(w in t for w in ["avalista", "avalistas", "emitente", "pagável em", "pagavel em"])
+    
+    if has_title or (has_classic_phrases and ("vencimento" in t or "avalista" in t or "emitente" in t)) or \
+       (has_form_markers and ("vencimento" in t or "emitente" in t or "pagar" in t or has_title)) or \
+       has_credit_parties:
+        tipo = "Nota Promissória"
+        meta = {}
+        
+        num_m = re.search(r"n[ºo°\.\s]*([0-9]{1,4})\b", text, re.IGNORECASE)
+        if num_m:
+            meta["numero_nota"] = num_m.group(1).strip()
+            
+        val_m = re.search(r"r\$\s*([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2})", text, re.IGNORECASE)
+        if val_m:
+            meta["valor"] = val_m.group(1).strip()
+            
+        venc_m = re.search(r"vencimento\s*[:\.\s]*([0-9]{1,2}\s*(?:de|\/)\s*[a-z0-9A-ZÀ-Ú]+\s*(?:de|\/)\s*[0-9]{2,4})", text, re.IGNORECASE)
+        if venc_m:
+            meta["vencimento"] = venc_m.group(1).strip()
+            
+        emit_m = re.search(r"emitente\s*[:\.\s]*([A-ZÀ-Ú\s]{4,35})", text)
+        if emit_m:
+            meta["emitente"] = emit_m.group(1).strip()
+            
+        return True, tipo, meta
+        
+    return False, None, {}
+
+
+def extract_recibo_signals(text: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """
+    Identifica se o texto pertence a um Recibo avulso / Recibo de Pagamento.
+    Evita falso positivo quando a palavra recibo é usada apenas em cláusula de quitação de contrato.
+    Retorna: (is_recibo: bool, tipo_documento: Optional[str], metadados: Dict[str, Any])
+    """
+    if not text or len(text.strip()) < 15:
+        return False, None, {}
+
+    t = text.lower()
+    
+    # Se for contrato com cláusulas contratuais extensas, não é recibo avulso
+    if any(k in t for k in ["compromisso de compra", "promessa de compra", "promitente vendedor", "promitente comprador", "cláusula sétima", "clausula setima", "foro da situação", "foro da situacao"]):
+        return False, None, {}
+
+    # Se for boleto bancário (que contém 'recibo do pagador/sacado'), o documento é Boleto Bancário
+    is_bol_chk, _, _, _ = extract_boleto_signals(text)
+    if is_bol_chk:
+        return False, None, {}
+        
+    has_recibo_header = bool(re.search(r"\brecibos?\b", t))
+    has_recebi = any(k in t for k in [
+        "recebi(emos) de", "recebi(emos)", "recebemos de", "recebi de",
+        "recebemos do", "recebi do", "recebemos da", "recebi da"
+    ])
+    has_recibo_terms = any(k in t for k in [
+        "a importância de", "a importancia de", "a quantia de",
+        "referente a", "referente ao pagamento", "correspondente a",
+        "em pagamento de", "como sinal e princípio", "para clareza firmo",
+        "para clareza firmamos", "dou plena quitação", "dou plena quitacao"
+    ])
+    
+    if (has_recibo_header and (has_recebi or has_recibo_terms)) or (has_recebi and has_recibo_terms):
+        tipo = "Recibo"
+        meta = {}
+        val_m = re.search(r"r\$\s*([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2})", text, re.IGNORECASE)
+        if val_m:
+            meta["valor"] = val_m.group(1).strip()
+        return True, tipo, meta
+        
+    return False, None, {}
+
+
 def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Identifica o tipo de documento e seu domínio a partir de assinaturas textuais e palavras-chave.
@@ -1449,25 +1929,71 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
     try:
         regra = consultar_regra_para_texto(resolve_default_db_path(), text)
         if regra:
-            return regra["valor_atribuido"], regra["dominio"]
+            is_bol_test, _, _, _ = extract_boleto_signals(text)
+            if not (is_bol_test and regra.get("valor_atribuido") == "Recibo"):
+                return regra["valor_atribuido"], regra["dominio"]
     except Exception:
         pass
+
 
     # 0.1 Detecção Universal de Boleto Bancário / FEBRABAN
     is_bol, bol_linha, bol_barras, _ = extract_boleto_signals(text)
     if is_bol:
         scores["Boleto Bancário"] = ("financeiro", 11 if (bol_linha or bol_barras) else 10)
 
+    # 0.2 Detecção Universal de Cheque / Talão de Cheques
+    is_chk, chk_num, chk_banco, chk_det = extract_cheque_signals(text)
+    if is_chk:
+        tag_chk = "Talão de Cheques" if chk_det.get("is_talao") else "Folha de Cheque"
+        scores[tag_chk] = ("financeiro", 11 if chk_num else 10)
+
+    # 0.3 Detecção Universal de Informe de Rendimentos Financeiros
+    is_inf, inf_tipo, inf_det = extract_informe_rendimentos_signals(text)
+    if is_inf:
+        scores[inf_tipo] = ("financeiro", 12)
+
+    # 0.4 Detecção Universal de IRPF / Recibo de Entrega / Declaração de Ajuste Anual
+    is_irpf, irpf_tipo, irpf_det = extract_irpf_signals(text)
+    if is_irpf:
+        scores[irpf_tipo] = ("financeiro", 13 if "recibo" in irpf_tipo.lower() else 12)
+
+    # 0.45 Detecção Universal Veicular (CRV, CRLV, ATPV, Vistoria, Remoção, Arrematação, DETRAN)
+    is_veic, veic_tipo, veic_det = extract_veicular_signals(text)
+    if is_veic:
+        v_dom = "juridico" if "citação" in (veic_tipo or "").lower() else "veicular"
+        scores[veic_tipo] = (v_dom, 13)
+
+    # 0.5 Detecção Universal de Contrato de Compra e Venda
+    is_cv, cv_tipo, cv_det = extract_contrato_compra_venda_signals(text)
+    if is_cv and not is_veic:
+        scores[cv_tipo] = ("juridico", 11)
+
+    # 0.6 Detecção Universal de Nota Promissória
+    is_np, np_tipo, np_det = extract_nota_promissoria_signals(text)
+    if is_np:
+        scores[np_tipo] = ("financeiro", 11)
+
+    # 0.7 Detecção Universal de Recibo
+    is_rec, rec_tipo, rec_det = extract_recibo_signals(text)
+    if is_rec and not is_cv and not is_veic:
+        scores[rec_tipo] = ("financeiro", 10)
+
     # 1. Domínio: Identificação
+    # Protege contra qualificação de partes em contratos ou declarações
+    is_contract_context = is_cv or any(k in t for k in [
+        "instrumento particular", "contrato", "cláusula", "clausula", "promitente",
+        "outorgante", "outorgado", "promitentes-vendedor", "promitentes vendedores"
+    ])
+
     if any(k in t for k in ["carteira nacional de habilita", "driver license", "permiso de conduccion", "senatran", "denatran", "1° habilita", "1ª habilita"]) or ("cnh" in t and "categoria" in t):
         scores["CNH"] = ("identificacao", 10)
-    elif any(k in t for k in ["cédula de identidade", "cedula de identidade", "registro geral", "instituto de identificação", "instituto de identificacao", "secretaria de segurança", "ssp/", "ssp-", "polícia civil"]):
+    elif not is_contract_context and any(k in t for k in ["cédula de identidade", "cedula de identidade", "registro geral", "instituto de identificação", "instituto de identificacao", "secretaria de segurança", "ssp/", "ssp-", "polícia civil"]):
         scores["RG"] = ("identificacao", 9)
     elif any(k in t for k in ["certidão de nascimento", "certidao de nascimento", "nascimento sob o termo", "registro civil das pessoas naturais"]):
         scores["Certidão de Nascimento"] = ("identificacao", 9)
     elif any(k in t for k in ["certidão de casamento", "certidao de casamento", "casamento sob o termo"]):
         scores["Certidão de Casamento"] = ("identificacao", 9)
-    elif any(k in t for k in ["cadastro de pessoas físicas", "cadastro de pessoas fisicas", "receita federal do brasil", "comprovante de inscrição no cpf", "cartão de identificação do contribuinte"]) or ("cpf" in t and "receita federal" in t):
+    elif not is_irpf and not is_inf and not is_contract_context and (any(k in t for k in ["comprovante de inscrição no cpf", "comprovante de inscricao no cpf", "cartão de identificação do contribuinte", "cartao de identificacao do contribuinte", "cadastro de pessoas físicas", "cadastro de pessoas fisicas"]) or ("cpf" in t and "receita federal" in t and not any(w in t for w in ["ajuste anual", "imposto sobre a renda", "informe de rendimentos"]))):
         scores["CPF"] = ("identificacao", 8)
     elif any(k in t for k in ["passaporte", "passport", "república federativa do brasil passaporte"]):
         scores["Passaporte"] = ("identificacao", 9)
@@ -1489,7 +2015,7 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
         scores["Certificado"] = ("academico", 8)
     elif any(k in t for k in ["declaração de matrícula", "atestado de matrícula", "declaração de conclusão", "declaramos para os devidos fins"]):
         scores["Declaração"] = ("academico", 7)
-    elif any(k in t for k in ["ementa", "conteúdo programático", "plano de ensino"]):
+    elif (re.search(r'\bementas?\b', t) and any(w in t for w in ["curso", "disciplina", "grade", "curricular", "plano de ensino", "conteúdo programático", "conteudo programatico", "bibliografia", "acadêmico", "academico"])) or any(k in t for k in ["conteúdo programático", "conteudo programatico", "plano de ensino"]):
         scores["Ementa"] = ("academico", 7)
     elif any(k in t for k in ["dissertação de mestrado", "dissertacao de mestrado", "tese de doutorado", "trabalho de conclusão de curso"]):
         scores["Dissertação"] = ("academico", 8)
@@ -1512,20 +2038,41 @@ def classify_text_signatures(text: str) -> Tuple[Optional[str], Optional[str]]:
     # 4. Domínio: Financeiro
     if any(k in t for k in ["comprovante pix", "transferência pix", "transferencia pix", "pagamento pix", "chave pix", "fim-a-fim", "end-to-end", "e2eid"]):
         scores["Comprovante PIX"] = ("financeiro", 10)
+    elif is_np:
+        scores["Nota Promissória"] = ("financeiro", 11)
+    elif any(k in t for k in ["talão de cheque", "talao de cheque", "talão de cheques", "talao de cheques"]):
+        scores["Talão de Cheques"] = ("financeiro", 10)
+    elif any(k in t for k in ["folha de cheque", "folhas de cheque", "pague por este cheque"]):
+        scores["Folha de Cheque"] = ("financeiro", 10)
     elif any(k in t for k in ["boleto bancário", "boleto bancario", "recibo do pagador", "linha digitável", "código de barras", "ficha de compensação"]):
         scores["Boleto Bancário"] = ("financeiro", 10)
-    elif any(k in t for k in ["comprovante de pagamento", "comprovante de transferência", "comprovante de transferencia", "autenticação bancária", "autenticação mecânica", "ted", "doc"]):
+    elif any(k in t for k in ["comprovante de pagamento", "comprovante de transferência", "comprovante de transferencia", "autenticação bancária", "autenticação mecânica", "ted", "doc"]) and not is_contract_context:
         scores["Comprovante de Pagamento"] = ("financeiro", 8)
-    elif any(k in t for k in ["recibo de pagamento", "recebemos de"]):
+    elif any(k in t for k in ["informe de rendimentos", "informe de rendimento", "comprovante de rendimentos"]):
+        scores["Informe de Rendimentos Financeiros"] = ("financeiro", 10)
+    elif any(k in t for k in ["declaração de ajuste anual", "declaracao de ajuste anual", "imposto sobre a renda", "irpf"]):
+        scores["Declaração de Imposto de Renda"] = ("financeiro", 10)
+    elif is_rec and not is_cv:
+        scores["Recibo"] = ("financeiro", 10)
+    elif any(k in t for k in ["recibo de pagamento", "recebemos de"]) and not is_contract_context:
         scores["Recibo"] = ("financeiro", 7)
 
     # 5. Domínio: Jurídico / Outros
-    if any(k in t for k in ["procuração", "procuracao", "outorgante", "outorgado"]):
+    if is_cv and not is_veic:
+        scores["Contrato de Compra e Venda"] = ("juridico", 11)
+    elif any(k in t for k in ["procuração", "procuracao", "outorgante", "outorgado"]):
         scores["Procuração"] = ("juridico", 8)
     elif any(k in t for k in ["termo de posse", "posse no cargo"]):
         scores["Termo de Posse"] = ("juridico", 8)
-    elif any(k in t for k in ["contrato de prestação", "instrumento particular"]):
-        scores["Contrato"] = ("juridico", 7)
+    elif not is_veic and any(k in t for k in ["contrato de compra e venda", "compromisso de compra", "promessa de compra"]):
+        scores["Contrato de Compra e Venda"] = ("juridico", 11)
+    elif any(k in t for k in ["contrato de prestação", "contrato de locação", "contrato particular", "instrumento particular", "contrato de"]):
+        scores["Contrato"] = ("juridico", 9)
+
+    # 6. Domínio: Veicular / Trânsito
+    if is_veic:
+        v_dom = "juridico" if "citação" in (veic_tipo or "").lower() else "veicular"
+        scores[veic_tipo] = (v_dom, 13)
 
     if not scores:
         return None, None
@@ -1555,11 +2102,14 @@ def run_tesseract_ocr_on_image(img: Any, try_rotation: bool = True) -> str:
         tmp_path = f.name
         img.save(tmp_path)
 
-    def _exec_tess(p: str) -> str:
+    def _exec_tess(p: str, extra_args: Optional[List[str]] = None) -> str:
         for lang in ["por+eng", "eng"]:
             try:
+                cmd = ["tesseract", p, "stdout", "-l", lang]
+                if extra_args:
+                    cmd.extend(extra_args)
                 proc = subprocess.run(
-                    ["tesseract", p, "stdout", "-l", lang],
+                    cmd,
                     capture_output=True,
                     text=True,
                     timeout=12
@@ -1571,6 +2121,20 @@ def run_tesseract_ocr_on_image(img: Any, try_rotation: bool = True) -> str:
         return ""
 
     text = _exec_tess(tmp_path)
+
+    # Se o texto for curto ou vazio (típico de notas promissórias em papel moeda/fundo padronizado ou recibos com baixo contraste)
+    if len(text.strip()) < 80 and ImageEnhance is not None:
+        try:
+            enh_img = ImageEnhance.Contrast(img.convert("L")).enhance(2.5)
+            enh_img.save(tmp_path)
+            for psm in ["6", "3"]:
+                t_enh = _exec_tess(tmp_path, ["--psm", psm])
+                if len(t_enh.strip()) > len(text.strip()):
+                    text = t_enh
+                    if len(text.strip()) >= 80:
+                        break
+        except Exception:
+            pass
 
     # Se não encontrou CPF ou assinatura conhecida, tenta rotação de 180 graus (documentos de cabeça para baixo)
     if try_rotation:
@@ -1694,7 +2258,7 @@ def extract_tesseract_text_from_pdf(
 
 def analyze_pdf_dossier(
     pdf_path: Union[str, Path],
-    max_ocr_pages: int = 10
+    max_ocr_pages: int = 25
 ) -> Dict[str, Any]:
     """
     Realiza a varredura completa de todas as páginas do PDF para identificar múltiplos documentos.
@@ -1717,7 +2281,18 @@ def analyze_pdf_dossier(
         "curso_titular": None,
         "faculdade_titular": None,
         "tipo_documento_principal": None,
-        "dominio_principal": None
+        "dominio_principal": None,
+        "numero_cheque": None,
+        "numeros_cheque": [],
+        "banco_cheque": None,
+        "conta_corrente": None,
+        "serie_cheque": None,
+        "agencia_cheque": None,
+        "numero_recibo": None,
+        "exercicio_irpf": None,
+        "ano_calendario": None,
+        "fonte_pagadora": None,
+        "cnpj_fonte_pagadora": None
     }
 
     if not p.exists() or pdfium is None:
@@ -1726,12 +2301,24 @@ def analyze_pdf_dossier(
     pages_info = []
     seen_tipos = []
     seen_dominios = []
+    all_cheque_numbers = []
+    banco_cheque = None
+    conta_corrente = None
+    serie_cheque = None
+    agencia_cheque = None
+    numero_recibo = None
+    exercicio_irpf = None
+    ano_calendario = None
+    fonte_pagadora = None
+    cnpj_fonte_pagadora = None
 
     with _PDFIUM_LOCK:
         pdf = None
         try:
             pdf = pdfium.PdfDocument(str(p))
             total_pages = len(pdf)
+            last_tipo = None
+            last_dom = None
 
             for i in range(total_pages):
                 page = None
@@ -1753,33 +2340,33 @@ def analyze_pdf_dossier(
                     except Exception:
                         p_text = ""
 
-                    # 2. Se houver imagens embutidas em alta resolução (ex: recortes CDT/SENATRAN)
-                    try:
-                        for obj in page.get_objects():
-                            if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE:
-                                bm = None
-                                try:
-                                    bm = obj.get_bitmap()
-                                    pil_img = bm.to_pil()
-                                    if pil_img.width >= 200 and pil_img.height >= 200:
-                                        t = run_tesseract_ocr_on_image(pil_img, try_rotation=True)
-                                        if t and len(t) >= 15:
-                                            embedded_texts.append(t)
-                                finally:
-                                    if bm is not None:
-                                        bm.close()
-                    except Exception:
-                        pass
-
-                    # 3. Se a página for imagem pura sem texto digital e não achou imagens embutidas, roda OCR se dentro do limite
-                    if len(p_text) < 40 and not embedded_texts and i < max_ocr_pages:
+                    # 2. Se a página for escaneada / imagem pura sem texto digital, renderiza a página completa (respeita /Rotate e orientação)
+                    if len(p_text) < 40 and i < max_ocr_pages:
                         try:
-                            bitmap = page.render(scale=1.5)
+                            bitmap = page.render(scale=2.0)
                             try:
                                 p_img = bitmap.to_pil()
                                 ocr_rendered_text = run_tesseract_ocr_on_image(p_img, try_rotation=True)
                             finally:
                                 bitmap.close()
+                        except Exception:
+                            pass
+                    elif len(p_text) >= 40:
+                        # Se já tem texto digital, mas pode conter recortes de imagem (ex: CDT/SENATRAN)
+                        try:
+                            for obj in page.get_objects():
+                                if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE:
+                                    bm = None
+                                    try:
+                                        bm = obj.get_bitmap()
+                                        pil_img = bm.to_pil()
+                                        if pil_img.width >= 200 and pil_img.height >= 200 and (pil_img.width < 1000 or pil_img.height < 1000):
+                                            t = run_tesseract_ocr_on_image(pil_img, try_rotation=True)
+                                            if t and len(t) >= 15:
+                                                embedded_texts.append(t)
+                                    finally:
+                                        if bm is not None:
+                                            bm.close()
                         except Exception:
                             pass
                 finally:
@@ -1793,7 +2380,96 @@ def analyze_pdf_dossier(
                 if not combined_page_text:
                     continue
 
-                tipo, dom = classify_text_signatures(combined_page_text)
+                is_chk_p, chk_num_p, chk_bco_p, chk_det_p = extract_cheque_signals(combined_page_text)
+                is_irpf_p, irpf_tipo_p, irpf_meta_p = extract_irpf_signals(combined_page_text)
+                is_inf_p, inf_tipo_p, inf_meta_p = extract_informe_rendimentos_signals(combined_page_text)
+                is_veic_p, veic_tipo_p, veic_det_p = extract_veicular_signals(combined_page_text)
+                is_cv_p, cv_tipo_p, cv_det_p = extract_contrato_compra_venda_signals(combined_page_text)
+                is_np_p, np_tipo_p, np_det_p = extract_nota_promissoria_signals(combined_page_text)
+                is_rec_p, rec_tipo_p, rec_det_p = extract_recibo_signals(combined_page_text)
+
+                # 0. Prioridade Máxima: Regras Aprendidas pelo Usuário a partir de Páginas Conferidas
+                regra_pg = None
+                try:
+                    regra_pg = consultar_regra_para_texto(resolve_default_db_path(), combined_page_text)
+                    is_bol_p, _, _, _ = extract_boleto_signals(combined_page_text)
+                    if regra_pg and is_bol_p and regra_pg.get("valor_atribuido") == "Recibo":
+                        regra_pg = None
+                except Exception:
+                    pass
+
+                if regra_pg and regra_pg.get("valor_atribuido"):
+                    tipo = regra_pg["valor_atribuido"]
+                    dom = regra_pg.get("dominio") or "academico"
+
+                elif is_veic_p:
+                    tipo = veic_tipo_p
+                    dom = "juridico" if "citação" in (veic_tipo_p or "").lower() else "veicular"
+                elif is_cv_p:
+                    tipo = cv_tipo_p
+                    dom = "juridico"
+                elif is_np_p:
+                    tipo = np_tipo_p
+                    dom = "financeiro"
+                elif is_rec_p:
+                    tipo = rec_tipo_p
+                    dom = "financeiro"
+                elif is_chk_p:
+                    tipo = "Talão de Cheques" if chk_det_p.get("is_talao") else "Folha de Cheque"
+                    dom = "financeiro"
+                elif is_inf_p:
+                    tipo = inf_tipo_p
+                    dom = "financeiro"
+                elif is_irpf_p:
+                    if last_tipo == "Recibo de Entrega da Declaração de Ajuste Anual":
+                        tipo = "Recibo de Entrega da Declaração de Ajuste Anual"
+                    else:
+                        tipo = irpf_tipo_p
+                    dom = "financeiro"
+                else:
+                    tipo, dom = classify_text_signatures(combined_page_text)
+
+
+                # Continuidade de Contrato: se a página anterior era Contrato e a atual tem termos contratuais sem novo cabeçalho
+                if not tipo or tipo == "Documento Diverso":
+                    if last_tipo in ["Contrato de Compra e Venda", "Contrato Particular de Compra e Venda de Imóvel", "Contrato"] and \
+                       any(k in combined_page_text.lower() for k in ["clausula", "cláusula", "foro", "testemunha", "cartorio", "cartório", "vendedor", "comprador", "instrumento", "eviccao", "evicção", "irrevogavel", "irrevogável"]):
+                        tipo = last_tipo
+                        dom = "juridico"
+
+                if tipo and tipo != "Documento Diverso":
+                    last_tipo = tipo
+                    last_dom = dom
+
+                if is_chk_p or (tipo and "cheque" in tipo.lower()):
+                    for n in chk_det_p.get("numeros_cheque", ([chk_num_p] if chk_num_p else [])):
+                        if n and n not in all_cheque_numbers:
+                            all_cheque_numbers.append(n)
+                    if chk_bco_p and not banco_cheque:
+                        banco_cheque = chk_bco_p
+                    if chk_det_p.get("conta_corrente") and not conta_corrente:
+                        conta_corrente = chk_det_p["conta_corrente"]
+                    if chk_det_p.get("serie_cheque") and not serie_cheque:
+                        serie_cheque = chk_det_p["serie_cheque"]
+                    if chk_det_p.get("agencia_cheque") and not agencia_cheque:
+                        agencia_cheque = chk_det_p["agencia_cheque"]
+
+                if is_irpf_p or irpf_meta_p:
+                    if irpf_meta_p.get("numero_recibo") and not numero_recibo:
+                        numero_recibo = irpf_meta_p["numero_recibo"]
+                    if irpf_meta_p.get("exercicio") and not exercicio_irpf:
+                        exercicio_irpf = irpf_meta_p["exercicio"]
+                    if irpf_meta_p.get("ano_calendario") and not ano_calendario:
+                        ano_calendario = irpf_meta_p["ano_calendario"]
+
+                if is_inf_p or inf_meta_p:
+                    if inf_meta_p.get("fonte_pagadora") and not fonte_pagadora:
+                        fonte_pagadora = inf_meta_p["fonte_pagadora"]
+                    if inf_meta_p.get("cnpj_fonte_pagadora") and not cnpj_fonte_pagadora:
+                        cnpj_fonte_pagadora = inf_meta_p["cnpj_fonte_pagadora"]
+                    if inf_meta_p.get("ano_calendario") and not ano_calendario:
+                        ano_calendario = inf_meta_p["ano_calendario"]
+
                 p_cpf = extract_cpf_fallback(combined_page_text)
                 p_rg = extract_rg_fallback(combined_page_text)
                 p_cnpj = extract_cnpj_fallback(combined_page_text)
@@ -1823,6 +2499,17 @@ def analyze_pdf_dossier(
                 except Exception:
                     pass
 
+
+    # Consolidação de pacotes de IRPF: se houver páginas de Recibo de Entrega da Declaração de Ajuste Anual
+    # e páginas de Declaração de Imposto de Renda contíguas, unifica como Recibo de Entrega da Declaração de Ajuste Anual
+    has_recibo_irpf = any(p.get("tipo") == "Recibo de Entrega da Declaração de Ajuste Anual" for p in pages_info)
+    if has_recibo_irpf:
+        for p_info in pages_info:
+            if p_info.get("tipo") == "Declaração de Imposto de Renda":
+                p_info["tipo"] = "Recibo de Entrega da Declaração de Ajuste Anual"
+        seen_tipos = [t for t in seen_tipos if t != "Declaração de Imposto de Renda"]
+        if "Recibo de Entrega da Declaração de Ajuste Anual" not in seen_tipos:
+            seen_tipos.insert(0, "Recibo de Entrega da Declaração de Ajuste Anual")
 
     # Hierarquia e Anti-Contaminação
     # CPF: Prioridade 1 = Identificação, 2 = Acadêmico, 3 = Financeiro
@@ -1869,15 +2556,48 @@ def analyze_pdf_dossier(
     priority_order = [
         "Diploma", "Certificado", "Histórico Escolar", "Declaração", "Ementa", "Dissertação", "Livro/Publicação",
         "Cartão CNPJ / Situação Cadastral", "Comprovante de Inscrição e de Situação Cadastral", "Currículo", "Declaração de Experiência Profissional",
+        "Dossiê Veicular",
+        "Certificado de Registro de Veículo (CRV)", "Certificado de Registro e Licenciamento de Veículo (CRLV)",
+        "Autorização para Transferência de Propriedade de Veículo (ATPV)",
+        "Comunicação de Venda ao DETRAN", "Laudo de Vistoria Veicular", "Guia de Remoção de Veículo",
+        "Nota de Arrematação (Leilão)", "Comprovante de Agendamento DETRAN",
         "CNH", "RG", "CPF", "Certidão de Nascimento", "Certidão de Casamento", "Passaporte",
-        "Comprovante PIX", "Comprovante de Pagamento", "Boleto", "Recibo"
+        "Contrato de Compra e Venda", "Contrato Particular de Compra e Venda de Imóvel", "Contrato", "Procuração", "Termo de Posse",
+        "Recibo de Entrega da Declaração de Ajuste Anual", "Declaração de Imposto de Renda", "Informe de Rendimentos Financeiros",
+        "Talão de Cheques", "Folha de Cheque",
+        "Comprovante PIX", "Comprovante de Pagamento", "Boleto", "Boleto Bancário", "Nota Promissória", "Recibo"
     ]
-    for p_tipo in priority_order:
-        if p_tipo in seen_tipos:
-            tipo_principal = p_tipo
-            break
-    if not tipo_principal and seen_tipos:
-        tipo_principal = seen_tipos[0]
+
+    cheque_pages = [p for p in pages_info if p.get("tipo") in ("Folha de Cheque", "Talão de Cheques")]
+    veic_pages = [p for p in pages_info if p.get("dominio") == "veicular"]
+    has_academic_prime = any(p["tipo"] in priority_order[:7] for p in pages_info)
+    has_id_prime = any(p["tipo"] in ["CNH", "RG", "CPF", "Certidão de Nascimento", "Certidão de Casamento", "Passaporte"] for p in pages_info)
+
+    if (len(cheque_pages) >= 2 or len(all_cheque_numbers) >= 2 or (len(cheque_pages) >= 1 and total_pages > 1 and len(cheque_pages) / max(1, len(pages_info)) >= 0.5)) and not has_academic_prime:
+        tipo_principal = "Talão de Cheques"
+        dominio_principal = "financeiro"
+    elif len(cheque_pages) == 1 and not has_academic_prime and not has_id_prime:
+        tipo_principal = "Folha de Cheque"
+        dominio_principal = "financeiro"
+    elif len(veic_pages) >= 2 and len(set(p.get("tipo") for p in veic_pages)) >= 2 and not has_academic_prime:
+        tipo_principal = "Dossiê Veicular"
+        dominio_principal = "veicular"
+    elif len(veic_pages) >= 1 and not has_academic_prime and not has_id_prime:
+        tipo_principal = veic_pages[0]["tipo"]
+        dominio_principal = "veicular"
+    else:
+        for p_tipo in priority_order:
+            if p_tipo in seen_tipos:
+                tipo_principal = p_tipo
+                break
+        if not tipo_principal and seen_tipos:
+            tipo_principal = seen_tipos[0]
+
+        if tipo_principal:
+            for p_info in pages_info:
+                if p_info.get("tipo") == tipo_principal:
+                    dominio_principal = p_info.get("dominio", dominio_principal)
+                    break
 
     result["paginas"] = pages_info
     result["todos_tipos"] = seen_tipos
@@ -1889,6 +2609,17 @@ def analyze_pdf_dossier(
     result["curso_titular"] = curso_titular
     result["tipo_documento_principal"] = tipo_principal
     result["dominio_principal"] = dominio_principal
+    result["numero_cheque"] = all_cheque_numbers[0] if all_cheque_numbers else None
+    result["numeros_cheque"] = all_cheque_numbers
+    result["banco_cheque"] = banco_cheque
+    result["conta_corrente"] = conta_corrente
+    result["serie_cheque"] = serie_cheque
+    result["agencia_cheque"] = agencia_cheque
+    result["numero_recibo"] = numero_recibo
+    result["exercicio_irpf"] = exercicio_irpf
+    result["ano_calendario"] = ano_calendario
+    result["fonte_pagadora"] = fonte_pagadora
+    result["cnpj_fonte_pagadora"] = cnpj_fonte_pagadora
 
     return result
 
@@ -2549,16 +3280,27 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
     * "financeiro" (para comprovantes PIX, recibos de pagamento, transferências bancárias, boletos, extratos, notas fiscais)
     * "identificacao" (para RG, CNH, CPF, Título de Eleitor, Certidão de Nascimento/Casamento, Passaporte, Registro Profissional)
     * "profissional" (para Cartão CNPJ, Comprovante de Inscrição e Situação Cadastral, currículos, carteira de trabalho, atestados de capacidade)
-    * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
+    * "veicular" (para Certificado de Registro de Veículo - CRV, Certificado de Registro e Licenciamento de Veículo - CRLV, Autorização para Transferência de Propriedade - ATPV, laudos de vistoria veicular, guias de remoção/pátio, comunicação de venda ao DETRAN, notas de arrematação de veículos)
+    * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, mandados de busca e apreensão, escrituras, petições)
     * "outro" (para quaisquer outros documentos não contemplados acima)
 - "tipo_documento": Nome específico do documento. Exemplos com critérios estritos:
+    * "Certificado de Registro de Veículo (CRV)" (ATENÇÃO: documento de propriedade e transferência de veículo, antigo DUT, frente e verso físico ou versão digital unificada. NUNCA confunda com CRLV e NUNCA classifique como Contrato de Compra e Venda)
+    * "Certificado de Registro e Licenciamento de Veículo (CRLV)" (ATENÇÃO: documento anual de porte obrigatório para circulação do veículo, com exercício/ano e QR Code, físico ou digital unificado. NUNCA confunda com CRV e NUNCA classifique como Contrato de Compra e Venda)
+    * "Autorização para Transferência de Propriedade de Veículo (ATPV)" (ATENÇÃO: autorização de transferência de veículo física ou digital/ATPV-e com comprador, vendedor e valor da venda. NUNCA classifique como Contrato de Compra e Venda)
+    * "Comunicação de Venda ao DETRAN", "Laudo de Vistoria Veicular", "Guia de Remoção de Veículo", "Nota de Arrematação (Leilão)", "Comprovante de Agendamento DETRAN"
+    * "Recibo de Entrega da Declaração de Ajuste Anual" / "Declaração de Imposto de Renda" (ATENÇÃO: classifique no domínio financeiro se o documento for declaração de IRPF ou recibo de entrega da Receita Federal, contendo expressões como "Imposto sobre a Renda - Pessoa Física", "Declaração de Ajuste Anual", "Recibo de Entrega", número do recibo, exercício/ano-calendário)
+    * "Informe de Rendimentos Financeiros" (ATENÇÃO: classifique no domínio financeiro se o documento for um informe de rendimentos financeiros emitido por banco/instituição financeira ou comprovante de rendimentos para fins de IRPF)
+    * "Talão de Cheques" / "Folha de Cheque" (ATENÇÃO: classifique como Folha de Cheque ou Talão de Cheques se o documento for uma folha ou talonário de cheque bancário, contendo expressões como "Pague por este cheque", "a quantia de", "à sua ordem", "centavos acima", número do cheque com 6 dígitos, série, agência, conta corrente ou canhotos de talão)
     * "Boleto Bancário" (ATENÇÃO: classifique categoricamente como Boleto Bancário se o documento contiver linha digitável com 47 ou 48 dígitos, código de barras FEBRABAN com 44 dígitos, termos como "ficha de compensação", "recibo do pagador/sacado", "nosso número", "pagável em qualquer banco", ou se for conta/fatura de concessionária de energia/água/serviços públicos com código de cobrança)
     * "Listagem de Pagamentos / Depósitos" (para borderôs, listagens de depósitos bancários, relações de pagamentos com tabelas ou múltiplos favorecidos)
     * "Comprovante PIX" (ATENÇÃO: classifique como PIX ESTRITAMENTE se o documento contiver expressamente o termo "PIX" ou identificador E2E padrão BACEN iniciado por 'E')
     * "Comprovante de Transferência Bancária (TED/DOC)" (para transferências bancárias entre contas sem indicação de PIX)
     * "DARF / Guia de Arrecadação Federal" (para guias de receitas federais / tributos)
-    * "Comprovante de Pagamento Bancário" (para pagamentos bancários sem menção a PIX)
-    * "Extrato Bancário", "Recibo de Pagamento", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
+    * "Contrato de Compra e Venda" (ATENÇÃO: classifique no domínio jurídico apenas se o documento for contrato particular ou escritura de compromisso/promessa de compra e venda. NUNCA classifique CRV, CRLV ou ATPV como Contrato de Compra e Venda, mesmo que contenham vendedor, comprador e valor da venda)
+    * "Nota Promissória" (ATENÇÃO: classifique no domínio financeiro se o documento for nota promissória / título de crédito comercial, contendo expressões como "Nota Promissória", "por esta única via", "pagarei/pagará por esta", "vencimento", "avalista", "emitente", padrão São Domingos cód. 6091)
+    * "Recibo" / "Recibo de Pagamento" (ATENÇÃO: classifique no domínio financeiro para recibos de quitação ou comprovantes de recebimento de valores)
+    * "Citação de Mandado de Busca e Apreensão" (para mandados judiciais e citações)
+    * "Extrato Bancário", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
 
 2. CAMPOS UNIVERSAIS:
 - "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
@@ -2566,15 +3308,28 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "cpf": CPF do titular ou recebedor identificado (ex: "000.000.000-00" ou apenas números). Se não houver menção, retorne null.
 - "rg": Número da Cédula de Identidade / RG do titular incluindo órgão emissor/UF (ex: "12.345.678-9 SSP/SP"). Se não houver, retorne null.
 - "cnpj": CNPJ da empresa, órgão ou pagador/recebedor formatado (ex: "00.000.000/0000-00") ou apenas números. Se não houver, retorne null.
-- "valor_monetario": Se for comprovante financeiro ou PIX, informe o valor monetário com 'R$' (ex: "R$ 150,00" ou "R$ 1.250,50"). Para outros documentos, retorne null.
+- "valor_monetario": Se for comprovante financeiro, cheque ou PIX, informe o valor monetário com 'R$' (ex: "R$ 150,00" ou "R$ 1.250,50"). Para outros documentos, retorne null.
 
-3. CAMPOS ACADÊMICOS (se aplicável):
+3. CAMPOS VEICULARES (se for documento do domínio veicular, senão retorne null):
+- "placa": Placa do veículo identificada no documento (ex: "MQB-4382" ou "MQB4382").
+- "renavam": Código Renavam do veículo com 9 a 11 dígitos (ex: "00833434136").
+- "chassi": Número de Identificação do Veículo / Chassi VIN com 17 dígitos (ex: "9C2JC30104R079694").
+- "marca_modelo": Marca, modelo e versão do veículo (ex: "HONDA/CG 125 TITAN KS").
+- "ano_veiculo": Ano de fabricação e modelo (ex: "2003/2004").
+- "orgao_transito": Órgão executivo de trânsito emissor (ex: "DETRAN-ES", "DETRAN-SP", "SENATRAN").
+- "valor_venda": Valor da venda expresso na ATPV ou nota de arrematação se houver.
+
+4. CAMPOS ACADÊMICOS (se aplicável):
 - "curso": Nome oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Bacharelado em Administração"). Se não for curso, retorne null.
 - "natureza_curso": Nível acadêmico: "Graduação / Curso Superior", "Pós-Graduação Lato Sensu (Especialização/MBA)", "Pós-Graduação Stricto Sensu (Mestrado/Doutorado)", "Curso Técnico / Profissionalizante", "Curso de Extensão / Aperfeiçoamento", "Educação Básica" ou null.
 - "carga_horaria": Carga horária total (ex: "750 h/aulas", "360 horas", "750h"). Se não houver, retorne null.
-- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se for Cartão CNPJ, informe "Receita Federal do Brasil (RFB)". Se não houver, retorne null.
+- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário, cheque ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "SICOOB", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se for Cartão CNPJ, informe "Receita Federal do Brasil (RFB)". Se não houver, retorne null.
 
-4. CAMPOS ESPECÍFICOS DE BOLETO / PIX / FINANCEIRO (preencha se for comprovante financeiro/boleto, senão retorne null):
+4. CAMPOS ESPECÍFICOS DE BOLETO / CHEQUE / PIX / FINANCEIRO (preencha se for comprovante financeiro/boleto/cheque, senão retorne null):
+- "numero_cheque": Número de 6 dígitos da folha de cheque (ex: "002366") se for cheque.
+- "banco_cheque": Nome do banco emissor do cheque (ex: "SICOOB", "Banco do Brasil").
+- "conta_corrente": Conta corrente bancária do emitente.
+- "serie_cheque": Série da folha de cheque (ex: "001").
 - "linha_digitavel": Linha digitável completa do boleto bancário (ex: "00190.00009 03183.378003 00078.500170 6 12780001804302" ou "836000000099 121500513001 180131922639 000227593344"). Se não houver, retorne null.
 - "codigo_barras": Código de barras numérico contínuo do boleto (44 dígitos). Se não houver, retorne null.
 - "nosso_numero": Nosso Número do boleto bancário (se presente).
@@ -2637,16 +3392,27 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
     * "financeiro" (para comprovantes PIX, recibos de pagamento, transferências bancárias, boletos, extratos, notas fiscais, listagens de depósito)
     * "identificacao" (para RG, CNH, CPF, Título de Eleitor, Certidão de Nascimento/Casamento, Passaporte, Registro Profissional)
     * "profissional" (para Cartão CNPJ, Comprovante de Inscrição e Situação Cadastral, currículos, carteira de trabalho, atestados de capacidade)
-    * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, escrituras, petições)
+    * "veicular" (para Certificado de Registro de Veículo - CRV, Certificado de Registro e Licenciamento de Veículo - CRLV, Autorização para Transferência de Propriedade - ATPV, laudos de vistoria veicular, guias de remoção/pátio, comunicação de venda ao DETRAN, notas de arrematação de veículos)
+    * "juridico" (para contratos, procurações, termos de posse, certidões judiciais, mandados de busca e apreensão, escrituras, petições)
     * "outro" (para quaisquer outros documentos não contemplados acima)
 - "tipo_documento": Nome específico do documento. Exemplos com critérios estritos:
+    * "Certificado de Registro de Veículo (CRV)" (ATENÇÃO: documento de propriedade e transferência de veículo, antigo DUT, frente e verso físico ou versão digital unificada. NUNCA confunda com CRLV e NUNCA classifique como Contrato de Compra e Venda)
+    * "Certificado de Registro e Licenciamento de Veículo (CRLV)" (ATENÇÃO: documento anual de porte obrigatório para circulação do veículo, com exercício/ano e QR Code, físico ou digital unificado. NUNCA confunda com CRV e NUNCA classifique como Contrato de Compra e Venda)
+    * "Autorização para Transferência de Propriedade de Veículo (ATPV)" (ATENÇÃO: autorização de transferência de veículo física ou digital/ATPV-e com comprador, vendedor e valor da venda. NUNCA classifique como Contrato de Compra e Venda)
+    * "Comunicação de Venda ao DETRAN", "Laudo de Vistoria Veicular", "Guia de Remoção de Veículo", "Nota de Arrematação (Leilão)", "Comprovante de Agendamento DETRAN"
+    * "Recibo de Entrega da Declaração de Ajuste Anual" / "Declaração de Imposto de Renda" (ATENÇÃO: classifique no domínio financeiro se o documento for declaração de IRPF ou recibo de entrega da Receita Federal, contendo expressões como "Imposto sobre a Renda - Pessoa Física", "Declaração de Ajuste Anual", "Recibo de Entrega", número do recibo, exercício/ano-calendário)
+    * "Informe de Rendimentos Financeiros" (ATENÇÃO: classifique no domínio financeiro se o documento for um informe de rendimentos financeiros emitido por banco/instituição financeira ou comprovante de rendimentos para fins de IRPF)
+    * "Talão de Cheques" / "Folha de Cheque" (ATENÇÃO: classifique como Folha de Cheque ou Talão de Cheques se o documento for uma folha ou talonário de cheque bancário, contendo expressões como "Pague por este cheque", "a quantia de", "à sua ordem", "centavos acima", número do cheque com 6 dígitos, série, agência, conta corrente ou canhotos de talão)
     * "Boleto Bancário" (ATENÇÃO: classifique categoricamente como Boleto Bancário se o documento contiver linha digitável com 47 ou 48 dígitos, código de barras FEBRABAN com 44 dígitos, termos como "ficha de compensação", "recibo do pagador/sacado", "nosso número", "pagável em qualquer banco", ou se for conta/fatura de concessionária de energia/água/serviços públicos com código de cobrança)
     * "Listagem de Pagamentos / Depósitos" (para borderôs, listagens de depósitos bancários, relações de pagamentos com tabelas ou múltiplos favorecidos)
     * "Comprovante PIX" (ATENÇÃO: classifique como PIX ESTRITAMENTE se o documento contiver expressamente o termo "PIX" ou identificador E2E padrão BACEN iniciado por 'E')
     * "Comprovante de Transferência Bancária (TED/DOC)" (para transferências bancárias entre contas sem indicação de PIX)
-    * "DARF / Guia de Arrecadação Federal" (para guias de receitas federais / tributos)
-    * "Comprovante de Pagamento Bancário" (para pagamentos bancários sem menção a PIX)
-    * "Extrato Bancário", "Recibo de Pagamento", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
+    * "DARF / Guia de Arrecadação Federal" (para guias DARF, arrecadação federal, impostos federais)
+    * "Contrato de Compra e Venda" (ATENÇÃO: classifique no domínio jurídico apenas se o documento for contrato particular ou escritura de compromisso/promessa de compra e venda. NUNCA classifique CRV, CRLV ou ATPV como Contrato de Compra e Venda, mesmo que contenham vendedor, comprador e valor da venda)
+    * "Nota Promissória" (ATENÇÃO: classifique no domínio financeiro se o documento for nota promissória / título de crédito comercial, contendo expressões como "Nota Promissória", "por esta única via", "pagarei/pagará por esta", "vencimento", "avalista", "emitente", padrão São Domingos cód. 6091)
+    * "Recibo" / "Recibo de Pagamento" (ATENÇÃO: classifique no domínio financeiro para recibos de quitação ou comprovantes de recebimento de valores)
+    * "Citação de Mandado de Busca e Apreensão" (para mandados judiciais e citações)
+    * "Extrato Bancário", "Cartão CNPJ / Situação Cadastral", "Diploma", "Certificado", "Histórico Escolar", "RG / Identidade", "CNH", "Contrato de Prestação de Serviços", "Declaração", "Outro". Se não puder identificar, retorne "Não identificado".
 
 2. CAMPOS UNIVERSAIS:
 - "data": Data principal do documento ou data/hora da transação (ex: "18/12/2023", "08/09/2026 14:30:00" ou "18 de dezembro de 2023"). Se não encontrar, retorne null.
@@ -2654,15 +3420,28 @@ Extraia as seguintes informações e retorne ESTRITAMENTE um objeto JSON com as 
 - "cpf": CPF do titular ou recebedor identificado (ex: "000.000.000-00" ou apenas números). Se não houver menção, retorne null.
 - "rg": Número da Cédula de Identidade / RG do titular incluindo órgão emissor/UF (ex: "12.345.678-9 SSP/SP"). Se não houver, retorne null.
 - "cnpj": CNPJ da empresa, órgão ou pagador/recebedor formatado (ex: "00.000.000/0000-00") ou apenas números. Se não houver, retorne null.
-- "valor_monetario": Se for comprovante financeiro ou PIX, informe o valor monetário com 'R$' (ex: "R$ 150,00" ou "R$ 1.250,50"). Para outros documentos, retorne null.
+- "valor_monetario": Se for comprovante financeiro, cheque ou PIX, informe o valor monetário com 'R$' (ex: "R$ 150,00" ou "R$ 1.250,50"). Para outros documentos, retorne null.
 
-3. CAMPOS ACADÊMICOS (se aplicável):
+3. CAMPOS VEICULARES (se for documento do domínio veicular, senão retorne null):
+- "placa": Placa do veículo identificada no documento (ex: "MQB-4382" ou "MQB4382").
+- "renavam": Código Renavam do veículo com 9 a 11 dígitos (ex: "00833434136").
+- "chassi": Número de Identificação do Veículo / Chassi VIN com 17 dígitos (ex: "9C2JC30104R079694").
+- "marca_modelo": Marca, modelo e versão do veículo (ex: "HONDA/CG 125 TITAN KS").
+- "ano_veiculo": Ano de fabricação e modelo (ex: "2003/2004").
+- "orgao_transito": Órgão executivo de trânsito emissor (ex: "DETRAN-ES", "DETRAN-SP", "SENATRAN").
+- "valor_venda": Valor da venda expresso na ATPV ou nota de arrematação se houver.
+
+4. CAMPOS ACADÊMICOS (se aplicável):
 - "curso": Nome oficial do curso concluído (ex: "Pós-graduação Lato Sensu em Gestão Escolar", "Bacharelado em Administração"). Se não for curso, retorne null.
 - "natureza_curso": Nível acadêmico: "Graduação / Curso Superior", "Pós-Graduação Lato Sensu (Especialização/MBA)", "Pós-Graduação Stricto Sensu (Mestrado/Doutorado)", "Curso Técnico / Profissionalizante", "Curso de Extensão / Aperfeiçoamento", "Educação Básica" ou null.
 - "carga_horaria": Carga horária total (ex: "750 h/aulas", "360 horas", "750h"). Se não houver, retorne null.
-- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "Nu Pagamentos S.A. (NUBANK)", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se for Cartão CNPJ, informe "Receita Federal do Brasil (RFB)". Se não houver, retorne null.
+- "faculdade": Nome padronizado da faculdade, universidade ou instituição de ensino no formato "Nome Completo por Extenso (SIGLA)" (ex: "Universidade de São Paulo (USP)"). Se for comprovante bancário, cheque ou PIX, informe o nome da Instituição Financeira / Banco / PSP (ex: "SICOOB", "Banco do Brasil (BB)", "Caixa Econômica Federal (CEF)"). Se for Cartão CNPJ, informe "Receita Federal do Brasil (RFB)". Se não houver, retorne null.
 
-4. CAMPOS ESPECÍFICOS DE BOLETO / PIX / FINANCEIRO (preencha se for documento financeiro/PIX/boleto, senão retorne null):
+4. CAMPOS ESPECÍFICOS DE BOLETO / CHEQUE / PIX / FINANCEIRO (preencha se for documento financeiro/PIX/boleto/cheque, senão retorne null):
+- "numero_cheque": Número de 6 dígitos da folha de cheque (ex: "002366") se for cheque.
+- "banco_cheque": Nome do banco emissor do cheque (ex: "SICOOB", "Banco do Brasil").
+- "conta_corrente": Conta corrente bancária do emitente.
+- "serie_cheque": Série da folha de cheque (ex: "001").
 - "linha_digitavel": Linha digitável completa do boleto bancário (ex: "00190.00009 03183.378003 00078.500170 6 12780001804302" ou "836000000099 121500513001 180131922639 000227593344"). Se não houver, retorne null.
 - "codigo_barras": Código de barras numérico contínuo do boleto (44 dígitos). Se não houver, retorne null.
 - "nosso_numero": Nosso Número do boleto bancário (se presente).
@@ -3146,6 +3925,18 @@ def process_single_pdf(
         boleto_corpus = f"{text or ''}\n{tess_text or ''}".strip()
         is_boleto, boleto_linha, boleto_barras, boleto_detalhes = extract_boleto_signals(boleto_corpus)
 
+        # 0.2 Detecção Universal e Extração de Sinais de Cheque / Talão de Cheques
+        cheque_corpus = f"{text or ''}\n{tess_text or ''}".strip()
+        is_cheque, cheque_num, cheque_banco, cheque_detalhes = extract_cheque_signals(cheque_corpus)
+
+        # 0.3 Detecção Universal e Extração de Sinais de IRPF e Informe de Rendimentos
+        doc_corpus = f"{text or ''}\n{tess_text or ''}".strip()
+        is_irpf, irpf_tipo, irpf_det = extract_irpf_signals(doc_corpus)
+        is_informe, informe_tipo, informe_det = extract_informe_rendimentos_signals(doc_corpus)
+        is_cv, cv_tipo, cv_det = extract_contrato_compra_venda_signals(doc_corpus)
+        is_np, np_tipo, np_det = extract_nota_promissoria_signals(doc_corpus)
+        is_rec, rec_tipo, rec_det = extract_recibo_signals(doc_corpus)
+
         # Se a LLM já extraiu linha_digitavel ou codigo_barras no JSON, consolida
         if not boleto_linha and extracted_data.get("linha_digitavel"):
             boleto_linha = _clean_str(extracted_data.get("linha_digitavel"))
@@ -3165,6 +3956,68 @@ def process_single_pdf(
             dominio_raw = "financeiro"
             tipo_doc_raw = "Boleto Bancário"
             tipo_lower = "boleto bancário"
+            is_legitimate_pix = False
+            has_explicit_pix_term = False
+            pix_chave = None
+            pix_e2e_id = None
+            pix_autenticacao = None
+        elif (
+            is_cheque
+            or "cheque" in tipo_lower
+            or "talao" in tipo_lower
+            or "talão" in tipo_lower
+            or (regra_aprendida and any(k in str(regra_aprendida.get("valor_atribuido") or "").lower() for k in ["cheque", "talao", "talão"]))
+        ):
+            is_cheque = True
+            dominio_raw = "financeiro"
+            is_talao_sig = cheque_detalhes.get("is_talao", False) or "talao" in tipo_lower or "talão" in tipo_lower
+            tipo_doc_raw = "Talão de Cheques" if is_talao_sig else "Folha de Cheque"
+            tipo_lower = tipo_doc_raw.lower()
+            is_legitimate_pix = False
+            has_explicit_pix_term = False
+            pix_chave = None
+            pix_e2e_id = None
+            pix_autenticacao = None
+        elif is_irpf:
+            dominio_raw = "financeiro"
+            tipo_doc_raw = irpf_tipo
+            tipo_lower = tipo_doc_raw.lower()
+            is_legitimate_pix = False
+            has_explicit_pix_term = False
+            pix_chave = None
+            pix_e2e_id = None
+            pix_autenticacao = None
+        elif is_informe:
+            dominio_raw = "financeiro"
+            tipo_doc_raw = informe_tipo
+            tipo_lower = tipo_doc_raw.lower()
+            is_legitimate_pix = False
+            has_explicit_pix_term = False
+            pix_chave = None
+            pix_e2e_id = None
+            pix_autenticacao = None
+        elif is_cv:
+            dominio_raw = "juridico"
+            tipo_doc_raw = cv_tipo or "Contrato de Compra e Venda"
+            tipo_lower = tipo_doc_raw.lower()
+            is_legitimate_pix = False
+            has_explicit_pix_term = False
+            pix_chave = None
+            pix_e2e_id = None
+            pix_autenticacao = None
+        elif is_np:
+            dominio_raw = "financeiro"
+            tipo_doc_raw = np_tipo or "Nota Promissória"
+            tipo_lower = tipo_doc_raw.lower()
+            is_legitimate_pix = False
+            has_explicit_pix_term = False
+            pix_chave = None
+            pix_e2e_id = None
+            pix_autenticacao = None
+        elif is_rec:
+            dominio_raw = "financeiro"
+            tipo_doc_raw = rec_tipo or "Recibo"
+            tipo_lower = tipo_doc_raw.lower()
             is_legitimate_pix = False
             has_explicit_pix_term = False
             pix_chave = None
@@ -3191,7 +4044,7 @@ def process_single_pdf(
         is_ted = bool(any(k in full_text_corpus for k in ["\bted\b", "\bdoc\b", "transferência bancária", "transferencia bancaria", "transferência entre contas", "transferencia entre contas"]))
 
         # Se foi sugerido como PIX sem conter termo 'PIX' ou E2E ID oficial, corrige a classificação
-        if "pix" in tipo_lower and not is_legitimate_pix and not is_boleto:
+        if "pix" in tipo_lower and not is_legitimate_pix and not is_boleto and not is_cheque:
             if is_listagem:
                 tipo_doc_raw = "Listagem de Pagamentos / Depósitos"
             elif is_darf:
@@ -3205,17 +4058,27 @@ def process_single_pdf(
             pix_e2e_id = None
 
         # Heurística inteligente para consolidação do domínio
-        is_non_financial_comprovante = any(k in tipo_lower for k in [
-            "inscrição", "inscricao", "situação cadastral", "situacao cadastral", "cnpj",
-            "residência", "residencia", "matrícula", "matricula", "rendimentos", "votação", "votacao"
-        ])
+        is_non_financial_comprovante = (
+            any(k in tipo_lower for k in [
+                "inscrição", "inscricao", "situação cadastral", "situacao cadastral", "cnpj",
+                "residência", "residencia", "matrícula", "matricula", "votação", "votacao"
+            ]) and not any(f in tipo_lower for f in ["informe de rendimentos", "rendimentos financeiros"])
+        )
 
         has_explicit_financial = bool(
             is_boleto or
+            is_cheque or
+            is_irpf or
+            is_informe or
+            is_np or
+            is_rec or
             is_legitimate_pix or
             is_listagem or
             is_darf or
             is_ted or
+            "nota promissória" in tipo_lower or
+            "nota promissoria" in tipo_lower or
+            "recibo" in tipo_lower or
             "comprovante de pagamento" in tipo_lower or
             "comprovante de transferência" in tipo_lower or
             "comprovante de transferencia" in tipo_lower or
@@ -3223,6 +4086,12 @@ def process_single_pdf(
             "comprovante bancario" in tipo_lower or
             "recibo de pagamento" in tipo_lower or
             "boleto" in tipo_lower or
+            "cheque" in tipo_lower or
+            "talao" in tipo_lower or
+            "talão" in tipo_lower or
+            "informe de rendimentos" in tipo_lower or
+            "imposto de renda" in tipo_lower or
+            "ajuste anual" in tipo_lower or
             ("recibo" in tipo_lower and not is_non_financial_comprovante)
         )
 
@@ -3231,6 +4100,16 @@ def process_single_pdf(
         if is_boleto:
             dominio = "financeiro"
             tipo_doc_raw = "Boleto Bancário"
+        elif is_cheque:
+            dominio = "financeiro"
+            is_talao_sig = cheque_detalhes.get("is_talao", False) or "talao" in tipo_lower or "talão" in tipo_lower
+            tipo_doc_raw = "Talão de Cheques" if is_talao_sig else "Folha de Cheque"
+        elif is_irpf:
+            dominio = "financeiro"
+            tipo_doc_raw = irpf_tipo
+        elif is_informe:
+            dominio = "financeiro"
+            tipo_doc_raw = informe_tipo
         elif not is_non_financial_comprovante and (has_pix_signal or has_explicit_financial or valor_raw or dominio_raw == "financeiro"):
             dominio = "financeiro"
             if not tipo_doc_raw or tipo_lower in ["não identificado", "nao identificado", "outro", "não informado", "nao informado"]:
@@ -3297,6 +4176,48 @@ def process_single_pdf(
             if boleto_detalhes.get("nosso_numero"):
                 res_dict["nosso_numero"] = boleto_detalhes["nosso_numero"]
                 res_dict["dados_extras"]["nosso_numero"] = boleto_detalhes["nosso_numero"]
+
+        # Atribuição e consolidação dos campos de Cheque / Talão de Cheques
+        if is_cheque or cheque_num or cheque_banco:
+            if cheque_num:
+                res_dict["dados_extras"]["numero_cheque"] = cheque_num
+            if cheque_detalhes.get("numeros_cheque"):
+                res_dict["dados_extras"]["numeros_cheque"] = cheque_detalhes["numeros_cheque"]
+            if cheque_banco or cheque_detalhes.get("banco_cheque"):
+                b_chk = cheque_banco or cheque_detalhes.get("banco_cheque")
+                res_dict["dados_extras"]["banco_cheque"] = b_chk
+                if not res_dict.get("faculdade"):
+                    res_dict["faculdade"] = b_chk
+            if cheque_detalhes.get("serie_cheque"):
+                res_dict["dados_extras"]["serie_cheque"] = cheque_detalhes["serie_cheque"]
+            if cheque_detalhes.get("agencia_cheque"):
+                res_dict["dados_extras"]["agencia_cheque"] = cheque_detalhes["agencia_cheque"]
+            if cheque_detalhes.get("conta_corrente"):
+                res_dict["dados_extras"]["conta_corrente"] = cheque_detalhes["conta_corrente"]
+
+        # Atribuição e consolidação dos campos de IRPF e Informe de Rendimentos
+        if is_irpf or irpf_det:
+            if irpf_det.get("numero_recibo"):
+                res_dict["dados_extras"]["numero_recibo"] = irpf_det["numero_recibo"]
+            if irpf_det.get("exercicio"):
+                res_dict["dados_extras"]["exercicio"] = irpf_det["exercicio"]
+                res_dict["dados_extras"]["exercicio_irpf"] = irpf_det["exercicio"]
+            if irpf_det.get("ano_calendario"):
+                res_dict["dados_extras"]["ano_calendario"] = irpf_det["ano_calendario"]
+            if irpf_det.get("total_rendimentos_tributaveis"):
+                res_dict["dados_extras"]["total_rendimentos_tributaveis"] = irpf_det["total_rendimentos_tributaveis"]
+            if not res_dict.get("faculdade"):
+                res_dict["faculdade"] = "Secretaria da Receita Federal do Brasil (RFB)"
+
+        if is_informe or informe_det:
+            if informe_det.get("fonte_pagadora"):
+                res_dict["dados_extras"]["fonte_pagadora"] = informe_det["fonte_pagadora"]
+                if not res_dict.get("faculdade"):
+                    res_dict["faculdade"] = informe_det["fonte_pagadora"]
+            if informe_det.get("cnpj_fonte_pagadora"):
+                res_dict["dados_extras"]["cnpj_fonte_pagadora"] = informe_det["cnpj_fonte_pagadora"]
+            if informe_det.get("ano_calendario") and not res_dict["dados_extras"].get("ano_calendario"):
+                res_dict["dados_extras"]["ano_calendario"] = informe_det["ano_calendario"]
 
         if is_manuscrito:
             res_dict["manuscrito"] = True
@@ -3487,7 +4408,7 @@ def process_single_pdf(
         # 4. Integração do Dossiê Multi-Páginas e Hierarquia Anti-Contaminação
         if not is_image:
             try:
-                dossier = analyze_pdf_dossier(pdf_path, max_ocr_pages=min(max_pages, 10))
+                dossier = analyze_pdf_dossier(pdf_path, max_ocr_pages=max(max_pages, 25))
                 todos_tipos = list(dossier.get("todos_tipos", []))
                 todos_dominios = list(dossier.get("todos_dominios", []))
 
@@ -3532,6 +4453,100 @@ def process_single_pdf(
                         todos_tipos.insert(0, "Boleto Bancário")
                     if "financeiro" not in todos_dominios:
                         todos_dominios.insert(0, "financeiro")
+                elif dossier.get("tipo_documento_principal") in ("Talão de Cheques", "Folha de Cheque") or is_cheque:
+                    tag_chk = dossier.get("tipo_documento_principal") or ("Talão de Cheques" if cheque_detalhes.get("is_talao") else "Folha de Cheque")
+                    res_dict["tipo_documento"] = tag_chk
+                    res_dict["dominio"] = "financeiro"
+                    if tag_chk not in todos_tipos:
+                        todos_tipos.insert(0, tag_chk)
+                    else:
+                        todos_tipos.remove(tag_chk)
+                        todos_tipos.insert(0, tag_chk)
+                    if "financeiro" not in todos_dominios:
+                        todos_dominios.insert(0, "financeiro")
+                    # Remove false PIX remnants
+                    res_dict["pix_chave"] = None
+                    res_dict["pix_e2e_id"] = None
+                    res_dict["pix_autenticacao"] = None
+                    for k_pix in ["pix_chave", "pix_e2e_id", "pix_autenticacao", "pix_pagador_nome", "pix_pagador_cpf_cnpj", "pix_pagador_banco", "pix_recebedor_banco", "pix_recebedor_nome", "pix_recebedor_cpf_cnpj"]:
+                        res_dict.pop(k_pix, None)
+                        if "dados_extras" in res_dict and isinstance(res_dict["dados_extras"], dict):
+                            res_dict["dados_extras"].pop(k_pix, None)
+                elif is_irpf or is_informe or (dossier.get("tipo_documento_principal") and ("imposto de renda" in dossier.get("tipo_documento_principal").lower() or "recibo de entrega" in dossier.get("tipo_documento_principal").lower() or "informe de rendimentos" in dossier.get("tipo_documento_principal").lower())):
+                    tag_ir = (irpf_tipo if is_irpf else (informe_tipo if is_informe else None)) or dossier.get("tipo_documento_principal") or "Declaração de Imposto de Renda"
+                    res_dict["tipo_documento"] = tag_ir
+                    res_dict["dominio"] = "financeiro"
+                    if tag_ir not in todos_tipos:
+                        todos_tipos.insert(0, tag_ir)
+                    if "financeiro" not in todos_dominios:
+                        todos_dominios.insert(0, "financeiro")
+                    # Remove false PIX remnants
+                    res_dict["pix_chave"] = None
+                    res_dict["pix_e2e_id"] = None
+                    res_dict["pix_autenticacao"] = None
+                    for k_pix in ["pix_chave", "pix_e2e_id", "pix_autenticacao", "pix_pagador_nome", "pix_pagador_cpf_cnpj", "pix_pagador_banco", "pix_recebedor_banco", "pix_recebedor_nome", "pix_recebedor_cpf_cnpj"]:
+                        res_dict.pop(k_pix, None)
+                        if "dados_extras" in res_dict and isinstance(res_dict["dados_extras"], dict):
+                            res_dict["dados_extras"].pop(k_pix, None)
+                elif is_cv or (dossier.get("tipo_documento_principal") and ("compra e venda" in dossier.get("tipo_documento_principal").lower() or "contrato" in dossier.get("tipo_documento_principal").lower())):
+                    tag_cv = (cv_tipo if is_cv else None) or dossier.get("tipo_documento_principal") or "Contrato de Compra e Venda"
+                    res_dict["tipo_documento"] = tag_cv
+                    res_dict["dominio"] = "juridico"
+                    if tag_cv not in todos_tipos:
+                        todos_tipos.insert(0, tag_cv)
+                    if "juridico" not in todos_dominios:
+                        todos_dominios.insert(0, "juridico")
+                elif is_np or (dossier.get("tipo_documento_principal") and "promissória" in dossier.get("tipo_documento_principal").lower()):
+                    tag_np = (np_tipo if is_np else None) or dossier.get("tipo_documento_principal") or "Nota Promissória"
+                    res_dict["tipo_documento"] = tag_np
+                    res_dict["dominio"] = "financeiro"
+                    if tag_np not in todos_tipos:
+                        todos_tipos.insert(0, tag_np)
+                    if "financeiro" not in todos_dominios:
+                        todos_dominios.insert(0, "financeiro")
+                elif is_rec or (dossier.get("tipo_documento_principal") and "recibo" in dossier.get("tipo_documento_principal").lower()):
+                    tag_rec = (rec_tipo if is_rec else None) or dossier.get("tipo_documento_principal") or "Recibo"
+                    res_dict["tipo_documento"] = tag_rec
+                    res_dict["dominio"] = "financeiro"
+                    if tag_rec not in todos_tipos:
+                        todos_tipos.insert(0, tag_rec)
+                    if "financeiro" not in todos_dominios:
+                        todos_dominios.insert(0, "financeiro")
+
+                # Consolida campos de cheque vindos do dossier
+                if dossier.get("numero_cheque") and "numero_cheque" not in res_dict.get("dados_extras", {}):
+                    res_dict.setdefault("dados_extras", {})["numero_cheque"] = dossier["numero_cheque"]
+                if dossier.get("numeros_cheque"):
+                    res_dict.setdefault("dados_extras", {})["numeros_cheque"] = dossier["numeros_cheque"]
+                if dossier.get("banco_cheque"):
+                    res_dict.setdefault("dados_extras", {})["banco_cheque"] = dossier["banco_cheque"]
+                    if not res_dict.get("faculdade"):
+                        res_dict["faculdade"] = dossier["banco_cheque"]
+                if dossier.get("conta_corrente") and "conta_corrente" not in res_dict.get("dados_extras", {}):
+                    res_dict.setdefault("dados_extras", {})["conta_corrente"] = dossier["conta_corrente"]
+                if dossier.get("serie_cheque") and "serie_cheque" not in res_dict.get("dados_extras", {}):
+                    res_dict.setdefault("dados_extras", {})["serie_cheque"] = dossier["serie_cheque"]
+                if dossier.get("agencia_cheque") and "agencia_cheque" not in res_dict.get("dados_extras", {}):
+                    res_dict.setdefault("dados_extras", {})["agencia_cheque"] = dossier["agencia_cheque"]
+
+                # Consolida campos de IRPF e Informe vindos do dossier
+                if dossier.get("numero_recibo") and "numero_recibo" not in res_dict.get("dados_extras", {}):
+                    res_dict.setdefault("dados_extras", {})["numero_recibo"] = dossier["numero_recibo"]
+                if dossier.get("exercicio_irpf") and "exercicio" not in res_dict.get("dados_extras", {}):
+                    res_dict.setdefault("dados_extras", {})["exercicio"] = dossier["exercicio_irpf"]
+                    res_dict.setdefault("dados_extras", {})["exercicio_irpf"] = dossier["exercicio_irpf"]
+                if dossier.get("ano_calendario") and "ano_calendario" not in res_dict.get("dados_extras", {}):
+                    res_dict.setdefault("dados_extras", {})["ano_calendario"] = dossier["ano_calendario"]
+                if dossier.get("fonte_pagadora") and "fonte_pagadora" not in res_dict.get("dados_extras", {}):
+                    res_dict.setdefault("dados_extras", {})["fonte_pagadora"] = dossier["fonte_pagadora"]
+                    if not res_dict.get("faculdade"):
+                        is_doc_irpf = is_irpf or any(k in (res_dict.get("tipo_documento") or "").lower() for k in ["ajuste anual", "imposto de renda"])
+                        if not is_doc_irpf:
+                            res_dict["faculdade"] = dossier["fonte_pagadora"]
+                        else:
+                            res_dict["faculdade"] = "Secretaria da Receita Federal do Brasil (RFB)"
+                if dossier.get("cnpj_fonte_pagadora") and "cnpj_fonte_pagadora" not in res_dict.get("dados_extras", {}):
+                    res_dict.setdefault("dados_extras", {})["cnpj_fonte_pagadora"] = dossier["cnpj_fonte_pagadora"]
 
                 res_dict["todos_tipos"] = todos_tipos if todos_tipos else ([prim_tipo] if prim_tipo else [])
                 res_dict["todos_dominios"] = todos_dominios if todos_dominios else ([prim_dom] if prim_dom else [])
@@ -3542,6 +4557,15 @@ def process_single_pdf(
                 if is_boleto:
                     prim_tipo = "Boleto Bancário"
                     prim_dom = "financeiro"
+                elif is_cheque:
+                    prim_tipo = "Talão de Cheques" if cheque_detalhes.get("is_talao") else "Folha de Cheque"
+                    prim_dom = "financeiro"
+                elif is_irpf:
+                    prim_tipo = irpf_tipo
+                    prim_dom = "financeiro"
+                elif is_informe:
+                    prim_tipo = informe_tipo
+                    prim_dom = "financeiro"
                 res_dict["todos_tipos"] = [prim_tipo] if prim_tipo else []
                 res_dict["todos_dominios"] = [prim_dom] if prim_dom else []
                 res_dict["dossie_paginas"] = []
@@ -3550,6 +4574,15 @@ def process_single_pdf(
             prim_dom = res_dict.get("dominio")
             if is_boleto:
                 prim_tipo = "Boleto Bancário"
+                prim_dom = "financeiro"
+            elif is_cheque:
+                prim_tipo = "Talão de Cheques" if cheque_detalhes.get("is_talao") else "Folha de Cheque"
+                prim_dom = "financeiro"
+            elif is_irpf:
+                prim_tipo = irpf_tipo
+                prim_dom = "financeiro"
+            elif is_informe:
+                prim_tipo = informe_tipo
                 prim_dom = "financeiro"
             res_dict["todos_tipos"] = [prim_tipo] if prim_tipo else []
             res_dict["todos_dominios"] = [prim_dom] if prim_dom else []
@@ -3686,6 +4719,16 @@ def format_single_txt(item: Dict[str, Any]) -> str:
         _add_if_val("Natureza do Curso", item.get("natureza_curso"))
         _add_if_val("Carga Horária", item.get("carga_horaria"))
     elif dom == "financeiro":
+        _add_if_val("Número do Cheque", de.get("numero_cheque"))
+        if de.get("numeros_cheque") and len(de.get("numeros_cheque")) > 1:
+            amostra_chk = ", ".join(str(n) for n in de["numeros_cheque"][:8])
+            if len(de["numeros_cheque"]) > 8:
+                amostra_chk += f" ... (+{len(de['numeros_cheque']) - 8} cheques)"
+            _add_if_val("Cheques no Talão", f"{amostra_chk} (Total: {len(de['numeros_cheque'])})")
+        _add_if_val("Banco do Cheque", de.get("banco_cheque"))
+        _add_if_val("Série do Cheque", de.get("serie_cheque"))
+        _add_if_val("Agência", de.get("agencia_cheque"))
+        _add_if_val("Conta Corrente", de.get("conta_corrente"))
         _add_if_val("Pagador", item.get("pix_pagador_nome"))
         _add_if_val("CPF/CNPJ do Pagador", item.get("pix_pagador_cpf_cnpj"))
         _add_if_val("Banco Origem (Pagador)", item.get("pix_pagador_banco"))
@@ -3704,6 +4747,15 @@ def format_single_txt(item: Dict[str, Any]) -> str:
         _add_if_val("Endereço Completo", de.get("endereco_completo"))
         _add_if_val("Telefone", de.get("telefone"))
         _add_if_val("E-mail", de.get("email"))
+    elif dom == "veicular":
+        _add_if_val("Placa", de.get("placa"))
+        _add_if_val("Renavam", de.get("renavam"))
+        _add_if_val("Chassi", de.get("chassi"))
+        _add_if_val("Marca / Modelo", de.get("marca_modelo"))
+        _add_if_val("Ano Fab / Modelo", de.get("ano_fabricacao_modelo") or de.get("ano_veiculo"))
+        _add_if_val("Órgão de Trânsito", de.get("orgao_transito") or item.get("faculdade"))
+        _add_if_val("Proprietário / Vendedor", de.get("vendedor") or de.get("proprietario_anterior") or item.get("beneficiario"))
+        _add_if_val("Comprador", de.get("comprador"))
 
     # Dados de manuscrito
     if de.get("manuscrito") or item.get("manuscrito"):
@@ -3726,7 +4778,10 @@ def format_single_txt(item: Dict[str, Any]) -> str:
         "data_abertura", "cnae_principal", "natureza_juridica", "endereco_completo",
         "telefone", "email", "manuscrito", "emitente", "referente_a", "conteudo_manuscrito",
         "texto_transcrito", "texto_ocr", "texto_digital", "texto_tesseract", "transcricao_completa",
-        "nomes_detectados", "dossie_paginas", "todos_dominios", "todos_tipos", "data_criacao"
+        "nomes_detectados", "dossie_paginas", "todos_dominios", "todos_tipos", "data_criacao",
+        "numero_cheque", "numeros_cheque", "banco_cheque", "serie_cheque", "agencia_cheque", "conta_corrente",
+        "placa", "renavam", "chassi", "marca_modelo", "ano_fabricacao_modelo", "ano_veiculo",
+        "orgao_transito", "vendedor", "proprietario_anterior", "comprador", "cnpj"
     }
     for k, v in de.items():
         if k not in ignore_keys:

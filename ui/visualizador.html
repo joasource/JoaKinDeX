@@ -1266,6 +1266,7 @@
                   <option value="academico">Acadêmico (Diplomas/Cursos)</option>
                   <option value="financeiro">Financeiro (PIX/Recibos)</option>
                   <option value="identificacao">Identificação Civil (RG/CNH/CPF)</option>
+                  <option value="veicular">🚗 Veicular (CRV/CRLV/ATPV/Vistoria)</option>
                   <option value="juridico">Jurídico (Contratos/Posse)</option>
                   <option value="profissional">Profissional / Cadastral / CNPJ</option>
                   <option value="outro">Outros Documentos</option>
@@ -1288,6 +1289,17 @@
                 </div>
                 <select id="select_tipo_documento" onchange="onTipoDocumentoChange()"
                         class="w-full bg-slate-950 border border-slate-700/80 rounded px-2.5 py-1.5 text-xs text-slate-100 font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                  <optgroup label="Veicular & Trânsito">
+                    <option value="Dossiê Veicular">Dossiê Veicular</option>
+                    <option value="Certificado de Registro de Veículo (CRV)">Certificado de Registro de Veículo (CRV)</option>
+                    <option value="Certificado de Registro e Licenciamento de Veículo (CRLV)">Certificado de Registro e Licenciamento de Veículo (CRLV)</option>
+                    <option value="Autorização para Transferência de Propriedade de Veículo (ATPV)">Autorização para Transferência de Propriedade de Veículo (ATPV)</option>
+                    <option value="Comunicação de Venda ao DETRAN">Comunicação de Venda ao DETRAN</option>
+                    <option value="Laudo de Vistoria Veicular">Laudo de Vistoria Veicular</option>
+                    <option value="Guia de Remoção de Veículo">Guia de Remoção de Veículo</option>
+                    <option value="Nota de Arrematação (Leilão)">Nota de Arrematação (Leilão)</option>
+                    <option value="Comprovante de Agendamento DETRAN">Comprovante de Agendamento DETRAN</option>
+                  </optgroup>
                   <optgroup label="Acadêmico">
                     <option value="Diploma">Diploma</option>
                     <option value="Certificado">Certificado</option>
@@ -1297,7 +1309,14 @@
                   </optgroup>
                   <optgroup label="Financeiro & Pagamentos">
                     <option value="Comprovante PIX">Comprovante PIX</option>
+                    <option value="Declaração de Imposto de Renda">Declaração de Imposto de Renda</option>
+                    <option value="Recibo de Entrega da Declaração de Ajuste Anual">Recibo de Entrega da Declaração de Ajuste Anual</option>
+                    <option value="Informe de Rendimentos Financeiros">Informe de Rendimentos Financeiros</option>
+                    <option value="Talão de Cheques">Talão de Cheques</option>
+                    <option value="Folha de Cheque">Folha de Cheque</option>
+                    <option value="Recibo">Recibo</option>
                     <option value="Recibo de Pagamento">Recibo de Pagamento</option>
+                    <option value="Nota Promissória">Nota Promissória</option>
                     <option value="Boleto Bancário">Boleto Bancário</option>
                     <option value="Extrato Bancário">Extrato Bancário</option>
                     <option value="Nota Fiscal">Nota Fiscal</option>
@@ -1316,6 +1335,8 @@
                     <option value="Certidão de Casamento">Certidão de Casamento</option>
                   </optgroup>
                   <optgroup label="Jurídico">
+                    <option value="Contrato de Compra e Venda">Contrato de Compra e Venda</option>
+                    <option value="Citação de Mandado de Busca e Apreensão">Citação de Mandado de Busca e Apreensão</option>
                     <option value="Contrato">Contrato</option>
                     <option value="Procuração">Procuração</option>
                     <option value="Termo de Posse">Termo de Posse</option>
@@ -1421,6 +1442,37 @@
           </p>
           <!-- Atalhos rápidos em linha -->
           <div id="dossierQuickPills" class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800/60"></div>
+        </div>
+
+        <!-- Barra de Seleção e Reclassificação em Massa do Dossiê -->
+        <div id="dossierBatchToolbar" class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-2 shadow-sm">
+          <div class="flex items-center gap-2 flex-wrap">
+            <label class="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-300 font-medium select-none hover:text-white transition">
+              <input type="checkbox" id="dossierSelectAllPages" onchange="toggleSelectAllDossierPages(this.checked)" class="rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer">
+              <span>Todas (<span id="dossierSelectedCount" class="font-mono text-cyan-400 font-semibold">0</span>)</span>
+            </label>
+            <div class="h-3.5 w-px bg-slate-700 mx-1 hidden sm:block"></div>
+            <!-- Seleção rápida por intervalo -->
+            <div class="flex items-center gap-1 text-[11px] text-slate-400">
+              <span class="text-[10px] uppercase text-slate-500 font-medium">De</span>
+              <input type="number" id="dossierRangeFrom" min="1" class="w-12 px-1.5 py-0.5 bg-slate-950 border border-slate-700 rounded text-center text-[11px] text-slate-200 font-mono focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="1">
+              <span class="text-[10px] uppercase text-slate-500 font-medium">até</span>
+              <input type="number" id="dossierRangeTo" min="1" class="w-12 px-1.5 py-0.5 bg-slate-950 border border-slate-700 rounded text-center text-[11px] text-slate-200 font-mono focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="N">
+              <button type="button" onclick="selectDossierPageRange()" title="Selecionar páginas no intervalo especificado" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded text-[11px] border border-slate-700 transition cursor-pointer">
+                Marcar
+              </button>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-1.5">
+            <button type="button" id="btnDossierBatchClassify" onclick="openDossierBatchClassifyModal()" disabled
+                    class="px-3 py-1 bg-slate-800/80 text-slate-500 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700/50 disabled:cursor-not-allowed cursor-pointer"
+                    title="Selecione uma ou mais páginas para reclassificar em massa">
+              <i class="fa-solid fa-tags text-[11px]"></i>
+              <span>Classificar Selecionadas</span>
+              <span id="dossierBatchBtnBadge" class="hidden font-mono px-1.5 py-0.2 text-[10px] rounded bg-indigo-500 text-white font-bold">0</span>
+            </button>
+          </div>
         </div>
 
         <!-- Grade Visual de Miniaturas por Página -->
@@ -2118,6 +2170,11 @@
                   title="Comprovantes bancários, PIX, notas e movimentações financeiras">
             💰 Financeiro
           </button>
+          <button type="button" id="biDomainVeicular" onclick="setBIDomain('veicular')"
+                  class="px-2 py-1 rounded text-xs font-medium transition text-slate-400 hover:text-slate-200"
+                  title="CRV, CRLV, ATPV, laudos de vistoria e documentos veiculares">
+            🚗 Veicular
+          </button>
           <button type="button" id="biDomainJuridico" onclick="setBIDomain('juridico')"
                   class="px-2 py-1 rounded text-xs font-medium transition text-slate-400 hover:text-slate-200"
                   title="Contratos, procurações, escrituras e termos">
@@ -2557,6 +2614,7 @@
             <option value="geral">🌐 Visão Geral / Executiva (Padrão recomendável)</option>
             <option value="preponderante">⚡ Auto-detectar Domínio Preponderante (quando >50% do acervo)</option>
             <option value="financeiro">💰 Abrir sempre em Financeiro</option>
+            <option value="veicular">🚗 Abrir sempre em Veicular</option>
             <option value="juridico">⚖️ Abrir sempre em Jurídico</option>
             <option value="identificacao">🪪 Abrir sempre em Identificação</option>
             <option value="cadastral">🏢 Abrir sempre em Cadastral</option>
@@ -2574,7 +2632,7 @@
               <i class="fa-solid fa-chart-column text-emerald-400"></i>
               <span>Cortes Numéricos das Faixas de Valor (R$):</span>
             </label>
-            <span class="text-[10px] text-slate-500 font-mono">Valores em Reais</span>
+            <span class="text-[11px] text-slate-400 font-mono">financeiro_faixas</span>
           </div>
 
           <!-- Presets rápidos -->
@@ -2657,6 +2715,7 @@
             <option value="academico">Acadêmico (Diplomas, Certificados, Históricos)</option>
             <option value="financeiro">Financeiro (Comprovantes PIX, Recibos, Notas)</option>
             <option value="identificacao">Identificação (RG, CNH, Certidões, CPF)</option>
+            <option value="veicular">🚗 Veicular (CRV, CRLV, ATPV, Vistoria)</option>
             <option value="juridico">Jurídico (Contratos, Termos de Posse, Procurações)</option>
             <option value="outro">Outro</option>
           </select>
@@ -3523,8 +3582,15 @@
             </optgroup>
             <optgroup label="Financeiro & Pagamentos">
               <option value="Comprovante PIX">Comprovante PIX</option>
+              <option value="Declaração de Imposto de Renda">Declaração de Imposto de Renda</option>
+              <option value="Recibo de Entrega da Declaração de Ajuste Anual">Recibo de Entrega da Declaração de Ajuste Anual</option>
+              <option value="Informe de Rendimentos Financeiros">Informe de Rendimentos Financeiros</option>
+              <option value="Talão de Cheques">Talão de Cheques</option>
+              <option value="Folha de Cheque">Folha de Cheque</option>
               <option value="Comprovante de Pagamento">Comprovante de Pagamento</option>
+              <option value="Recibo">Recibo</option>
               <option value="Recibo de Pagamento">Recibo de Pagamento</option>
+              <option value="Nota Promissória">Nota Promissória</option>
               <option value="Boleto Bancário">Boleto Bancário</option>
               <option value="Extrato Bancário">Extrato Bancário</option>
               <option value="Nota Fiscal">Nota Fiscal</option>
@@ -3536,6 +3602,7 @@
               <option value="Registro Profissional">Registro Profissional</option>
             </optgroup>
             <optgroup label="Jurídico">
+              <option value="Contrato de Compra e Venda">Contrato de Compra e Venda</option>
               <option value="Procuração">Procuração</option>
               <option value="Contrato">Contrato</option>
               <option value="Termo de Posse">Termo de Posse</option>
@@ -3699,6 +3766,66 @@
         <button type="button" onclick="closeLearnedRulesModal()"
                 class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium transition">
           Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CLASSIFICAR PÁGINAS DO DOSSIÊ (MANUAL E EM MASSA) -->
+  <div id="modalDossierClassifyPages" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 w-full max-w-lg space-y-4 animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-tags text-indigo-400"></i> Classificar Páginas do Dossiê
+          </h3>
+          <p id="dossierClassifyTargetDesc" class="text-[11px] text-slate-400 mt-0.5">
+            Defina o tipo de documento a atribuir às páginas selecionadas.
+          </p>
+        </div>
+        <button type="button" onclick="closeDossierClassifyModal()" class="text-slate-400 hover:text-slate-200 text-sm p-1 cursor-pointer" title="Fechar">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Indicador das páginas afetadas -->
+      <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex items-center gap-2 text-xs">
+        <span class="text-slate-400 text-[11px] font-medium shrink-0">Páginas afetadas:</span>
+        <span id="dossierClassifyPagesList" class="font-mono text-cyan-400 font-semibold truncate flex-1">Pág. 1</span>
+        <span id="dossierClassifyPagesBadge" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono shrink-0">1 pág</span>
+      </div>
+
+      <!-- Campo de busca rápida de tipos -->
+      <div class="space-y-1.5">
+        <label class="block text-xs font-medium text-slate-300">
+          Tipo de Documento:
+        </label>
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+          <input type="text" id="dossierClassifySearchInput" placeholder="Buscar ou digitar tipo de documento..."
+                 oninput="filterDossierClassifyTypes(this.value)"
+                 onkeydown="if(event.key==='Enter') applyCustomDossierClassifyType()"
+                 class="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-medium">
+        </div>
+      </div>
+
+      <!-- Lista de tipos pré-definidos clicáveis com rolagem -->
+      <div class="space-y-1">
+        <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Sugestões e Tipos Cadastrados</span>
+        <div id="dossierClassifyTypeList" class="max-h-56 overflow-y-auto space-y-1 p-1 bg-slate-950/60 rounded-lg border border-slate-800/80">
+          <!-- Renderizado dinamicamente com os tipos disponíveis -->
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-3 border-t border-slate-800 text-xs">
+        <button type="button" onclick="closeDossierClassifyModal()"
+                class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium transition cursor-pointer">
+          Cancelar
+        </button>
+        <button type="button" onclick="applyCustomDossierClassifyType()"
+                class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition shadow-sm cursor-pointer">
+          <i class="fa-solid fa-check"></i>
+          <span>Aplicar Classificação</span>
         </button>
       </div>
     </div>
@@ -5239,6 +5366,8 @@
         badge.innerText = dom;
         if (dom === 'financeiro') {
           badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+        } else if (dom === 'veicular') {
+          badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30";
         } else if (dom === 'identificacao') {
           badge.className = "text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-cyan-500/20 text-cyan-400 border border-cyan-500/30";
         } else if (dom === 'juridico') {
@@ -5283,11 +5412,51 @@
         }
       }
 
+      const isIrpf = tipoVal.includes('imposto de renda') || tipoVal.includes('ajuste anual');
+      const isInforme = tipoVal.includes('informe');
+      const isCheque = tipoVal.includes('cheque') || tipoVal.includes('talao') || tipoVal.includes('talão');
+      const isBoleto = tipoVal.includes('boleto');
+      const isPromissoria = tipoVal.includes('promissoria') || tipoVal.includes('promissória');
+      const isPix = tipoVal.includes('pix');
+
       if (dom === 'financeiro') {
-        if (pixCard) pixCard.classList.remove('hidden');
-        if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Favorecido / Recebedor (Destino)";
-        if (labelFaculdade) labelFaculdade.innerText = "Instituição Financeira / Banco";
-        if (labelData) labelData.innerText = "Data e Hora da Operação";
+        if (pixCard) {
+          if (isPix) {
+            pixCard.classList.remove('hidden');
+          } else {
+            pixCard.classList.add('hidden');
+          }
+        }
+        if (isIrpf) {
+          if (labelBeneficiario) labelBeneficiario.innerText = "Contribuinte / Declarante";
+          if (labelFaculdade) labelFaculdade.innerText = "Órgão Emissor / Secretaria da Receita Federal (RFB)";
+          if (labelData) labelData.innerText = "Data de Transmissão / Entrega";
+        } else if (isInforme) {
+          if (labelBeneficiario) labelBeneficiario.innerText = "Titular / Beneficiário dos Rendimentos";
+          if (labelFaculdade) labelFaculdade.innerText = "Fonte Pagadora / Instituição Financeira";
+          if (labelData) labelData.innerText = "Ano-Calendário / Data de Emissão";
+        } else if (isCheque) {
+          if (labelBeneficiario) labelBeneficiario.innerText = "Nominal a / Favorecido";
+          if (labelFaculdade) labelFaculdade.innerText = "Instituição Bancária do Cheque";
+          if (labelData) labelData.innerText = "Data de Emissão do Cheque";
+        } else if (isBoleto) {
+          if (labelBeneficiario) labelBeneficiario.innerText = "Pagador / Sacado / Beneficiário";
+          if (labelFaculdade) labelFaculdade.innerText = "Instituição Bancária Emissora";
+          if (labelData) labelData.innerText = "Data de Vencimento / Pagamento";
+        } else if (isPromissoria) {
+          if (labelBeneficiario) labelBeneficiario.innerText = "Emitente / Devedor";
+          if (labelFaculdade) labelFaculdade.innerText = "Credor / Beneficiário";
+          if (labelData) labelData.innerText = "Data de Vencimento / Emissão";
+        } else {
+          if (labelBeneficiario) labelBeneficiario.innerText = "Nome do Favorecido / Recebedor";
+          if (labelFaculdade) labelFaculdade.innerText = "Instituição Financeira / Banco";
+          if (labelData) labelData.innerText = "Data e Hora da Operação";
+        }
+      } else if (dom === 'veicular') {
+        if (pixCard) pixCard.classList.add('hidden');
+        if (labelBeneficiario) labelBeneficiario.innerText = "Proprietário / Comprador / Titular";
+        if (labelFaculdade) labelFaculdade.innerText = "Órgão de Trânsito (DETRAN / SENATRAN)";
+        if (labelData) labelData.innerText = "Data do Documento / Venda / Emissão";
       } else if (dom === 'identificacao') {
         if (pixCard) pixCard.classList.add('hidden');
         if (labelBeneficiario) labelBeneficiario.innerText = "Nome Completo do Titular";
@@ -5332,11 +5501,11 @@
         if (labelRg) labelRg.innerText = "Inscrição Estadual / Registro";
         if (inputRg) inputRg.placeholder = "Ex: ISENTO ou Nº de Registro";
       } else {
-        if (labelCpf) labelCpf.innerText = dom === 'academico' ? "CPF do Aluno / Titular" : (dom === 'identificacao' ? "CPF do Titular" : "CPF");
+        if (labelCpf) labelCpf.innerText = dom === 'academico' ? "CPF do Aluno / Titular" : (dom === 'veicular' ? "CPF do Proprietário / Comprador" : (dom === 'identificacao' ? "CPF do Titular" : "CPF"));
         if (badgeCpf) badgeCpf.innerText = "cpf";
         if (inputCpf) inputCpf.placeholder = "000.000.000-00";
-        if (labelRg) labelRg.innerText = "RG / Identidade";
-        if (inputRg) inputRg.placeholder = "Ex: 2030359 SSP-ES";
+        if (labelRg) labelRg.innerText = dom === 'veicular' ? "Placa / Renavam / Chassi" : "RG / Identidade";
+        if (inputRg) inputRg.placeholder = dom === 'veicular' ? "Ex: MQB-4382 ou Renavam" : "Ex: 2030359 SSP-ES";
       }
 
       if (labelDocCnpj) {
@@ -5345,7 +5514,13 @@
         } else if (isActualCadastralDoc || dom === 'profissional') {
           labelDocCnpj.innerText = "CNPJ da Empresa / Titular";
         } else if (dom === 'financeiro') {
-          labelDocCnpj.innerText = "CNPJ do Pagador / Recebedor";
+          if (isIrpf) {
+            labelDocCnpj.innerText = "CPF do Contribuinte / CNPJ Fonte Pagadora";
+          } else if (isInforme) {
+            labelDocCnpj.innerText = "CNPJ da Fonte Pagadora";
+          } else {
+            labelDocCnpj.innerText = "CNPJ do Pagador / Recebedor";
+          }
         } else {
           labelDocCnpj.innerText = "CNPJ";
         }
@@ -5446,10 +5621,17 @@
         'Declaração': 'academico',
         'Currículo': 'profissional',
         'Comprovante PIX': 'financeiro',
+        'Talão de Cheques': 'financeiro',
+        'Folha de Cheque': 'financeiro',
+        'Nota Promissória': 'financeiro',
+        'Recibo': 'financeiro',
         'Recibo de Pagamento': 'financeiro',
         'Boleto Bancário': 'financeiro',
         'Extrato Bancário': 'financeiro',
         'Nota Fiscal': 'financeiro',
+        'Declaração de Imposto de Renda': 'financeiro',
+        'Recibo de Entrega da Declaração de Ajuste Anual': 'financeiro',
+        'Informe de Rendimentos Financeiros': 'financeiro',
         'Cartão CNPJ / Situação Cadastral': 'profissional',
         'Comprovante de Inscrição e de Situação Cadastral': 'profissional',
         'Cartão CNPJ': 'profissional',
@@ -5460,9 +5642,22 @@
         'CPF': 'identificacao',
         'Certidão de Nascimento': 'identificacao',
         'Certidão de Casamento': 'identificacao',
+        'Contrato de Compra e Venda': 'juridico',
+        'Contrato Particular de Compra e Venda de Imóvel': 'juridico',
         'Contrato': 'juridico',
         'Procuração': 'juridico',
-        'Termo de Posse': 'juridico'
+        'Termo de Posse': 'juridico',
+        'Citação de Mandado de Busca e Apreensão': 'juridico',
+        'Procuração / Substabelecimento Veicular': 'juridico',
+        'Dossiê Veicular': 'veicular',
+        'Certificado de Registro de Veículo (CRV)': 'veicular',
+        'Certificado de Registro e Licenciamento de Veículo (CRLV)': 'veicular',
+        'Autorização para Transferência de Propriedade de Veículo (ATPV)': 'veicular',
+        'Comunicação de Venda ao DETRAN': 'veicular',
+        'Laudo de Vistoria Veicular': 'veicular',
+        'Guia de Remoção de Veículo': 'veicular',
+        'Nota de Arrematação (Leilão)': 'veicular',
+        'Comprovante de Agendamento DETRAN': 'veicular'
       };
 
       if (selectDom && mapTipoDom[tipo] && selectDom.value !== mapTipoDom[tipo]) {
@@ -5481,6 +5676,7 @@
         renderMultiTags(doc);
       }
 
+      onDominioChange();
       markDirty();
     }
 
@@ -6199,6 +6395,39 @@
         };
       }
 
+      // 3.1 Cheque / Talão de Cheques
+      if (t.includes('cheque') || t.includes('talao')) {
+        return { 
+          icon: 'fa-solid fa-money-check-dollar', 
+          color: 'text-emerald-400', 
+          bg: 'bg-emerald-950/40 border-emerald-800/70 text-emerald-200 hover:bg-emerald-900/50 hover:border-emerald-500', 
+          activeBg: 'bg-emerald-600 border-emerald-400 text-white', 
+          category: 'Financeiro' 
+        };
+      }
+
+      // 3.2 Imposto de Renda / IRPF / Declaração de Ajuste Anual / Recibo de Entrega
+      if (t.includes('imposto de renda') || t.includes('irpf') || t.includes('ajuste anual') || (t.includes('recibo') && t.includes('entrega'))) {
+        return { 
+          icon: 'fa-solid fa-file-invoice-dollar', 
+          color: 'text-emerald-400', 
+          bg: 'bg-emerald-950/40 border-emerald-800/70 text-emerald-200 hover:bg-emerald-900/50 hover:border-emerald-500', 
+          activeBg: 'bg-emerald-600 border-emerald-400 text-white', 
+          category: 'Financeiro' 
+        };
+      }
+
+      // 3.3 Informe de Rendimentos Financeiros
+      if (t.includes('informe de rendimentos') || t.includes('comprovante de rendimentos') || t.includes('rendimentos financeiros')) {
+        return { 
+          icon: 'fa-solid fa-chart-line', 
+          color: 'text-emerald-400', 
+          bg: 'bg-emerald-950/40 border-emerald-800/70 text-emerald-200 hover:bg-emerald-900/50 hover:border-emerald-500', 
+          activeBg: 'bg-emerald-600 border-emerald-400 text-white', 
+          category: 'Financeiro' 
+        };
+      }
+
       // 4. Financeiro (Recibo, Comprovante, Boleto, Pagamento, Transferência, Extrato, Nota Fiscal)
       if (t.includes('recibo') || t.includes('comprovante') || t.includes('boleto') || t.includes('pagamento') || t.includes('financeir') || t.includes('banc') || t.includes('extrato') || t.includes('nota fiscal') || t.includes('fatura')) {
         return { 
@@ -6369,13 +6598,30 @@
         if (cargo) subtags.push({ label: cargo, title: 'Cargo / Especialidade', icon: 'fa-solid fa-briefcase text-sky-400' });
         const empresa = safeString(doc.faculdade || doc.empresa || de.empresa).trim();
         if (empresa) subtags.push({ label: empresa, title: 'Empresa / Órgão', icon: 'fa-solid fa-building-user text-slate-400' });
-      } else if (docDom === 'financeiro' || normTag.includes('pix') || normTag.includes('recibo') || normTag.includes('pagamento') || normTag.includes('boleto')) {
+      } else if (docDom === 'financeiro' || normTag.includes('pix') || normTag.includes('recibo') || normTag.includes('pagamento') || normTag.includes('boleto') || normTag.includes('cheque') || normTag.includes('talao')) {
         const val = safeString(doc.valor_monetario).trim();
         if (val) subtags.push({ label: val, title: 'Valor', icon: 'fa-solid fa-money-bill-wave text-emerald-400' });
-        const banco = safeString(doc.faculdade || doc.pix_pagador_banco || de.pix_pagador_banco).trim();
+        const numCheque = safeString(de.numero_cheque || doc.numero_cheque).trim();
+        if (numCheque) subtags.push({ label: `Cheque Nº ${numCheque}`, title: 'Número do Cheque', icon: 'fa-solid fa-money-check-dollar text-cyan-400' });
+        const banco = safeString(doc.faculdade || doc.pix_pagador_banco || de.pix_pagador_banco || de.banco_cheque).trim();
         if (banco) subtags.push({ label: banco, title: 'Instituição / Banco', icon: 'fa-solid fa-building-columns text-slate-400' });
+        const conta = safeString(de.conta_corrente).trim();
+        if (conta) subtags.push({ label: `C/C: ${conta}`, title: 'Conta Corrente', icon: 'fa-solid fa-wallet text-slate-400' });
+        const serie = safeString(de.serie_cheque).trim();
+        if (serie) subtags.push({ label: `Série: ${serie}`, title: 'Série do Cheque', icon: 'fa-solid fa-tag text-slate-400' });
         const chave = safeString(doc.pix_chave || de.pix_chave).trim();
         if (chave) subtags.push({ label: chave, title: 'Chave PIX', icon: 'fa-solid fa-key text-amber-400' });
+      } else if (docDom === 'veicular' || normTag.includes('crv') || normTag.includes('crlv') || normTag.includes('atpv') || normTag.includes('veicular') || normTag.includes('veiculo') || normTag.includes('vistoria') || normTag.includes('remocao') || normTag.includes('arrematacao')) {
+        const placa = safeString(doc.placa || de.placa).trim();
+        if (placa) subtags.push({ label: `Placa: ${placa}`, title: 'Placa do Veículo', icon: 'fa-solid fa-car text-orange-400' });
+        const renavam = safeString(doc.renavam || de.renavam).trim();
+        if (renavam) subtags.push({ label: `Renavam: ${renavam}`, title: 'Código Renavam', icon: 'fa-solid fa-barcode text-amber-400' });
+        const chassi = safeString(doc.chassi || de.chassi).trim();
+        if (chassi) subtags.push({ label: `Chassi: ${chassi}`, title: 'Chassi do Veículo', icon: 'fa-solid fa-hashtag text-slate-400' });
+        const mm = safeString(doc.curso || de.marca_modelo).trim();
+        if (mm) subtags.push({ label: mm, title: 'Marca / Modelo', icon: 'fa-solid fa-car-side text-cyan-400' });
+        const emissor = safeString(doc.faculdade || de.orgao_transito).trim();
+        if (emissor) subtags.push({ label: emissor, title: 'Órgão de Trânsito', icon: 'fa-solid fa-shield-halved text-teal-400' });
       } else if (docDom === 'identificacao' || normTag.includes('cnh') || normTag.includes('rg') || normTag.includes('cpf') || normTag.includes('identidad') || normTag.includes('certidao')) {
         const emissor = safeString(doc.faculdade || doc.orgao_emissor).trim();
         if (emissor) subtags.push({ label: emissor, title: 'Órgão Emissor', icon: 'fa-solid fa-building-shield text-cyan-400' });
@@ -7262,11 +7508,41 @@
       if (norm.includes('declaracao')) {
         return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-file-lines text-[9px] text-amber-400"></i>${t}</span>`;
       }
-      if (norm.includes('pix') || norm.includes('recibo') || norm.includes('comprovante') || norm.includes('pagamento')) {
+      if (norm.includes('ajuste anual') || norm.includes('imposto de renda')) {
+        return `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-file-invoice-dollar text-[9px] text-emerald-400"></i>${t}</span>`;
+      }
+      if (norm.includes('informe') || norm.includes('rendimentos')) {
+        return `<span class="bg-teal-500/10 text-teal-300 border border-teal-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-chart-line text-[9px] text-teal-400"></i>${t}</span>`;
+      }
+      if (norm.includes('cheque') || norm.includes('talao') || norm.includes('talão')) {
+        return `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-money-check-dollar text-[9px] text-emerald-400"></i>${t}</span>`;
+      }
+      if (norm.includes('boleto')) {
+        return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-barcode text-[9px] text-amber-400"></i>${t}</span>`;
+      }
+      if (norm.includes('promissoria') || norm.includes('promissória')) {
+        return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-hashtag text-[9px] text-amber-400"></i>${t}</span>`;
+      }
+      if (norm.includes('pix')) {
         return `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-brands fa-pix text-[9px] text-emerald-400"></i>${t}</span>`;
+      }
+      if (norm.includes('recibo') || norm.includes('comprovante') || norm.includes('pagamento')) {
+        return `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-receipt text-[9px] text-emerald-400"></i>${t}</span>`;
       }
       if (norm.includes('rg') || norm.includes('cnh') || norm.includes('identidade') || norm.includes('identificacao') || norm.includes('civil')) {
         return `<span class="bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-regular fa-id-card text-[9px] text-sky-400"></i>${t}</span>`;
+      }
+      if (norm.includes('crv') || norm.includes('dut')) {
+        return `<span class="bg-orange-500/10 text-orange-300 border border-orange-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-car text-[9px] text-orange-400"></i>${t}</span>`;
+      }
+      if (norm.includes('crlv') || norm.includes('licenciamento')) {
+        return `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-car-side text-[9px] text-emerald-400"></i>${t}</span>`;
+      }
+      if (norm.includes('atpv') || norm.includes('transferencia de propriedade') || norm.includes('transferência de propriedade')) {
+        return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-right-left text-[9px] text-amber-400"></i>${t}</span>`;
+      }
+      if (norm.includes('veicular') || norm.includes('remocao') || norm.includes('remoção') || norm.includes('vistoria') || norm.includes('arrematacao') || norm.includes('arrematação')) {
+        return `<span class="bg-orange-500/10 text-orange-300 border border-orange-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-car text-[9px] text-orange-400"></i>${t}</span>`;
       }
       if (norm.includes('contrato') || norm.includes('termo') || norm.includes('procuracao')) {
         return `<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 truncate max-w-[130px]"><i class="fa-solid fa-file-contract text-[9px] text-indigo-400"></i>${t}</span>`;
@@ -7358,8 +7634,24 @@
 
         let middleBadge = '';
         if (docDom === 'financeiro') {
-          const valDisplay = doc.valor_monetario ? doc.valor_monetario : 'PIX';
-          middleBadge = `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold flex items-center gap-1 shrink-0"><i class="fa-brands fa-pix text-[9px]"></i>${valDisplay}</span>`;
+          const de = doc.dados_extras || {};
+          const isPix = (doc.tipo_documento || '').toLowerCase().includes('pix') || (doc.todos_tipos || []).some(t => safeString(t).toLowerCase().includes('pix')) || doc.pix_chave || doc.pix_e2e_id || de.pix_chave || de.pix_e2e_id;
+          const isCheque = (doc.tipo_documento || '').toLowerCase().includes('cheque') || (doc.tipo_documento || '').toLowerCase().includes('talao');
+          const isBoleto = (doc.tipo_documento || '').toLowerCase().includes('boleto');
+          const isIrpf = (doc.tipo_documento || '').toLowerCase().includes('imposto de renda') || (doc.tipo_documento || '').toLowerCase().includes('ajuste anual');
+          const isInforme = (doc.tipo_documento || '').toLowerCase().includes('informe');
+          
+          let iconHtml = '<i class="fa-solid fa-coins text-[9px]"></i>';
+          if (isPix) iconHtml = '<i class="fa-brands fa-pix text-[9px]"></i>';
+          else if (isCheque) iconHtml = '<i class="fa-solid fa-money-check-dollar text-[9px]"></i>';
+          else if (isBoleto) iconHtml = '<i class="fa-solid fa-barcode text-[9px]"></i>';
+          else if (isIrpf) iconHtml = '<i class="fa-solid fa-file-invoice-dollar text-[9px]"></i>';
+          else if (isInforme) iconHtml = '<i class="fa-solid fa-chart-line text-[9px]"></i>';
+
+          const valDisplay = doc.valor_monetario ? doc.valor_monetario : (isPix ? 'PIX' : (isBoleto ? 'Boleto' : (isCheque ? 'Cheque' : (isIrpf ? 'IRPF' : (isInforme ? 'Informe' : 'Financeiro')))));
+          middleBadge = `<span class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold flex items-center gap-1 shrink-0">${iconHtml}${valDisplay}</span>`;
+        } else if (docDom === 'veicular') {
+          middleBadge = `<span class="bg-orange-500/10 text-orange-300 border border-orange-500/30 px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 shrink-0"><i class="fa-solid fa-car text-[9px]"></i>Veicular</span>`;
         } else if (docDom === 'identificacao') {
           middleBadge = `<span class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 shrink-0"><i class="fa-regular fa-id-badge text-[9px]"></i>Identidade</span>`;
         } else if (docDom === 'juridico') {
@@ -7386,13 +7678,38 @@
           const de = doc.dados_extras || {};
           const pagador = doc.pix_pagador_nome || de.pix_pagador_nome || '';
           const chave = doc.pix_chave || de.pix_chave || '';
+          const isIrpf = (doc.tipo_documento || '').toLowerCase().includes('imposto de renda') || (doc.tipo_documento || '').toLowerCase().includes('ajuste anual');
+          const isBoleto = (doc.tipo_documento || '').toLowerCase().includes('boleto');
+          const isCheque = (doc.tipo_documento || '').toLowerCase().includes('cheque') || (doc.tipo_documento || '').toLowerCase().includes('talao');
+          const isInforme = (doc.tipo_documento || '').toLowerCase().includes('informe');
+
           if (pagador) {
             subText = `Origem: ${pagador}`;
           } else if (chave) {
             subText = `Chave: ${chave}`;
+          } else if (isIrpf) {
+            const ex = de.exercicio || de.exercicio_irpf || '';
+            const ano = de.ano_calendario || '';
+            subText = (ex || ano) ? `IRPF Exercício ${ex || '-'} • Ano ${ano || '-'}` : (doc.observacoes_conferencia || 'Declaração de Ajuste Anual');
+          } else if (isInforme) {
+            const fonte = de.fonte_pagadora || doc.faculdade || '';
+            subText = fonte ? `Fonte: ${fonte}` : (doc.observacoes_conferencia || 'Informe de Rendimentos');
+          } else if (isCheque) {
+            const bco = de.banco_cheque || doc.faculdade || '';
+            const n = de.numero_cheque || (de.numeros_cheque && de.numeros_cheque[0]) || '';
+            subText = [bco, n ? `Nº ${n}` : ''].filter(Boolean).join(' • ') || (doc.observacoes_conferencia || 'Cheque Bancário');
+          } else if (isBoleto) {
+            const bco = doc.faculdade || '';
+            subText = bco ? `Banco: ${bco}` : (doc.observacoes_conferencia || 'Boleto Bancário');
           } else {
-            subText = safeString(doc.observacoes_conferencia || 'Comprovante PIX');
+            subText = safeString(doc.observacoes_conferencia || doc.tipo_documento || 'Documento Financeiro');
           }
+        } else if (docDom === 'veicular') {
+          const de = doc.dados_extras || {};
+          const p = doc.placa || de.placa || '';
+          const ren = doc.renavam || de.renavam || '';
+          const mm = de.marca_modelo || doc.curso || '';
+          subText = [p ? `Placa: ${p}` : '', ren ? `Renavam: ${ren}` : '', mm, doc.faculdade || ''].filter(Boolean).join(' • ') || 'Documento Veicular';
         } else if (docDom === 'identificacao') {
           const emissor = doc.faculdade ? `Emissor: ${doc.faculdade}` : '';
           const rgNum = doc.rg ? `RG: ${doc.rg}` : '';
@@ -7954,6 +8271,18 @@
       vencimento: { label: 'Data de Vencimento', icon: 'fa-regular fa-calendar-xmark', category: 'financas', type: 'text', isCore: false },
       data_pagamento: { label: 'Data do Pagamento', icon: 'fa-regular fa-calendar-check', category: 'financas', type: 'text', isCore: false },
       
+      // Cheques & Talonários
+      numero_cheque: { label: 'Número do Cheque', icon: 'fa-solid fa-money-check-dollar', category: 'financas', type: 'mono', isCore: false },
+      banco_cheque: { label: 'Banco do Cheque', icon: 'fa-solid fa-building-columns', category: 'financas', type: 'text', isCore: false },
+      serie_cheque: { label: 'Série do Cheque', icon: 'fa-solid fa-tag', category: 'financas', type: 'mono', isCore: false },
+      agencia_cheque: { label: 'Agência do Cheque', icon: 'fa-solid fa-code-branch', category: 'financas', type: 'mono', isCore: false },
+      conta_corrente: { label: 'Conta Corrente', icon: 'fa-solid fa-wallet', category: 'financas', type: 'mono', isCore: false },
+      numeros_cheque: { label: 'Cheques no Talão', icon: 'fa-solid fa-layer-group', category: 'financas', type: 'chips', isCore: false },
+
+      // Notas Promissórias
+      numero_nota: { label: 'Número da Nota Promissória', icon: 'fa-solid fa-hashtag', category: 'financas', type: 'mono', isCore: false },
+      numero_promissoria: { label: 'Número da Nota Promissória', icon: 'fa-solid fa-hashtag', category: 'financas', type: 'mono', isCore: false },
+
       // PIX (Exibido se e somente se houver dados de PIX no documento)
       pix_chave: { label: 'Chave PIX Utilizada', icon: 'fa-solid fa-key', category: 'financas', type: 'mono', isCore: false },
       pix_e2e_id: { label: 'ID Transação Fim-a-Fim (E2E)', icon: 'fa-solid fa-fingerprint', category: 'financas', type: 'mono', isCore: false },
@@ -7964,6 +8293,15 @@
       pix_recebedor_nome: { label: 'Favorecido (Destino)', icon: 'fa-solid fa-arrow-down-left-and-up-right-to-center', category: 'financas', type: 'text', isCore: false },
       pix_recebedor_cpf_cnpj: { label: 'CPF/CNPJ Favorecido', icon: 'fa-regular fa-id-badge', category: 'financas', type: 'mono', isCore: false },
       pix_recebedor_banco: { label: 'Banco do Favorecido', icon: 'fa-solid fa-building-columns', category: 'financas', type: 'text', isCore: false },
+
+      // Imposto de Renda & Informes Financeiros
+      numero_recibo: { label: 'Número do Recibo (IRPF)', icon: 'fa-solid fa-receipt', category: 'financas', type: 'mono', isCore: false },
+      exercicio: { label: 'Exercício (IRPF)', icon: 'fa-regular fa-calendar-check', category: 'financas', type: 'text', isCore: false },
+      exercicio_irpf: { label: 'Exercício (IRPF)', icon: 'fa-regular fa-calendar-check', category: 'financas', type: 'text', isCore: false },
+      ano_calendario: { label: 'Ano-Calendário', icon: 'fa-regular fa-calendar', category: 'financas', type: 'text', isCore: false },
+      fonte_pagadora: { label: 'Fonte Pagadora', icon: 'fa-solid fa-building-columns', category: 'financas', type: 'text', isCore: false },
+      cnpj_fonte_pagadora: { label: 'CNPJ Fonte Pagadora', icon: 'fa-solid fa-landmark', category: 'financas', type: 'mono', isCore: false },
+      total_rendimentos_tributaveis: { label: 'Rendimentos Tributáveis (R$)', icon: 'fa-solid fa-coins', category: 'financas', type: 'currency', isCore: false },
 
       // Identificação & Pessoas
       beneficiario: { label: 'Nome do Titular / Beneficiário', icon: 'fa-solid fa-user', category: 'identificacao', type: 'text', isCore: true },
@@ -8189,6 +8527,30 @@
           <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-[11px] font-semibold">
             <i class="fa-solid fa-barcode text-amber-400"></i>
             <span>Boleto</span>
+          </div>
+        `);
+      }
+
+      // Cheque / Talão de Cheques
+      const hasCheque = activeFields.some(f => f.key === 'numero_cheque' || f.key === 'numeros_cheque') || (doc.tipo_documento || '').toLowerCase().includes('cheque') || (doc.tipo_documento || '').toLowerCase().includes('talao');
+      if (hasCheque) {
+        const isTalao = (doc.tipo_documento || '').toLowerCase().includes('talao') || (doc.dados_extras?.numeros_cheque && doc.dados_extras.numeros_cheque.length > 1);
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-[11px] font-semibold shadow-sm">
+            <i class="fa-solid fa-money-check-dollar text-emerald-400"></i>
+            <span>${isTalao ? 'Talão de Cheques' : 'Cheque'}</span>
+          </div>
+        `);
+      }
+
+      // Imposto de Renda / Recibo de Entrega
+      const hasIrpf = activeFields.some(f => f.key === 'numero_recibo' || f.key === 'exercicio' || f.key === 'exercicio_irpf') || (doc.tipo_documento || '').toLowerCase().includes('ajuste anual') || (doc.tipo_documento || '').toLowerCase().includes('imposto de renda') || (Array.isArray(doc.todos_tipos) && doc.todos_tipos.some(t => safeString(t).toLowerCase().includes('imposto de renda') || safeString(t).toLowerCase().includes('ajuste anual')));
+      if (hasIrpf) {
+        const exVal = activeFields.find(f => f.key === 'exercicio' || f.key === 'exercicio_irpf')?.val || doc.dados_extras?.exercicio || doc.dados_extras?.exercicio_irpf || '';
+        pills.push(`
+          <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-sans text-[11px] font-semibold shadow-sm">
+            <i class="fa-solid fa-file-invoice-dollar text-emerald-400"></i>
+            <span>IRPF ${exVal ? `(${escapeHtml(exVal)})` : ''}</span>
           </div>
         `);
       }
@@ -8922,7 +9284,9 @@
       // Atualiza domínio correspondente
       const tLower = tipo.toLowerCase();
       let newDom = 'academico';
-      if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto') || tLower.includes('extrato')) {
+      if (tLower.includes('crv') || tLower.includes('crlv') || tLower.includes('atpv') || tLower.includes('veicular') || tLower.includes('veiculo') || tLower.includes('vistoria') || tLower.includes('remocao') || tLower.includes('arrematacao')) {
+        newDom = 'veicular';
+      } else if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto') || tLower.includes('extrato') || tLower.includes('cheque') || tLower.includes('talao') || tLower.includes('promissória') || tLower.includes('promissoria') || tLower.includes('imposto de renda') || tLower.includes('irpf') || tLower.includes('informe')) {
         newDom = 'financeiro';
       } else if (tLower.includes('rg') || tLower.includes('cnh') || tLower.includes('cpf') || tLower.includes('certidão') || tLower.includes('certidao') || tLower.includes('passaporte') || tLower.includes('eleitor')) {
         newDom = 'identificacao';
@@ -8963,7 +9327,9 @@
       const allTipos = Array.isArray(doc.todos_tipos) ? doc.todos_tipos : [];
       allTipos.forEach(t => {
         const tLower = safeString(t).toLowerCase();
-        if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto') || tLower.includes('extrato') || tLower.includes('nota fiscal')) {
+        if (tLower.includes('crv') || tLower.includes('crlv') || tLower.includes('atpv') || tLower.includes('veicular') || tLower.includes('veiculo') || tLower.includes('vistoria') || tLower.includes('detran') || tLower.includes('senatran') || tLower.includes('denatran') || tLower.includes('remocao') || tLower.includes('remoção') || tLower.includes('arrematacao') || tLower.includes('arrematação')) {
+          doms.add('veicular');
+        } else if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto') || tLower.includes('extrato') || tLower.includes('nota fiscal') || tLower.includes('cheque') || tLower.includes('talao') || tLower.includes('promissória') || tLower.includes('promissoria') || tLower.includes('imposto de renda') || tLower.includes('irpf') || tLower.includes('informe')) {
           doms.add('financeiro');
         } else if (tLower.includes('rg') || tLower.includes('cnh') || tLower.includes('cpf') || tLower.includes('certid') || tLower.includes('passaporte') || tLower.includes('eleitor')) {
           doms.add('identificacao');
@@ -9316,7 +9682,9 @@
       if (dominio) domsSet.add(dominio);
       todosTipos.forEach(t => {
         const tLower = safeString(t).toLowerCase();
-        if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto') || tLower.includes('extrato') || tLower.includes('nota fiscal')) {
+        if (tLower.includes('crv') || tLower.includes('crlv') || tLower.includes('atpv') || tLower.includes('veicular') || tLower.includes('veiculo') || tLower.includes('vistoria') || tLower.includes('detran') || tLower.includes('senatran') || tLower.includes('denatran') || tLower.includes('remocao') || tLower.includes('remoção') || tLower.includes('arrematacao') || tLower.includes('arrematação')) {
+          domsSet.add('veicular');
+        } else if (tLower.includes('pix') || tLower.includes('pagamento') || tLower.includes('recibo') || tLower.includes('boleto') || tLower.includes('extrato') || tLower.includes('nota fiscal')) {
           domsSet.add('financeiro');
         } else if (tLower.includes('rg') || tLower.includes('cnh') || tLower.includes('cpf') || tLower.includes('certid') || tLower.includes('passaporte') || tLower.includes('eleitor')) {
           domsSet.add('identificacao');
@@ -9537,6 +9905,7 @@
       let html = '<div class="divide-y divide-slate-800/80">';
       regras.forEach(r => {
         const domBadgeColor = r.dominio === 'financeiro' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                             r.dominio === 'veicular' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' :
                              r.dominio === 'profissional' ? 'bg-sky-500/20 text-sky-300 border-sky-500/30' :
                              r.dominio === 'identificacao' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
                              r.dominio === 'juridico' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
@@ -9870,6 +10239,53 @@
       switchInspectorTab(tab);
     }
 
+    // =========================================================================
+    // ESTADO E CONTROLES DA ABA DOSSIÊ (SELEÇÃO DIRETA E RECLASSIFICAÇÃO)
+    // =========================================================================
+    let selectedDossierPages = new Set();
+    let targetDossierClassifyPages = [];
+    let lastRenderedDossieMd5 = null;
+
+    const KNOWN_DOSSIER_TYPES = [
+      // Financeiro
+      { name: 'Contrato de Compra e Venda', category: 'Jurídico', icon: 'fa-solid fa-file-contract' },
+      { name: 'Recibo', category: 'Financeiro', icon: 'fa-solid fa-receipt' },
+      { name: 'Recibo de Pagamento', category: 'Financeiro', icon: 'fa-solid fa-receipt' },
+      { name: 'Nota Promissória', category: 'Financeiro', icon: 'fa-solid fa-money-bill-wave' },
+      { name: 'Boleto Bancário', category: 'Financeiro', icon: 'fa-solid fa-barcode' },
+      { name: 'Folha de Cheque', category: 'Financeiro', icon: 'fa-solid fa-money-check' },
+      { name: 'Talão de Cheques', category: 'Financeiro', icon: 'fa-solid fa-money-check-dollar' },
+      { name: 'Comprovante PIX', category: 'Financeiro', icon: 'fa-brands fa-pix' },
+      { name: 'Comprovante de Pagamento Bancário', category: 'Financeiro', icon: 'fa-solid fa-circle-dollar-to-slot' },
+      { name: 'Comprovante de Transferência Bancária (TED/DOC)', category: 'Financeiro', icon: 'fa-solid fa-money-bill-transfer' },
+      { name: 'Extrato Bancário', category: 'Financeiro', icon: 'fa-solid fa-list-ol' },
+      { name: 'Nota Fiscal', category: 'Financeiro', icon: 'fa-solid fa-file-invoice-dollar' },
+      { name: 'Informe de Rendimentos Financeiros', category: 'Financeiro', icon: 'fa-solid fa-chart-line' },
+      { name: 'Declaração de Imposto de Renda', category: 'Financeiro', icon: 'fa-solid fa-file-invoice' },
+      { name: 'Recibo de Entrega da Declaração de Ajuste Anual', category: 'Financeiro', icon: 'fa-solid fa-file-invoice' },
+      // Identificação
+      { name: 'RG / Identidade', category: 'Identificação', icon: 'fa-regular fa-id-card' },
+      { name: 'CPF', category: 'Identificação', icon: 'fa-solid fa-fingerprint' },
+      { name: 'CNH', category: 'Identificação', icon: 'fa-solid fa-id-badge' },
+      { name: 'Certidão de Nascimento', category: 'Identificação', icon: 'fa-solid fa-baby' },
+      { name: 'Certidão de Casamento', category: 'Identificação', icon: 'fa-solid fa-ring' },
+      // Jurídico
+      { name: 'Contrato', category: 'Jurídico', icon: 'fa-solid fa-file-signature' },
+      { name: 'Procuração', category: 'Jurídico', icon: 'fa-solid fa-handshake' },
+      { name: 'Termo de Posse', category: 'Jurídico', icon: 'fa-solid fa-landmark' },
+      // Acadêmico
+      { name: 'Diploma', category: 'Acadêmico', icon: 'fa-solid fa-graduation-cap' },
+      { name: 'Certificado', category: 'Acadêmico', icon: 'fa-solid fa-award' },
+      { name: 'Histórico Escolar', category: 'Acadêmico', icon: 'fa-solid fa-book-open' },
+      { name: 'Declaração', category: 'Acadêmico', icon: 'fa-solid fa-file-lines' },
+      // Profissional
+      { name: 'Carteira de Trabalho', category: 'Profissional', icon: 'fa-solid fa-briefcase' },
+      { name: 'Cartão CNPJ', category: 'Profissional', icon: 'fa-solid fa-building' },
+      // Outros
+      { name: 'Documento Diverso', category: 'Outros', icon: 'fa-solid fa-file' },
+      { name: 'Outro', category: 'Outros', icon: 'fa-solid fa-folder-open' }
+    ];
+
     function renderDossierPagesGrid(doc) {
       const gridEl = document.getElementById('dossierPagesGrid');
       const countBadge = document.getElementById('dossierPageCountBadge');
@@ -9883,7 +10299,15 @@
         gridEl.innerHTML = '<div class="col-span-2 text-center py-8 text-slate-500 text-xs">Nenhum documento selecionado.</div>';
         if (countBadge) countBadge.innerText = '0 páginas';
         if (tabBadge) tabBadge.classList.add('hidden');
+        selectedDossierPages.clear();
+        updateDossierBatchUI(0);
         return;
+      }
+
+      // Se mudou de documento, limpa a seleção de páginas
+      if (lastRenderedDossieMd5 !== doc.md5) {
+        selectedDossierPages.clear();
+        lastRenderedDossieMd5 = doc.md5;
       }
 
       const isImg = isImageDoc(doc);
@@ -9892,6 +10316,15 @@
         : [{ pagina: 1, tipo: doc.tipo_documento || 'Documento' }];
 
       const totalPages = Math.max(1, parseInt(doc.paginas) || dossie.length);
+
+      // Atualiza limites dos inputs de intervalo
+      const rangeFrom = document.getElementById('dossierRangeFrom');
+      const rangeTo = document.getElementById('dossierRangeTo');
+      if (rangeFrom) rangeFrom.max = totalPages;
+      if (rangeTo) {
+        rangeTo.max = totalPages;
+        if (!rangeTo.value) rangeTo.placeholder = totalPages;
+      }
 
       if (countBadge) {
         countBadge.innerText = `${totalPages} ${totalPages > 1 ? 'páginas' : 'página'}`;
@@ -9909,8 +10342,8 @@
           pill.id = `dossiePillPage_${item.pagina}`;
           const isPillActive = (currentDossieActivePage === item.pagina);
           pill.className = isPillActive
-            ? 'px-2 py-0.5 rounded bg-emerald-600 text-white font-semibold border border-emerald-500 text-[10px] flex items-center gap-1 transition shadow-sm'
-            : 'px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 border border-slate-700/80 text-[10px] flex items-center gap-1 transition';
+            ? 'px-2 py-0.5 rounded bg-emerald-600 text-white font-semibold border border-emerald-500 text-[10px] flex items-center gap-1 transition shadow-sm cursor-pointer'
+            : 'px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 border border-slate-700/80 text-[10px] flex items-center gap-1 transition cursor-pointer';
           pill.title = `Ir para página ${item.pagina} (${item.tipo || 'Página'})`;
           pill.innerHTML = `<span class="font-mono ${isPillActive ? 'text-white' : 'text-cyan-400'} font-semibold">P.${item.pagina}</span> <span class="truncate max-w-[120px]">${escapeHtml(item.tipo || '')}</span>`;
           pill.onclick = () => jumpToPdfPage(item.pagina);
@@ -9929,18 +10362,35 @@
         const card = document.createElement('div');
         card.id = `dossieCardPage_${pNum}`;
         const isCardActive = (currentDossieActivePage === pNum);
-        card.className = `bg-slate-900/90 border ${isCardActive ? 'ring-2 ring-emerald-500 border-emerald-500 bg-slate-800/90' : 'border-slate-800 hover:border-emerald-500/60'} rounded-xl p-2.5 flex flex-col gap-2 transition-all hover:shadow-lg group`;
+        const isSelected = selectedDossierPages.has(pNum);
+
+        let cardBorderClass = 'border-slate-800 hover:border-indigo-500/50';
+        if (isSelected) {
+          cardBorderClass = 'ring-2 ring-indigo-500 border-indigo-500/80 bg-indigo-950/20';
+        } else if (isCardActive) {
+          cardBorderClass = 'ring-2 ring-emerald-500 border-emerald-500 bg-slate-800/90';
+        }
+
+        card.className = `bg-slate-900/90 border ${cardBorderClass} rounded-xl p-2.5 flex flex-col gap-2 transition-all hover:shadow-lg group relative`;
 
         const thumbUrl = isImg ? `/api/arquivo/${doc.md5}` : `/api/thumbnail/${doc.md5}/${pNum}?w=720`;
 
         card.innerHTML = `
-          <div class="flex items-center justify-between text-[11px] pb-1 border-b border-slate-800/80">
-            <span class="font-mono font-bold text-cyan-400 flex items-center gap-1">
-              <i class="fa-regular fa-file-lines text-[10px]"></i> Pág. ${pNum}
-            </span>
-            <span class="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 truncate max-w-[110px]" title="${escapeHtmlAttr(pageType)}">
-              ${escapeHtml(pageType)}
-            </span>
+          <div class="flex items-center justify-between text-[11px] pb-1.5 border-b border-slate-800/80 gap-1.5 select-none">
+            <label class="flex items-center gap-1.5 cursor-pointer select-none">
+              <input type="checkbox" class="dossier-page-cb rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+                     data-page="${pNum}" ${isSelected ? 'checked' : ''}
+                     onchange="toggleDossierPageSelection(${pNum}, this.checked)">
+              <span class="font-mono font-bold text-cyan-400 flex items-center gap-1 text-[11px] cursor-pointer">
+                <i class="fa-regular fa-file-lines text-[10px]"></i> Pág. ${pNum}
+              </span>
+            </label>
+            <button type="button" onclick="openDossierClassifyModalSingle(${pNum})"
+                    class="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-indigo-300 border border-slate-700/90 truncate max-w-[130px] flex items-center gap-1 transition shadow-sm cursor-pointer"
+                    title="Clique para alterar o tipo de documento desta página">
+              <span class="truncate font-medium">${escapeHtml(pageType)}</span>
+              <i class="fa-solid fa-pen text-[8px] text-slate-400 group-hover:text-indigo-400 shrink-0"></i>
+            </button>
           </div>
           <div class="relative aspect-[3/4] bg-slate-950 rounded-lg overflow-hidden border border-slate-800/80 cursor-pointer" onclick="openDossiePageLightbox(${pNum})" title="Clique para Visualizar em Alta Resolução (Página ${pNum})">
             <img src="${thumbUrl}" loading="lazy" alt="Página ${pNum}" class="w-full h-full object-cover object-top transition-transform duration-200 group-hover:scale-105"
@@ -9956,13 +10406,364 @@
             </div>
           </div>
           <button type="button" id="dossieBtnPage_${pNum}" onclick="jumpToPdfPage(${pNum})"
-                  class="w-full py-1.5 px-2 ${isCardActive ? 'bg-emerald-600 text-white font-semibold shadow' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-300'} rounded text-[10px] font-medium transition flex items-center justify-center gap-1.5">
+                  class="w-full py-1.5 px-2 ${isCardActive ? 'bg-emerald-600 text-white font-semibold shadow' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-300'} rounded text-[10px] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer">
             <i class="fa-solid ${isCardActive ? 'fa-circle-check text-emerald-200' : 'fa-eye text-slate-400'} text-[9px]"></i>
             <span>${isCardActive ? 'Exibindo no Leitor' : 'Exibir no Leitor'}</span>
           </button>
         `;
         gridEl.appendChild(card);
       }
+
+      updateDossierBatchUI(totalPages);
+    }
+
+    // Manipuladores de Seleção de Páginas no Dossiê (Simples, Direto, Sem Teclas Modificadoras)
+    function toggleDossierPageSelection(pNum, isChecked) {
+      if (isChecked) {
+        selectedDossierPages.add(pNum);
+      } else {
+        selectedDossierPages.delete(pNum);
+      }
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      const totalPages = Math.max(1, parseInt(doc.paginas) || (Array.isArray(doc.dossie_paginas) ? doc.dossie_paginas.length : 1));
+      updateDossierBatchUI(totalPages);
+      syncDossierCardSelection(pNum);
+    }
+
+    function syncDossierCardSelection(pNum) {
+      const card = document.getElementById(`dossieCardPage_${pNum}`);
+      if (!card) return;
+      const cb = card.querySelector('.dossier-page-cb');
+      const isSel = selectedDossierPages.has(pNum);
+      if (cb && cb.checked !== isSel) cb.checked = isSel;
+      const isCardActive = (currentDossieActivePage === pNum);
+      if (isSel) {
+        card.className = 'bg-slate-900/90 border ring-2 ring-indigo-500 border-indigo-500/80 bg-indigo-950/20 rounded-xl p-2.5 flex flex-col gap-2 transition-all hover:shadow-lg group relative';
+      } else if (isCardActive) {
+        card.className = 'bg-slate-900/90 border ring-2 ring-emerald-500 border-emerald-500 bg-slate-800/90 rounded-xl p-2.5 flex flex-col gap-2 transition-all hover:shadow-lg group relative';
+      } else {
+        card.className = 'bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 rounded-xl p-2.5 flex flex-col gap-2 transition-all hover:shadow-lg group relative';
+      }
+    }
+
+    function syncAllDossierCardsSelection(totalPages) {
+      for (let p = 1; p <= totalPages; p++) {
+        syncDossierCardSelection(p);
+      }
+    }
+
+    function toggleSelectAllDossierPages(isChecked) {
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      const totalPages = Math.max(1, parseInt(doc.paginas) || (Array.isArray(doc.dossie_paginas) ? doc.dossie_paginas.length : 1));
+
+      if (isChecked) {
+        for (let p = 1; p <= totalPages; p++) {
+          selectedDossierPages.add(p);
+        }
+      } else {
+        selectedDossierPages.clear();
+      }
+
+      updateDossierBatchUI(totalPages);
+      syncAllDossierCardsSelection(totalPages);
+    }
+
+    function selectDossierPageRange() {
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      const totalPages = Math.max(1, parseInt(doc.paginas) || (Array.isArray(doc.dossie_paginas) ? doc.dossie_paginas.length : 1));
+
+      const fromInput = document.getElementById('dossierRangeFrom');
+      const toInput = document.getElementById('dossierRangeTo');
+      const fromVal = parseInt(fromInput?.value);
+      const toVal = parseInt(toInput?.value);
+
+      if (isNaN(fromVal) || isNaN(toVal)) {
+        showToast('Informe os números inicial e final do intervalo.', 'info');
+        return;
+      }
+
+      const start = Math.max(1, Math.min(fromVal, toVal));
+      const end = Math.min(totalPages, Math.max(fromVal, toVal));
+
+      for (let p = start; p <= end; p++) {
+        selectedDossierPages.add(p);
+      }
+
+      updateDossierBatchUI(totalPages);
+      syncAllDossierCardsSelection(totalPages);
+      showToast(`Páginas de ${start} a ${end} marcadas (${selectedDossierPages.size} no total).`, 'info');
+    }
+
+    function updateDossierBatchUI(totalPages) {
+      const countEl = document.getElementById('dossierSelectedCount');
+      const btnClassify = document.getElementById('btnDossierBatchClassify');
+      const badgeEl = document.getElementById('dossierBatchBtnBadge');
+      const selectAllCb = document.getElementById('dossierSelectAllPages');
+
+      const count = selectedDossierPages.size;
+      if (countEl) countEl.innerText = count;
+
+      if (btnClassify) {
+        if (count > 0) {
+          btnClassify.disabled = false;
+          btnClassify.className = 'px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm cursor-pointer';
+        } else {
+          btnClassify.disabled = true;
+          btnClassify.className = 'px-3 py-1 bg-slate-800/80 text-slate-500 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700/50 disabled:cursor-not-allowed cursor-pointer';
+        }
+      }
+
+      if (badgeEl) {
+        if (count > 0) {
+          badgeEl.classList.remove('hidden');
+          badgeEl.innerText = count;
+        } else {
+          badgeEl.classList.add('hidden');
+        }
+      }
+
+      if (selectAllCb) {
+        if (count === 0) {
+          selectAllCb.checked = false;
+          selectAllCb.indeterminate = false;
+        } else if (totalPages > 0 && count >= totalPages) {
+          selectAllCb.checked = true;
+          selectAllCb.indeterminate = false;
+        } else {
+          selectAllCb.checked = false;
+          selectAllCb.indeterminate = true;
+        }
+      }
+    }
+
+    function formatDossierPageNumbers(arr) {
+      if (!arr || arr.length === 0) return 'nenhuma';
+      const sorted = [...arr].sort((a, b) => a - b);
+      if (sorted.length <= 3) {
+        return sorted.map(p => `Pág. ${p}`).join(', ');
+      }
+      let isContiguous = true;
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] !== sorted[i - 1] + 1) {
+          isContiguous = false;
+          break;
+        }
+      }
+      if (isContiguous) {
+        return `Páginas ${sorted[0]} a ${sorted[sorted.length - 1]}`;
+      }
+      return `Páginas ${sorted.slice(0, 3).join(', ')} e mais ${sorted.length - 3}`;
+    }
+
+    // Abertura e Controle da Modal de Reclassificação (Individual e em Massa)
+    function openDossierClassifyModalSingle(pNum) {
+      targetDossierClassifyPages = [pNum];
+      setupAndOpenDossierClassifyModal();
+    }
+
+    function openDossierBatchClassifyModal() {
+      if (selectedDossierPages.size === 0) {
+        showToast('Selecione ao menos uma página para classificar.', 'info');
+        return;
+      }
+      targetDossierClassifyPages = Array.from(selectedDossierPages).sort((a, b) => a - b);
+      setupAndOpenDossierClassifyModal();
+    }
+
+    function setupAndOpenDossierClassifyModal() {
+      const modal = document.getElementById('modalDossierClassifyPages');
+      const listEl = document.getElementById('dossierClassifyPagesList');
+      const badgeEl = document.getElementById('dossierClassifyPagesBadge');
+      const searchInput = document.getElementById('dossierClassifySearchInput');
+      if (!modal) return;
+
+      const count = targetDossierClassifyPages.length;
+      if (listEl) listEl.innerText = formatDossierPageNumbers(targetDossierClassifyPages);
+      if (badgeEl) badgeEl.innerText = `${count} ${count > 1 ? 'págs' : 'pág'}`;
+      if (searchInput) searchInput.value = '';
+
+      renderDossierClassifyTypeList('');
+      modal.classList.remove('hidden');
+      setTimeout(() => searchInput?.focus(), 50);
+    }
+
+    function closeDossierClassifyModal() {
+      const modal = document.getElementById('modalDossierClassifyPages');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function filterDossierClassifyTypes(query) {
+      renderDossierClassifyTypeList(query);
+    }
+
+    function applyCustomDossierClassifyType() {
+      const searchInput = document.getElementById('dossierClassifySearchInput');
+      const val = searchInput ? searchInput.value.trim() : '';
+      if (val) {
+        applyDossierClassifyType(val);
+      } else {
+        showToast('Digite ou selecione um tipo de documento.', 'info');
+      }
+    }
+
+    function renderDossierClassifyTypeList(query = '') {
+      const container = document.getElementById('dossierClassifyTypeList');
+      if (!container) return;
+      container.innerHTML = '';
+      const q = (query || '').toLowerCase().trim();
+
+      const typesMap = new Map();
+      KNOWN_DOSSIER_TYPES.forEach(item => typesMap.set(item.name.toLowerCase(), item));
+
+      const selectTipo = document.getElementById('select_tipo_documento');
+      if (selectTipo) {
+        Array.from(selectTipo.options).forEach(opt => {
+          const name = opt.value;
+          if (name && !typesMap.has(name.toLowerCase())) {
+            typesMap.set(name.toLowerCase(), {
+              name: name,
+              category: opt.parentElement?.label || 'Geral',
+              icon: 'fa-solid fa-file'
+            });
+          }
+        });
+      }
+
+      const allItems = Array.from(typesMap.values());
+      const filtered = q
+        ? allItems.filter(item => item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q))
+        : allItems;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-4 text-slate-400 text-xs">
+            <p>Nenhum tipo pré-cadastrado encontrado para "<strong>${escapeHtml(query)}</strong>".</p>
+            <button type="button" onclick="applyDossierClassifyType('${escapeHtmlAttr(query)}')" class="mt-2 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold cursor-pointer">
+              Usar "${escapeHtml(query)}"
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      const groups = {};
+      filtered.forEach(item => {
+        if (!groups[item.category]) groups[item.category] = [];
+        groups[item.category].push(item);
+      });
+
+      Object.entries(groups).forEach(([cat, items]) => {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'space-y-1 mb-2';
+        groupDiv.innerHTML = `<div class="text-[10px] font-semibold text-slate-500 uppercase px-1 pt-1 tracking-wider">${escapeHtml(cat)}</div>`;
+
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-1 sm:grid-cols-2 gap-1';
+
+        items.forEach(item => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'w-full text-left px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-indigo-600 hover:text-white text-slate-200 border border-slate-800/80 text-xs flex items-center justify-between group transition shadow-sm cursor-pointer';
+          btn.innerHTML = `
+            <span class="flex items-center gap-2 truncate">
+              <i class="${item.icon} text-[11px] text-indigo-400 group-hover:text-white transition"></i>
+              <span class="truncate font-medium">${escapeHtml(item.name)}</span>
+            </span>
+            <i class="fa-solid fa-chevron-right text-[9px] text-slate-600 group-hover:text-indigo-200 opacity-0 group-hover:opacity-100 transition"></i>
+          `;
+          btn.onclick = () => applyDossierClassifyType(item.name);
+          grid.appendChild(btn);
+        });
+
+        groupDiv.appendChild(grid);
+        container.appendChild(groupDiv);
+      });
+    }
+
+    function applyDossierClassifyType(chosenType) {
+      const cleanType = (chosenType || '').trim();
+      if (!cleanType) {
+        showToast('Informe ou selecione um tipo de documento válido.', 'error');
+        return;
+      }
+      if (!targetDossierClassifyPages || targetDossierClassifyPages.length === 0) {
+        showToast('Nenhuma página alvo selecionada.', 'error');
+        closeDossierClassifyModal();
+        return;
+      }
+      if (currentIndex < 0 || !filteredDocs || !filteredDocs[currentIndex]) return;
+      const doc = filteredDocs[currentIndex];
+      const totalPages = Math.max(1, parseInt(doc.paginas) || (Array.isArray(doc.dossie_paginas) ? doc.dossie_paginas.length : 1));
+
+      // Garante inicialização correta de dossie_paginas
+      if (!Array.isArray(doc.dossie_paginas) || doc.dossie_paginas.length === 0) {
+        doc.dossie_paginas = [];
+        for (let i = 1; i <= totalPages; i++) {
+          doc.dossie_paginas.push({
+            pagina: i,
+            tipo: (i === 1 ? (doc.tipo_documento || 'Página Inicial') : `Página ${i}`)
+          });
+        }
+      }
+
+      // Atualiza as páginas alvo
+      targetDossierClassifyPages.forEach(pNum => {
+        let pItem = doc.dossie_paginas.find(x => x.pagina === pNum);
+        if (!pItem) {
+          pItem = { pagina: pNum, tipo: cleanType };
+          doc.dossie_paginas.push(pItem);
+        } else {
+          pItem.tipo = cleanType;
+        }
+
+        // Se a página 1 foi alterada, reflete no tipo_documento principal
+        if (pNum === 1) {
+          doc.tipo_documento = cleanType;
+          const selectTipo = document.getElementById('select_tipo_documento');
+          if (selectTipo) selectTipo.value = cleanType;
+        }
+      });
+
+      // Ordena dossie_paginas numericamente
+      doc.dossie_paginas.sort((a, b) => a.pagina - b.pagina);
+
+      // Recalcula todos_tipos
+      const tiposSet = new Set();
+      if (doc.tipo_documento) tiposSet.add(doc.tipo_documento);
+      doc.dossie_paginas.forEach(p => {
+        if (p.tipo && p.tipo.trim() && !p.tipo.startsWith('Página ')) {
+          tiposSet.add(p.tipo.trim());
+        }
+      });
+      doc.todos_tipos = Array.from(tiposSet);
+
+      // Recalcula todos_dominios automaticamente sem exigir que o usuário informe domínio
+      recalculateDocDomains(doc);
+
+      // Atualiza no repositório de documentos
+      const mainIdx = documents.findIndex(d => d.md5 === doc.md5);
+      if (mainIdx !== -1) documents[mainIdx] = doc;
+      filteredDocs[currentIndex] = doc;
+
+      // Marca formulário como modificado
+      markDirty();
+
+      // Atualiza UI
+      renderDossierPagesGrid(doc);
+      renderMultiTags(doc);
+      if (typeof initMasterFilterLists === 'function') initMasterFilterLists();
+      if (typeof updateFacetFilters === 'function') updateFacetFilters();
+
+      const countAff = targetDossierClassifyPages.length;
+      showToast(`${countAff} ${countAff > 1 ? 'páginas reclassificadas' : 'página reclassificada'} como "${cleanType}"!`, 'success');
+
+      // Limpa seleções e fecha modal
+      selectedDossierPages.clear();
+      targetDossierClassifyPages = [];
+      closeDossierClassifyModal();
     }
 
     async function loadDocumentText(md5, force = false) {
@@ -12876,7 +13677,7 @@
       }
 
       // Atualiza visual do botão do domínio inicial
-      const domains = ['geral', 'financeiro', 'juridico', 'identificacao', 'cadastral', 'academico'];
+      const domains = ['geral', 'financeiro', 'veicular', 'juridico', 'identificacao', 'cadastral', 'academico'];
       domains.forEach(d => {
         const id = 'biDomain' + d.charAt(0).toUpperCase() + d.slice(1);
         const el = document.getElementById(id);
@@ -12893,6 +13694,7 @@
         const labelMap = {
           'geral': 'Visão Geral Executiva',
           'financeiro': 'Domínio Financeiro',
+          'veicular': 'Domínio Veicular / Trânsito',
           'juridico': 'Domínio Jurídico',
           'identificacao': 'Domínio Identificação',
           'cadastral': 'Domínio Cadastral',
@@ -12906,7 +13708,7 @@
 
     function setBIDomain(domain) {
       biState.domain = domain;
-      const domains = ['geral', 'financeiro', 'juridico', 'identificacao', 'cadastral', 'academico'];
+      const domains = ['geral', 'financeiro', 'veicular', 'juridico', 'identificacao', 'cadastral', 'academico'];
       domains.forEach(d => {
         const id = 'biDomain' + d.charAt(0).toUpperCase() + d.slice(1);
         const el = document.getElementById(id);
@@ -12923,6 +13725,7 @@
         const labelMap = {
           'geral': 'Visão Geral Executiva',
           'financeiro': 'Domínio Financeiro',
+          'veicular': 'Domínio Veicular / Trânsito',
           'juridico': 'Domínio Jurídico',
           'identificacao': 'Domínio Identificação',
           'cadastral': 'Domínio Cadastral',
@@ -13446,6 +14249,7 @@
           { key: 'identificacao', label: 'Identificação', color: '#f59e0b', icon: 'fa-id-card' },
           { key: 'cadastral', label: 'Cadastral', color: '#0284c7', icon: 'fa-building' },
           { key: 'academico', label: 'Acadêmico', color: '#ec4899', icon: 'fa-graduation-cap' },
+          { key: 'veicular', label: 'Veicular', color: '#f97316', icon: 'fa-car' },
           { key: 'outro', label: 'Outros', color: '#64748b', icon: 'fa-folder' }
         ];
 
@@ -14327,7 +15131,7 @@
       const dim = biState.matrixDim || 'dominio_status';
 
       if (dim === 'dominio_status') {
-        const rows = ['financeiro', 'juridico', 'identificacao', 'cadastral', 'academico', 'outro'];
+        const rows = ['financeiro', 'juridico', 'identificacao', 'cadastral', 'academico', 'veicular', 'outro'];
         const cols = ['Pendente', 'Aprovado'];
         const rowLabels = {
           'financeiro': '💰 Financeiro',
@@ -14335,6 +15139,7 @@
           'identificacao': '🪪 Identificação',
           'cadastral': '🏢 Cadastral',
           'academico': '🎓 Acadêmico',
+          'veicular': '🚗 Veicular',
           'outro': '📁 Outro'
         };
 

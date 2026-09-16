@@ -170,6 +170,7 @@ try:
         batch_update_tag_domain,
         sync_to_json,
         salvar_regra_aprendida,
+        aprender_com_paginas_dossie,
         obter_regras_aprendidas,
         remover_regra_aprendida,
         consultar_regra_para_texto
@@ -188,6 +189,7 @@ except ImportError:
             batch_update_tag_domain,
             sync_to_json,
             salvar_regra_aprendida,
+            aprender_com_paginas_dossie,
             obter_regras_aprendidas,
             remover_regra_aprendida,
             consultar_regra_para_texto
@@ -206,6 +208,7 @@ except ImportError:
             batch_update_tag_domain,
             sync_to_json,
             salvar_regra_aprendida,
+            aprender_com_paginas_dossie,
             obter_regras_aprendidas,
             remover_regra_aprendida,
             consultar_regra_para_texto
@@ -1528,6 +1531,42 @@ def create_handler(server_ctx: ConferenciaServer):
                 self.wfile.write(body)
                 return
 
+            # API para obter metadados de um único documento por MD5
+            if path.startswith("/api/documento/") or path.startswith("/api/document/"):
+                prefix = "/api/documento/" if path.startswith("/api/documento/") else "/api/document/"
+                md5_req = path.split(prefix)[-1].strip().lower()
+                dados = server_ctx.load_data()
+                doc_found = next((item for item in dados if item.get("md5", "").lower() == md5_req), None)
+                if not doc_found and server_ctx.db_path and server_ctx.db_path.exists():
+                    try:
+                        import sqlite3
+                        with sqlite3.connect(server_ctx.db_path) as conn:
+                            conn.row_factory = sqlite3.Row
+                            cur = conn.cursor()
+                            row = cur.execute("SELECT * FROM documentos WHERE LOWER(md5) = ?", (md5_req,)).fetchone()
+                            if row:
+                                doc_found = dict(row)
+                                for col in ["metadados_adicionais", "assinaturas", "dados_extras", "todos_tipos", "todos_dominios", "paginas_detalhes"]:
+                                    if col in doc_found and isinstance(doc_found[col], str):
+                                        try:
+                                            doc_found[col] = json.loads(doc_found[col])
+                                        except Exception:
+                                            pass
+                    except Exception as e:
+                        pass
+                if doc_found:
+                    body = json.dumps(doc_found, ensure_ascii=False).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                else:
+                    self.send_error(404, f"Documento com MD5 {md5_req} não encontrado.")
+                    return
+
+
             # API de Regras Aprendidas pelo Usuário
             if path == "/api/regras-aprendidas":
                 try:
@@ -2033,9 +2072,18 @@ def create_handler(server_ctx: ConferenciaServer):
                     all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
                     server_ctx.update_txt_report(all_processed)
 
-                    # 4. Aprendizado Incremental se solicitado pelo usuário
-                    if payload.get("aprender_regra") and item_editado.get("tipo_documento"):
+                    # 4. Aprendizado Incremental se solicitado pelo usuário (Nível de Página e Documento)
+                    if payload.get("aprender_regra"):
                         try:
+                            dossie_pgs = item_editado.get("dossie_paginas", [])
+                            if dossie_pgs:
+                                aprender_com_paginas_dossie(
+                                    server_ctx.db_path,
+                                    target_md5,
+                                    dossie_pgs,
+                                    item_editado=item_editado
+                                )
+
                             termo = (item_editado.get("tipo_documento") or "").strip()
                             if termo:
                                 salvar_regra_aprendida(
@@ -2115,6 +2163,38 @@ def create_handler(server_ctx: ConferenciaServer):
                     sync_to_json(server_ctx.db_path, server_ctx.json_path, only_processed=True)
                     all_processed = get_all_documents(server_ctx.db_path, only_processed=True)
                     server_ctx.update_txt_report(all_processed)
+
+                    # 4. Aprendizado Incremental se solicitado na aprovação
+                    if payload.get("aprender_regra"):
+                        try:
+                            doc_appr = get_document_by_md5(server_ctx.db_path, target_md5)
+                            if doc_appr:
+                                dossie_pgs = doc_appr.get("dossie_paginas", [])
+                                if isinstance(dossie_pgs, str):
+                                    try:
+                                        dossie_pgs = json.loads(dossie_pgs)
+                                    except Exception:
+                                        dossie_pgs = []
+                                if dossie_pgs:
+                                    aprender_com_paginas_dossie(
+                                        server_ctx.db_path,
+                                        target_md5,
+                                        dossie_pgs,
+                                        item_editado=doc_appr
+                                    )
+                                termo = (doc_appr.get("tipo_documento") or "").strip()
+                                if termo:
+                                    salvar_regra_aprendida(
+                                        server_ctx.db_path,
+                                        termo_chave=termo,
+                                        valor_atribuido=termo,
+                                        dominio=doc_appr.get("dominio", "academico"),
+                                        campo_alvo="tipo_documento",
+                                        remover_pix=(doc_appr.get("dominio") != "financeiro"),
+                                        origem_md5=target_md5
+                                    )
+                        except Exception as e:
+                            print(f"[Aviso] Falha ao registrar regra aprendida na aprovação: {e}")
 
                     resp = json.dumps({"status": "sucesso", "mensagem": "Conferência aprovada com sucesso!"}).encode("utf-8")
                     self.send_response(200)

@@ -11,6 +11,8 @@ e sincronização contínua com os arquivos joakindex.json e .txt.
 import sqlite3
 import json
 import os
+import re
+import unicodedata
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Tuple
 from datetime import datetime
@@ -306,7 +308,9 @@ def doc_to_row_data(doc: Dict[str, Any]) -> Tuple:
     if not dominio:
         tipo_lower = str(tipo_documento or "").lower()
         is_non_fin = any(k in tipo_lower for k in ["inscrição", "inscricao", "situação", "situacao", "cnpj", "residência", "residencia", "matrícula", "matricula", "rendimentos", "votação", "votacao"])
-        if not is_non_fin and ("pix" in tipo_lower or "comprovante de pagamento" in tipo_lower or "comprovante pix" in tipo_lower or "recibo de pagamento" in tipo_lower or "boleto" in tipo_lower or valor_monetario):
+        if any(k in tipo_lower for k in ["crv", "crlv", "atpv", "veiculo", "veículo", "veicular", "vistoria", "detran", "senatran", "denatran", "remocao", "remoção", "arrematacao", "arrematação", "leilao", "leilão", "guincho"]):
+            dominio = "veicular"
+        elif not is_non_fin and ("pix" in tipo_lower or "comprovante de pagamento" in tipo_lower or "comprovante pix" in tipo_lower or "recibo de pagamento" in tipo_lower or "boleto" in tipo_lower or valor_monetario):
             dominio = "financeiro"
         elif any(k in tipo_lower for k in ["situação cadastral", "situacao cadastral", "cnpj", "currículo", "curriculo", "experiência profissional", "experiencia profissional"]):
             dominio = "profissional"
@@ -972,6 +976,148 @@ def resolve_default_db_path() -> Path:
 DEFAULT_DB_PATH = resolve_default_db_path()
 
 
+def extract_page_learned_terms(p_tipo: str, p_text: str) -> List[str]:
+    """Extrai os termos mais relevantes e característicos de uma página classificada."""
+    terms = []
+    if not p_tipo or not p_text:
+        return terms
+    t_clean = p_text.lower()
+    tipo_clean = p_tipo.lower().strip()
+
+    # 1. Termo exato do tipo de documento se presente no texto da página
+    if tipo_clean and tipo_clean in t_clean and len(tipo_clean) >= 3:
+        terms.append(tipo_clean)
+
+    # Variações sem acento
+    try:
+        t_unaccent = "".join(c for c in unicodedata.normalize("NFD", t_clean) if unicodedata.category(c) != "Mn")
+        tipo_unaccent = "".join(c for c in unicodedata.normalize("NFD", tipo_clean) if unicodedata.category(c) != "Mn")
+        if tipo_unaccent and tipo_unaccent in t_unaccent and len(tipo_unaccent) >= 3 and tipo_unaccent not in terms:
+            terms.append(tipo_unaccent)
+    except Exception:
+        pass
+
+    # Âncoras específicas conforme família documental
+    if "compra e venda" in tipo_clean:
+        for phrase in ["compromisso de compra e venda", "instrumento particular de compromisso", "promitentes-vendedor", "promitente-comprador"]:
+            if phrase in t_clean and phrase not in terms:
+                terms.append(phrase)
+    elif "promiss" in tipo_clean:
+        for phrase in ["nota promissória", "nota promissoria", "por esta única via", "por esta unica via", "são domingos cód. 6091"]:
+            if phrase in t_clean and phrase not in terms:
+                terms.append(phrase)
+    elif "recibo" in tipo_clean:
+        for phrase in ["recibo de pagamento", "recebi(emos) de", "recebemos de", "recebi de", "a importancia de", "a importância de"]:
+            if phrase in t_clean and phrase not in terms:
+                terms.append(phrase)
+    elif "cheque" in tipo_clean:
+        for phrase in ["talão de cheques", "folha de cheque", "pague por este cheque", "a ordem de"]:
+            if phrase in t_clean and phrase not in terms:
+                terms.append(phrase)
+    elif "boleto" in tipo_clean:
+        for phrase in ["linha digitável", "linha digitavel", "código de barras", "codigo de barras"]:
+            if phrase in t_clean and phrase not in terms:
+                terms.append(phrase)
+    elif "extrato" in tipo_clean:
+        for phrase in ["extrato bancário", "extrato de conta", "saldo anterior"]:
+            if phrase in t_clean and phrase not in terms:
+                terms.append(phrase)
+
+    # 2. Linhas iniciais de cabeçalho significativa (título em destaque)
+    lines = [l.strip() for l in p_text.split("\n") if l.strip()]
+    for line in lines[:3]:
+        l_low = line.lower()
+        if 5 <= len(line) <= 70 and not re.match(r"^[\d\s\-\.\,\/]+$", line):
+            if any(w in l_low for w in ["recibo", "promiss", "compromisso", "contrato", "declaracao", "declaração", "certificado", "diploma", "comprovante", "termo", "extrato"]):
+                if l_low not in terms:
+                    terms.append(l_low)
+                break
+
+    return terms
+
+
+def aprender_com_paginas_dossie(
+    db_path: Union[str, Path],
+    md5: str,
+    dossie_paginas: List[Dict[str, Any]],
+    text_per_page: Optional[Dict[int, str]] = None,
+    item_editado: Optional[Dict[str, Any]] = None
+) -> int:
+    """
+    Aprende regras incrementais no nível de PÁGINA a partir da conferência manual do usuário.
+    Garante que o indexador aprenda com cada página classificada do dossiê para classificar
+    páginas corretamente no futuro.
+    """
+    if not dossie_paginas:
+        return 0
+
+    def _tipo_para_dominio(t_name: str) -> str:
+        t_low = (t_name or "").lower()
+        if any(k in t_low for k in ["crv", "crlv", "atpv", "veiculo", "veículo", "veicular", "vistoria", "detran", "senatran", "denatran", "remocao", "remoção", "arrematacao", "arrematação", "leilao", "leilão", "guincho", "transito", "trânsito"]):
+            return "veicular"
+        elif any(k in t_low for k in ["recibo", "promiss", "boleto", "cheque", "pix", "pagamento", "extrato", "fatura", "darf", "ted", "doc"]):
+            return "financeiro"
+        elif any(k in t_low for k in ["contrato", "procur", "posse", "estatuto", "termo", "citação", "citacao", "mandado"]):
+            return "juridico"
+        elif any(k in t_low for k in ["rg", "cpf", "cnh", "identidade", "certid", "passaporte", "eleitor"]):
+            return "identificacao"
+        elif any(k in t_low for k in ["trabalho", "ctps", "cnpj", "lattes", "curriculo", "currículo", "registro profissional"]):
+            return "profissional"
+        elif any(k in t_low for k in ["diploma", "certificado", "histórico", "historico", "ementa", "atestado"]):
+            return "academico"
+        return (item_editado.get("dominio") if item_editado else None) or "academico"
+
+    if not text_per_page:
+        text_per_page = {}
+        try:
+            db_p = Path(db_path).expanduser().resolve()
+            txt_file = db_p.parent / "individuais" / f"{md5}.txt"
+            if not txt_file.exists():
+                cand = db_p.parent.parent / "saida" / "individuais" / f"{md5}.txt"
+                if cand.exists():
+                    txt_file = cand
+            if txt_file.exists():
+                raw_txt = txt_file.read_text(encoding="utf-8", errors="replace")
+                pattern = re.compile(r'--- PÁGINA\s+(\d+)\s+---|=== PÁGINA\s+(\d+)\s+===')
+                matches = list(pattern.finditer(raw_txt))
+                for idx, m in enumerate(matches):
+                    p_n = int(m.group(1) or m.group(2))
+                    st = m.end()
+                    en = matches[idx + 1].start() if idx + 1 < len(matches) else len(raw_txt)
+                    text_per_page[p_n] = raw_txt[st:en].strip()
+        except Exception:
+            pass
+
+    regras_gravadas = 0
+    for p_item in dossie_paginas:
+        p_num = p_item.get("pagina")
+        p_tipo = (p_item.get("tipo") or "").strip()
+        if not p_tipo or p_tipo.lower() in ["não identificado", "nao identificado", "outro", "documento diverso", f"página {p_num}", f"pagina {p_num}"]:
+            continue
+        p_txt = text_per_page.get(p_num, "")
+        if len(p_txt.strip()) < 10:
+            continue
+
+        p_dom = _tipo_para_dominio(p_tipo)
+        terms = extract_page_learned_terms(p_tipo, p_txt)
+        for term in terms:
+            try:
+                salvar_regra_aprendida(
+                    db_path=db_path,
+                    termo_chave=term,
+                    valor_atribuido=p_tipo,
+                    dominio=p_dom,
+                    campo_alvo="tipo_documento",
+                    remover_pix=(p_dom != "financeiro"),
+                    origem_md5=f"{md5}:p{p_num}"
+                )
+                regras_gravadas += 1
+            except Exception:
+                pass
+
+    return regras_gravadas
+
+
 def consultar_regra_para_texto(db_path: Optional[Union[str, Path]] = None, texto: str = "") -> Optional[Dict[str, Any]]:
     """Verifica se algum termo-chave de regra aprendida ocorre no texto."""
     if not texto:
@@ -984,13 +1130,22 @@ def consultar_regra_para_texto(db_path: Optional[Union[str, Path]] = None, texto
             return None
         regras = obter_regras_aprendidas(db)
         t_lower = texto.lower()
-        for r in regras:
+        # Prioriza regras com termos-chave mais longos e específicos
+        regras_ordenadas = sorted(regras, key=lambda r: len((r.get("termo_chave") or "").strip()), reverse=True)
+        for r in regras_ordenadas:
             termo = (r.get("termo_chave") or "").strip().lower()
-            if termo and termo in t_lower:
-                return r
+            if not termo:
+                continue
+            if len(termo) <= 4:
+                if re.search(r'\b' + re.escape(termo) + r'\b', t_lower):
+                    return r
+            else:
+                if termo in t_lower:
+                    return r
     except Exception:
         pass
     return None
+
 
 
 def rebuild_fts_index(db_path_or_conn: Union[str, Path, sqlite3.Connection]) -> int:
