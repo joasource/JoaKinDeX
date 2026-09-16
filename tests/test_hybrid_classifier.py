@@ -1,4 +1,5 @@
-from joakindex.cli import should_trigger_hybrid_fallback, OpenAIClient, clean_and_parse_json, build_universal_vision_prompt, build_universal_prompt
+from joakindex.cli import should_trigger_hybrid_fallback, build_universal_vision_prompt, build_universal_prompt
+from joakindex.llm_clients import OpenAIClient, clean_and_parse_json
 from joakindex.config import get_factory_defaults
 
 
