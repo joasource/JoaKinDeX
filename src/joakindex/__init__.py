@@ -14,7 +14,6 @@ from joakindex.cli import (
     process_single_pdf,
     extract_file_dublin_core,
     format_cpf,
-    validate_cpf_checksum,
     is_valid_cpf_syntax,
     extract_cpf_fallback,
     extract_rg_fallback,
@@ -26,6 +25,8 @@ from joakindex.cli import (
     extract_nota_promissoria_signals,
     extract_recibo_signals,
 )
+
+from joakindex.extractors_texto import validate_cpf_checksum
 
 from joakindex.server import (
     main as server_main,
