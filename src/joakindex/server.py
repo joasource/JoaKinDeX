@@ -273,6 +273,11 @@ except ImportError:
     )
 
 try:
+    from joakindex.api_export import handle_get_export_relacional_zip
+except ImportError:
+    from .api_export import handle_get_export_relacional_zip
+
+try:
     from joakindex.api_browse import (
         handle_get_browse_dirs,
         handle_post_browse_mkdir,
@@ -1556,6 +1561,11 @@ def create_handler(server_ctx: ConferenciaServer):
             # Download de lote em ZIP via GET
             if path == "/api/batch/exportar-zip":
                 handle_get_batch_exportar_zip(self, server_ctx, parsed)
+                return
+
+            # Exportação Relacional Estruturada (pessoas/empresas/endereços/documentos/vínculos em ZIP)
+            if path == "/api/export/relacional-zip":
+                handle_get_export_relacional_zip(self, server_ctx, parsed)
                 return
 
             super().do_GET()
