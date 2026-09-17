@@ -15,7 +15,7 @@ __version__ = "1.0.0"
 
 import json
 
-from joakindex.cli import process_single_pdf, format_single_txt
+from joakindex.classificacao import process_single_pdf, format_single_txt
 from joakindex.db import upsert_document, sync_to_json, get_all_documents, get_document_by_md5
 from joakindex.normalizer import normalizar_instituicao
 

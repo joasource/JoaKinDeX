@@ -1,4 +1,4 @@
-from joakindex.cli import should_trigger_hybrid_fallback, build_universal_vision_prompt, build_universal_prompt
+from joakindex.prompts_universais import should_trigger_hybrid_fallback, build_universal_vision_prompt, build_universal_prompt
 from joakindex.llm_clients import OpenAIClient, clean_and_parse_json
 from joakindex.config import get_factory_defaults
 
@@ -214,7 +214,7 @@ def test_universal_vision_prompt_has_ocr_transcription_instruction():
 
 
 def test_format_single_txt_zero_noise_and_appends_ocr():
-    from joakindex.cli import format_single_txt
+    from joakindex.classificacao import format_single_txt
     item = {
         "md5": "abc1234567890def",
         "status": "sucesso",
@@ -243,7 +243,7 @@ def test_format_single_txt_zero_noise_and_appends_ocr():
 
 
 def test_sanitize_llm_transcription_valid_and_loop_hallucination():
-    from joakindex.cli import sanitize_llm_transcription
+    from joakindex.extractors_texto import sanitize_llm_transcription
     # 1. Texto legítimo e limpo
     valid_text = "FRACAROLI IMP. E EXP. DE CAFE\nListagem para depósito\nValor Total: R$ 2.358.691,00\nData: 26/11/2025"
     assert sanitize_llm_transcription(valid_text) == valid_text
@@ -258,7 +258,7 @@ def test_sanitize_llm_transcription_valid_and_loop_hallucination():
 
 
 def test_extract_names_from_document_text():
-    from joakindex.cli import extract_names_from_document_text
+    from joakindex.extractors_texto import extract_names_from_document_text
     sample_text = """
     FRACAROLI IMP. E EXP. DE CAFE
     Listagem para depósito
@@ -281,7 +281,7 @@ def test_extract_names_from_document_text():
 
 
 def test_universal_prompt_has_nomes_detectados_and_anti_pix_rules():
-    from joakindex.cli import build_universal_prompt
+    from joakindex.prompts_universais import build_universal_prompt
     prompt = build_universal_prompt("Texto de teste...")
     assert "nomes_detectados" in prompt
     assert "Listagem de Pagamentos / Depósitos" in prompt
@@ -291,7 +291,7 @@ def test_universal_prompt_has_nomes_detectados_and_anti_pix_rules():
 
 
 def test_format_single_txt_displays_nomes_detectados():
-    from joakindex.cli import format_single_txt
+    from joakindex.classificacao import format_single_txt
     item = {
         "md5": "1234567890abcdef",
         "status": "sucesso",
@@ -311,7 +311,7 @@ def test_format_single_txt_displays_nomes_detectados():
 
 
 def test_extract_boleto_signals_banking_linha_digitavel():
-    from joakindex.cli import extract_boleto_signals, classify_text_signatures
+    from joakindex.extractors_sinais import extract_boleto_signals, classify_text_signatures
     sample_bb = "001-9 00190.00009 03183.378003 00078.500170 6 12780001804302 PAGAVEL EM QUALQUER BANCO Vencimento 27/11/2025"
     is_bol, linha, barras, det = extract_boleto_signals(sample_bb)
     assert is_bol is True
@@ -331,7 +331,7 @@ def test_extract_boleto_signals_banking_linha_digitavel():
 
 
 def test_extract_boleto_signals_concessionaria_and_utilities():
-    from joakindex.cli import extract_boleto_signals, classify_text_signatures
+    from joakindex.extractors_sinais import extract_boleto_signals, classify_text_signatures
     sample_edp = "EDP ESPÍRITO SANTO Linha Cod. de Barra 836000000099 121500513001 180131922639 000227593344 DATA 14-04-2025 VALOR R$ 412,15"
     is_bol, linha, _, _ = extract_boleto_signals(sample_edp)
     assert is_bol is True
@@ -342,7 +342,7 @@ def test_extract_boleto_signals_concessionaria_and_utilities():
 
 
 def test_extract_boleto_signals_structural_terms():
-    from joakindex.cli import extract_boleto_signals, classify_text_signatures
+    from joakindex.extractors_sinais import extract_boleto_signals, classify_text_signatures
     sample_termo = "Documento de Cobrança Ficha de Compensação Cedente: SICOOB Agência/Código Beneficiário 3008/0000434"
     is_bol, _, _, _ = extract_boleto_signals(sample_termo)
     assert is_bol is True
@@ -372,7 +372,7 @@ def test_regras_aprendidas_dynamic_matching(tmp_path):
 
 
 def test_universal_prompts_contain_boleto_rules_and_fields():
-    from joakindex.cli import build_universal_prompt, build_universal_vision_prompt
+    from joakindex.prompts_universais import build_universal_prompt, build_universal_vision_prompt
     prompt_txt = build_universal_prompt("Texto de teste")
     prompt_vis = build_universal_vision_prompt("Texto prévio")
 

@@ -9,7 +9,7 @@ comportamento interno já tem suíte própria em test_process_single_pdf.py.
 """
 import json
 
-from joakindex import cli
+from joakindex import cli, classificacao
 from joakindex.db import get_db_path, get_json_path, init_database, upsert_documents_batch
 
 
@@ -73,7 +73,7 @@ def test_processa_novos_documentos_e_persiste_json_txt_db(tmp_path, monkeypatch)
         "a.pdf": {"status": "sucesso", "tipo_documento": "Certificado", "beneficiario": "Ana"},
         "b.pdf": {"status": "sucesso", "tipo_documento": "Diploma", "beneficiario": "Beto"},
     })
-    monkeypatch.setattr(cli, "process_single_pdf", fake)
+    monkeypatch.setattr(classificacao, "process_single_pdf", fake)
 
     res = cli.run_batch_classification(
         input_path=str(pasta), output_dir=str(out_dir), client=DummyClient(), use_tqdm=False,
@@ -103,7 +103,7 @@ def test_no_individual_nao_grava_pasta_individuais(tmp_path, monkeypatch):
     _write_pdf(pasta, "a.pdf", b"conteudo A")
     out_dir = tmp_path / "saida"
 
-    monkeypatch.setattr(cli, "process_single_pdf", _fake_process_single_pdf({
+    monkeypatch.setattr(classificacao, "process_single_pdf", _fake_process_single_pdf({
         "a.pdf": {"status": "sucesso", "beneficiario": "Ana"},
     }))
 
@@ -134,7 +134,7 @@ def test_modo_incremental_pula_documento_ja_com_sucesso(tmp_path, monkeypatch):
         chamadas.append(pdf_path.name)
         return {"md5": metadata["md5"], "status": "sucesso", "beneficiario": "Nao Deveria Rodar"}
 
-    monkeypatch.setattr(cli, "process_single_pdf", fake_process)
+    monkeypatch.setattr(classificacao, "process_single_pdf", fake_process)
 
     res = cli.run_batch_classification(
         input_path=str(pasta), output_dir=str(out_dir), client=DummyClient(), use_tqdm=False,
@@ -171,7 +171,7 @@ def test_force_reprocessa_mesmo_documentos_aprovados(tmp_path, monkeypatch):
         chamadas.append(pdf_path.name)
         return {"md5": metadata["md5"], "status": "sucesso", "beneficiario": "Ana Reprocessada"}
 
-    monkeypatch.setattr(cli, "process_single_pdf", fake_process)
+    monkeypatch.setattr(classificacao, "process_single_pdf", fake_process)
 
     # Sem --force: documento aprovado é preservado e NÃO reprocessado.
     res_sem_force = cli.run_batch_classification(
@@ -212,7 +212,7 @@ def test_reprocess_ocr_seleciona_apenas_candidatos_elegiveis(tmp_path, monkeypat
         chamadas.append(pdf_path.name)
         return {"md5": metadata["md5"], "status": "sucesso", "tipo_documento": "Diploma"}
 
-    monkeypatch.setattr(cli, "process_single_pdf", fake_process)
+    monkeypatch.setattr(classificacao, "process_single_pdf", fake_process)
 
     cli.run_batch_classification(
         input_path=str(pasta), output_dir=str(out_dir), client=DummyClient(),
@@ -232,7 +232,7 @@ def test_workers_multiplos_processa_todos_os_arquivos(tmp_path, monkeypatch):
     def fake_process(pdf_path, client, max_pages=4, skip_ocr=False, metadata=None, hybrid=False, hybrid_cloud_client=None):
         return {"md5": metadata["md5"], "status": "sucesso", "tipo_documento": pdf_path.name}
 
-    monkeypatch.setattr(cli, "process_single_pdf", fake_process)
+    monkeypatch.setattr(classificacao, "process_single_pdf", fake_process)
 
     res = cli.run_batch_classification(
         input_path=str(pasta), output_dir=str(out_dir), client=DummyClient(), use_tqdm=False, workers=3,
@@ -254,7 +254,7 @@ def test_stop_checker_interrompe_processamento(tmp_path, monkeypatch):
     def fake_process(pdf_path, client, max_pages=4, skip_ocr=False, metadata=None, hybrid=False, hybrid_cloud_client=None):
         return {"md5": metadata["md5"], "status": "sucesso"}
 
-    monkeypatch.setattr(cli, "process_single_pdf", fake_process)
+    monkeypatch.setattr(classificacao, "process_single_pdf", fake_process)
 
     res = cli.run_batch_classification(
         input_path=str(pasta), output_dir=str(out_dir), client=DummyClient(), use_tqdm=False,
@@ -270,7 +270,7 @@ def test_progress_callback_recebe_eventos_principais(tmp_path, monkeypatch):
     _write_pdf(pasta, "a.pdf", b"conteudo A")
     out_dir = tmp_path / "saida"
 
-    monkeypatch.setattr(cli, "process_single_pdf", _fake_process_single_pdf({
+    monkeypatch.setattr(classificacao, "process_single_pdf", _fake_process_single_pdf({
         "a.pdf": {"status": "sucesso", "beneficiario": "Ana"},
     }))
 
@@ -299,7 +299,7 @@ def test_erro_em_um_arquivo_nao_interrompe_processamento_dos_demais(tmp_path, mo
             raise RuntimeError("falha simulada")
         return {"md5": metadata["md5"], "status": "sucesso"}
 
-    monkeypatch.setattr(cli, "process_single_pdf", fake_process)
+    monkeypatch.setattr(classificacao, "process_single_pdf", fake_process)
 
     res = cli.run_batch_classification(
         input_path=str(pasta), output_dir=str(out_dir), client=DummyClient(), use_tqdm=False, workers=1,

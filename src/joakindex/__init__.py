@@ -11,12 +11,20 @@ __email__ = "joaquimfsneto@gmail.com"
 from joakindex.cli import (
     main,
     run_batch_classification,
-    process_single_pdf,
     extract_file_dublin_core,
+)
+
+from joakindex.classificacao import process_single_pdf
+
+from joakindex.extractors_texto import (
+    validate_cpf_checksum,
     format_cpf,
     is_valid_cpf_syntax,
     extract_cpf_fallback,
     extract_rg_fallback,
+)
+
+from joakindex.extractors_sinais import (
     extract_boleto_signals,
     extract_cheque_signals,
     extract_irpf_signals,
@@ -25,8 +33,6 @@ from joakindex.cli import (
     extract_nota_promissoria_signals,
     extract_recibo_signals,
 )
-
-from joakindex.extractors_texto import validate_cpf_checksum
 
 from joakindex.server import (
     main as server_main,
