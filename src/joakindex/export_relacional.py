@@ -18,8 +18,11 @@ __author__ = "Joaquim Ferreira Silva Neto"
 __email__ = "joaquimfsneto@gmail.com"
 __version__ = "1.0.0"
 
+import csv
 import hashlib
+import io
 import re
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -274,3 +277,41 @@ def aggregate_export(db_path: Union[str, Path]) -> Dict[str, List[Dict[str, Any]
         "documentos": documentos_rows,
         "vinculos": vinculos_rows,
     }
+
+
+# Colunas de cada CSV, na ordem em que aparecem no arquivo final. As chaves deste
+# dict (sem ".csv") têm que bater exatamente com as chaves retornadas por
+# aggregate_export — ver test_csv_columns_chaves_batem_com_aggregate_export.
+CSV_COLUMNS: Dict[str, List[str]] = {
+    "pessoas_fisicas.csv": ["entidade_id", "nome_normalizado", "cpf", "rg", "identificacao_incompleta", "documentos_md5"],
+    "pessoas_juridicas.csv": ["entidade_id", "razao_social_normalizada", "cnpj", "identificacao_incompleta", "documentos_md5"],
+    "enderecos.csv": ["entidade_id", "tipo_entidade", "documento_md5", "endereco_completo"],
+    "documentos.csv": ["md5", "nome_arquivo", "tipo_documento", "data", "entidade_titular_id", "dossie_id", "status", "status_conferencia"],
+    "vinculos.csv": ["documento_md5", "entidade_id", "tipo_entidade", "papel"],
+}
+
+
+def build_export_zip(db_path: Union[str, Path]) -> io.BytesIO:
+    """
+    Chama aggregate_export(db_path), serializa cada lista como CSV (UTF-8 com BOM,
+    mesmo padrão já usado no export plano do frontend, para abrir corretamente
+    acentuação no Excel) e empacota os 5 arquivos num ZIP em memória — mesmo
+    padrão de create_documents_zip em api_batch.py.
+    """
+    data = aggregate_export(db_path)
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for filename, columns in CSV_COLUMNS.items():
+            chave = filename[: -len(".csv")]
+            sio = io.StringIO()
+            sio.write("﻿")
+            writer = csv.DictWriter(sio, fieldnames=columns, extrasaction="ignore")
+            writer.writeheader()
+            for row in data[chave]:
+                out_row = dict(row)
+                if isinstance(out_row.get("documentos_md5"), list):
+                    out_row["documentos_md5"] = ";".join(out_row["documentos_md5"])
+                writer.writerow(out_row)
+            zf.writestr(filename, sio.getvalue())
+    zip_buffer.seek(0)
+    return zip_buffer

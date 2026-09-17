@@ -1,11 +1,16 @@
+import csv
+import io
 import tempfile
+import zipfile
 from pathlib import Path
 
 import pytest
 
 from joakindex.db import create_schema, get_connection, upsert_document
 from joakindex.export_relacional import (
+    CSV_COLUMNS,
     aggregate_export,
+    build_export_zip,
     build_vinculos_for_doc,
     resolve_pessoa_fisica_id,
     resolve_pessoa_juridica_id,
@@ -272,3 +277,39 @@ def test_aggregate_export_sem_cpf_sem_rg_documentos_diferentes_nao_fundem(temp_d
     result = aggregate_export(temp_db)
     assert len(result["pessoas_fisicas"]) == 2
     assert all(p["identificacao_incompleta"] for p in result["pessoas_fisicas"])
+
+
+def test_csv_columns_chaves_batem_com_aggregate_export(temp_db):
+    result = aggregate_export(temp_db)
+    chaves_csv = {filename[: -len(".csv")] for filename in CSV_COLUMNS}
+    assert chaves_csv == set(result.keys())
+
+
+def test_build_export_zip_gera_cinco_csvs_com_cabecalhos_corretos(temp_db):
+    upsert_document(temp_db, {
+        "md5": "docz", "nome_arquivo": "z.pdf", "beneficiario": "Fulano de Tal", "cpf": CPF_VALIDO,
+        "dados_extras": {"endereco_completo": "Rua Z, 1"},
+    })
+    zip_buffer = build_export_zip(temp_db)
+    with zipfile.ZipFile(zip_buffer) as zf:
+        assert set(zf.namelist()) == set(CSV_COLUMNS.keys())
+        for filename, columns in CSV_COLUMNS.items():
+            content = zf.read(filename).decode("utf-8-sig")
+            reader = csv.DictReader(io.StringIO(content))
+            assert reader.fieldnames == columns
+
+        pessoas_reader = csv.DictReader(io.StringIO(zf.read("pessoas_fisicas.csv").decode("utf-8-sig")))
+        rows = list(pessoas_reader)
+        assert len(rows) == 1
+        assert rows[0]["cpf"] == CPF_VALIDO_DIGITS
+        assert rows[0]["documentos_md5"] == "docz"
+
+
+def test_build_export_zip_base_vazia_gera_zip_valido_so_com_cabecalhos(temp_db):
+    zip_buffer = build_export_zip(temp_db)
+    with zipfile.ZipFile(zip_buffer) as zf:
+        assert set(zf.namelist()) == set(CSV_COLUMNS.keys())
+        for filename in CSV_COLUMNS:
+            content = zf.read(filename).decode("utf-8-sig")
+            linhas = [linha for linha in content.splitlines() if linha]
+            assert len(linhas) == 1  # só o cabeçalho
