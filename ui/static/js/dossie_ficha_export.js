@@ -1375,3 +1375,25 @@
       showToast('Exportação concluída! Baixando JSON e CSV com todas as informações extraídas.', 'success');
     }
 
+    // Exporta o dump relacional estruturado (5 CSVs vinculados) do banco inteiro, via backend
+    async function exportRelacionalZip() {
+      showToast('Gerando exportação relacional estruturada (pode levar alguns segundos)...', 'info');
+      try {
+        const resp = await fetch('/api/export/relacional-zip');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = url;
+        downloadAnchor.download = `joakindex_export_relacional_${timestamp}.zip`;
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        document.body.removeChild(downloadAnchor);
+        URL.revokeObjectURL(url);
+        showToast('Exportação relacional (ZIP com 5 planilhas vinculadas) baixada com sucesso!', 'success');
+      } catch (err) {
+        showToast('Falha ao gerar exportação relacional: ' + err.message, 'error');
+      }
+    }
+
