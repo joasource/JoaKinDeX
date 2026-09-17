@@ -1,5 +1,5 @@
 """
-Testes de caracterização de prompt_interactive_menu (src/joakindex/cli.py).
+Testes de caracterização de prompt_interactive_menu (src/joakindex/menu_interativo.py).
 
 prompt_interactive_menu é o menu interativo do CLI (~340 linhas): uma sequência
 de prompts via input() que preenche um argparse.Namespace (entrada, saída,
@@ -13,7 +13,7 @@ import argparse
 
 import pytest
 
-from joakindex import cli
+from joakindex import menu_interativo
 
 
 def _make_args(**overrides):
@@ -51,10 +51,10 @@ def _mock_config_helpers(monkeypatch, tmp_path):
     """
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.setattr(cli, "has_custom_config", lambda *a, **k: False)
-    monkeypatch.setattr(cli, "reset_classifier_config", lambda: None)
+    monkeypatch.setattr(menu_interativo, "has_custom_config", lambda *a, **k: False)
+    monkeypatch.setattr(menu_interativo, "reset_classifier_config", lambda: None)
     monkeypatch.setattr(
-        cli,
+        menu_interativo,
         "get_factory_defaults",
         lambda: {
             "classificador": {
@@ -75,10 +75,10 @@ def _mock_config_helpers(monkeypatch, tmp_path):
             }
         },
     )
-    monkeypatch.setattr(cli, "resolve_classifier_output_dir", lambda raw: str(raw))
-    monkeypatch.setattr(cli, "detect_ollama_environments", lambda base_url=None: [])
+    monkeypatch.setattr(menu_interativo, "resolve_classifier_output_dir", lambda raw: str(raw))
+    monkeypatch.setattr(menu_interativo, "detect_ollama_environments", lambda base_url=None: [])
     saved = {}
-    monkeypatch.setattr(cli, "save_classifier_config", lambda updates: saved.update(updates))
+    monkeypatch.setattr(menu_interativo, "save_classifier_config", lambda updates: saved.update(updates))
     return saved
 
 
@@ -98,7 +98,7 @@ def test_fluxo_completo_ollama_incremental_aceita_tudo_por_padrao(monkeypatch, t
     pasta = tmp_path / "pdf"
     pasta.mkdir()
     (pasta / "doc.pdf").write_bytes(b"conteudo")
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 1)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 1)
 
     _queue_inputs(monkeypatch, [
         str(pasta),   # 1. entrada
@@ -111,7 +111,7 @@ def test_fluxo_completo_ollama_incremental_aceita_tudo_por_padrao(monkeypatch, t
         "",           # confirmação final (aceita "S")
     ])
 
-    result = cli.prompt_interactive_menu(_make_args())
+    result = menu_interativo.prompt_interactive_menu(_make_args())
 
     assert result.input == str(pasta)
     assert result.provider == "ollama"
@@ -137,7 +137,7 @@ def test_caminho_inexistente_mantido_apos_confirmacao(monkeypatch, tmp_path):
         "",                 # confirmação final
     ])
 
-    result = cli.prompt_interactive_menu(_make_args())
+    result = menu_interativo.prompt_interactive_menu(_make_args())
 
     assert result.input == str(inexistente.expanduser().resolve())
 
@@ -145,7 +145,7 @@ def test_caminho_inexistente_mantido_apos_confirmacao(monkeypatch, tmp_path):
 def test_reset_no_prompt_de_entrada_restaura_padroes_de_fabrica(monkeypatch, tmp_path):
     pasta = tmp_path / "pdf"
     pasta.mkdir()
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 0)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 0)
 
     _queue_inputs(monkeypatch, [
         "reset",      # aciona reset_classifier_config + get_factory_defaults
@@ -160,7 +160,7 @@ def test_reset_no_prompt_de_entrada_restaura_padroes_de_fabrica(monkeypatch, tmp
         "",           # confirmação final
     ])
 
-    result = cli.prompt_interactive_menu(_make_args(input="./algo-customizado"))
+    result = menu_interativo.prompt_interactive_menu(_make_args(input="./algo-customizado"))
 
     assert result.input == str(pasta.expanduser().resolve())
 
@@ -168,7 +168,7 @@ def test_reset_no_prompt_de_entrada_restaura_padroes_de_fabrica(monkeypatch, tmp
 def test_provedor_openai_pede_modelo_chave_e_base_url(monkeypatch, tmp_path):
     pasta = tmp_path / "pdf"
     pasta.mkdir()
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 0)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 0)
 
     _queue_inputs(monkeypatch, [
         str(pasta), "s",   # entrada (sem PDFs, confirma)
@@ -183,7 +183,7 @@ def test_provedor_openai_pede_modelo_chave_e_base_url(monkeypatch, tmp_path):
         "",                 # confirmação final
     ])
 
-    result = cli.prompt_interactive_menu(_make_args())
+    result = menu_interativo.prompt_interactive_menu(_make_args())
 
     assert result.provider == "openai"
     assert result.model == "gpt-4o-mini"
@@ -193,7 +193,7 @@ def test_provedor_openai_pede_modelo_chave_e_base_url(monkeypatch, tmp_path):
 def test_openai_sem_chave_pode_prosseguir_com_confirmacao_explicita(monkeypatch, tmp_path):
     pasta = tmp_path / "pdf"
     pasta.mkdir()
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 0)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 0)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     _queue_inputs(monkeypatch, [
@@ -210,7 +210,7 @@ def test_openai_sem_chave_pode_prosseguir_com_confirmacao_explicita(monkeypatch,
         "",      # confirmação final
     ])
 
-    result = cli.prompt_interactive_menu(_make_args())
+    result = menu_interativo.prompt_interactive_menu(_make_args())
 
     assert result.provider == "openai"
     assert result.openai_key is None
@@ -219,9 +219,9 @@ def test_openai_sem_chave_pode_prosseguir_com_confirmacao_explicita(monkeypatch,
 def test_multiplos_ambientes_ollama_permite_escolher_por_indice(monkeypatch, tmp_path):
     pasta = tmp_path / "pdf"
     pasta.mkdir()
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 0)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 0)
     monkeypatch.setattr(
-        cli,
+        menu_interativo,
         "detect_ollama_environments",
         lambda base_url=None: [
             {"description": "Nativo", "is_running": True, "container": None, "models": ["modelo-a"], "type": "native"},
@@ -241,7 +241,7 @@ def test_multiplos_ambientes_ollama_permite_escolher_por_indice(monkeypatch, tmp
         "",       # confirmação final
     ])
 
-    result = cli.prompt_interactive_menu(_make_args())
+    result = menu_interativo.prompt_interactive_menu(_make_args())
 
     assert result.docker == "open-webui"
     assert result.model == "modelo-b"
@@ -250,7 +250,7 @@ def test_multiplos_ambientes_ollama_permite_escolher_por_indice(monkeypatch, tmp
 def test_workers_invalido_repete_prompt_ate_valor_valido(monkeypatch, tmp_path):
     pasta = tmp_path / "pdf"
     pasta.mkdir()
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 0)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 0)
 
     _queue_inputs(monkeypatch, [
         str(pasta), "s",
@@ -265,7 +265,7 @@ def test_workers_invalido_repete_prompt_ate_valor_valido(monkeypatch, tmp_path):
         "",      # confirmação final
     ])
 
-    result = cli.prompt_interactive_menu(_make_args())
+    result = menu_interativo.prompt_interactive_menu(_make_args())
 
     assert result.workers == 3
 
@@ -273,7 +273,7 @@ def test_workers_invalido_repete_prompt_ate_valor_valido(monkeypatch, tmp_path):
 def test_skip_ocr_desativado_quando_usuario_responde_nao(monkeypatch, tmp_path):
     pasta = tmp_path / "pdf"
     pasta.mkdir()
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 0)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 0)
 
     _queue_inputs(monkeypatch, [
         str(pasta), "s",
@@ -286,7 +286,7 @@ def test_skip_ocr_desativado_quando_usuario_responde_nao(monkeypatch, tmp_path):
         "",      # confirmação final
     ])
 
-    result = cli.prompt_interactive_menu(_make_args())
+    result = menu_interativo.prompt_interactive_menu(_make_args())
 
     assert result.skip_ocr is True
 
@@ -304,7 +304,7 @@ def test_estrategia_de_processamento_mapeia_force_e_reprocess_ocr(
 ):
     pasta = tmp_path / "pdf"
     pasta.mkdir()
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 0)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 0)
 
     _queue_inputs(monkeypatch, [
         str(pasta), "s",
@@ -317,7 +317,7 @@ def test_estrategia_de_processamento_mapeia_force_e_reprocess_ocr(
         "",   # confirmação final
     ])
 
-    result = cli.prompt_interactive_menu(_make_args())
+    result = menu_interativo.prompt_interactive_menu(_make_args())
 
     assert result.force is esperado_force
     assert result.reprocess_ocr is esperado_reprocess_ocr
@@ -326,7 +326,7 @@ def test_estrategia_de_processamento_mapeia_force_e_reprocess_ocr(
 def test_cancelar_na_confirmacao_final_sai_com_sys_exit_0(monkeypatch, tmp_path):
     pasta = tmp_path / "pdf"
     pasta.mkdir()
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 0)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 0)
 
     _queue_inputs(monkeypatch, [
         str(pasta), "s",
@@ -340,7 +340,7 @@ def test_cancelar_na_confirmacao_final_sai_com_sys_exit_0(monkeypatch, tmp_path)
     ])
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.prompt_interactive_menu(_make_args())
+        menu_interativo.prompt_interactive_menu(_make_args())
 
     assert exc_info.value.code == 0
 
@@ -352,7 +352,7 @@ def test_eof_durante_prompt_sai_com_sys_exit_0(monkeypatch):
     monkeypatch.setattr("builtins.input", _raise_eof)
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.prompt_interactive_menu(_make_args())
+        menu_interativo.prompt_interactive_menu(_make_args())
 
     assert exc_info.value.code == 0
 
@@ -360,10 +360,10 @@ def test_eof_durante_prompt_sai_com_sys_exit_0(monkeypatch):
 def test_config_final_e_persistida_com_save_classifier_config(monkeypatch, tmp_path):
     pasta = tmp_path / "pdf"
     pasta.mkdir()
-    monkeypatch.setattr(cli, "count_pdfs_in_path", lambda p: 0)
+    monkeypatch.setattr(menu_interativo, "count_pdfs_in_path", lambda p: 0)
 
     saved = {}
-    monkeypatch.setattr(cli, "save_classifier_config", lambda updates: saved.update(updates))
+    monkeypatch.setattr(menu_interativo, "save_classifier_config", lambda updates: saved.update(updates))
 
     _queue_inputs(monkeypatch, [
         str(pasta), "s",
@@ -376,7 +376,7 @@ def test_config_final_e_persistida_com_save_classifier_config(monkeypatch, tmp_p
         "",
     ])
 
-    result = cli.prompt_interactive_menu(_make_args())
+    result = menu_interativo.prompt_interactive_menu(_make_args())
 
     assert saved["input"] == result.input
     assert saved["output_dir"] == result.output_dir

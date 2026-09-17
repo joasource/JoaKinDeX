@@ -19,7 +19,7 @@ import subprocess
 import urllib.parse
 from pathlib import Path
 
-from joakindex.cli import SUPPORTED_EXTENSIONS
+from joakindex.classificacao import SUPPORTED_EXTENSIONS
 
 
 def handle_get_browse_dirs(handler, server_ctx, parsed):

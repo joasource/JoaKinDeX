@@ -131,32 +131,30 @@ try:
         extract_file_author,
         extract_file_dublin_core,
         run_batch_classification,
-        get_available_ollama_models,
         convert_office_to_pdf,
         WORD_EXTENSIONS,
         IMAGE_EXTENSIONS,
-        SUPPORTED_EXTENSIONS
     )
-    from joakindex.classificacao import TEXT_EXTENSIONS
+    from joakindex.classificacao import TEXT_EXTENSIONS, SUPPORTED_EXTENSIONS
     from joakindex.extractors_texto import sanitize_llm_transcription
     from joakindex.extractors_documento import extract_tesseract_text_from_pdf
     from joakindex.llm_clients import OllamaClient, OpenAIClient
+    from joakindex.menu_interativo import get_available_ollama_models
 except Exception:
     try:
         from .cli import (
             extract_file_author,
             extract_file_dublin_core,
             run_batch_classification,
-            get_available_ollama_models,
             convert_office_to_pdf,
             WORD_EXTENSIONS,
             IMAGE_EXTENSIONS,
-            SUPPORTED_EXTENSIONS
         )
-        from .classificacao import TEXT_EXTENSIONS
+        from .classificacao import TEXT_EXTENSIONS, SUPPORTED_EXTENSIONS
         from .extractors_texto import sanitize_llm_transcription
         from .extractors_documento import extract_tesseract_text_from_pdf
         from .llm_clients import OllamaClient, OpenAIClient
+        from .menu_interativo import get_available_ollama_models
     except Exception:
         import importlib.util
         main_py = Path(__file__).resolve().parent.parent.parent / "joakindex.py"
