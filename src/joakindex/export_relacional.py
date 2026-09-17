@@ -20,9 +20,19 @@ __version__ = "1.0.0"
 
 import hashlib
 import re
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from joakindex.extractors_texto import validate_cnpj_checksum, validate_cpf_checksum
+
+# Campos de passthrough do LLM (sem coluna dedicada) que identificam uma pessoa
+# física por um papel específico num documento — lidos defensivamente via .get(),
+# podem ou não existir dependendo do tipo de documento.
+_CAMPOS_PAPEL_PF_SIMPLES = (
+    ("emitente", "emitente"),
+    ("vendedor", "vendedor"),
+    ("comprador", "comprador"),
+    ("proprietario_anterior", "proprietario_anterior"),
+)
 
 
 def _only_digits(val: Optional[str]) -> str:
@@ -82,8 +92,11 @@ def resolve_pessoa_fisica_id(doc: Dict[str, Any]) -> Tuple[Optional[str], bool, 
         }
 
     # Provisório: sem CPF válido e sem RG -> não mescla por nome. 1:1 com o documento.
+    # O hash do nome é incluído no id para que duas pessoas diferentes e sem
+    # identificação no MESMO documento (ex.: comprador e vendedor sem CPF) não colidam.
     md5 = str(doc.get("md5") or "")
-    entidade_id = f"PF_PROV_{md5[:16]}"
+    digest = hashlib.sha1(nome_norm.encode("utf-8")).hexdigest()[:8]
+    entidade_id = f"PF_PROV_{md5[:16]}_{digest}"
     return entidade_id, True, {
         "entidade_id": entidade_id,
         "nome_normalizado": nome_norm,
@@ -120,3 +133,71 @@ def resolve_pessoa_juridica_id(
         "cnpj": "",
         "identificacao_incompleta": True,
     }
+
+
+def _vinculo_pf_por_nome(md5: str, nome: Optional[str], papel: str) -> Optional[Dict[str, Any]]:
+    """Resolve um nome solto (sem CPF/RG dedicados) para um vínculo de pessoa física."""
+    if not nome or not str(nome).strip():
+        return None
+    entidade_id, _, _ = resolve_pessoa_fisica_id({"md5": md5, "beneficiario": nome})
+    if not entidade_id:
+        return None
+    return {"documento_md5": md5, "entidade_id": entidade_id, "tipo_entidade": "PF", "papel": papel}
+
+
+def build_vinculos_for_doc(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Extrai TODAS as partes (papéis) de um documento como linhas de vínculo,
+    a partir dos campos populados (não do `tipo_documento`, que é texto livre
+    gerado pelo LLM e não um enum confiável). Um documento pode gerar 0, 1 ou
+    várias linhas dependendo de quantos papéis distintos ele tiver.
+    """
+    md5 = str(doc.get("md5") or "")
+    vinculos: List[Dict[str, Any]] = []
+
+    # 1. Titular: beneficiario (PF) tem prioridade; cai para razao_social/cnpj (PJ)
+    #    quando não há beneficiário (ex.: Cartão CNPJ / Situação Cadastral).
+    beneficiario = doc.get("beneficiario")
+    if beneficiario and str(beneficiario).strip():
+        pf_id, _, _ = resolve_pessoa_fisica_id(doc)
+        if pf_id:
+            vinculos.append({"documento_md5": md5, "entidade_id": pf_id, "tipo_entidade": "PF", "papel": "titular"})
+    else:
+        razao_social = doc.get("razao_social")
+        if razao_social and str(razao_social).strip():
+            pj_id, _, _ = resolve_pessoa_juridica_id(razao_social, doc.get("cnpj"), md5)
+            vinculos.append({"documento_md5": md5, "entidade_id": pj_id, "tipo_entidade": "PJ", "papel": "titular"})
+
+    # 2. Fonte pagadora: PJ se tiver CNPJ válido, senão trata como nome de PF solto.
+    fonte_pagadora = doc.get("fonte_pagadora")
+    if fonte_pagadora and str(fonte_pagadora).strip():
+        cnpj_fp_digits = _only_digits(doc.get("cnpj_fonte_pagadora"))
+        if cnpj_fp_digits and validate_cnpj_checksum(cnpj_fp_digits):
+            pj_id, _, _ = resolve_pessoa_juridica_id(fonte_pagadora, cnpj_fp_digits, md5)
+            vinculos.append({"documento_md5": md5, "entidade_id": pj_id, "tipo_entidade": "PJ", "papel": "fonte_pagadora"})
+        else:
+            v = _vinculo_pf_por_nome(md5, fonte_pagadora, "fonte_pagadora")
+            if v:
+                vinculos.append(v)
+
+    # 3. Papéis simples de PF via passthrough do LLM (emitente, vendedor, comprador, proprietario_anterior).
+    for campo, papel in _CAMPOS_PAPEL_PF_SIMPLES:
+        v = _vinculo_pf_por_nome(md5, doc.get(campo), papel)
+        if v:
+            vinculos.append(v)
+
+    # 4. Listagens com múltiplos nomes (borderôs, relações de pagamento) -> um vínculo
+    #    "listado" por nome. Quando o documento tem só uma pessoa, o prompt de extração
+    #    instrui o LLM a retornar `nomes_detectados: [mesmo nome do beneficiário]` — nesse
+    #    caso o nome já virou vínculo "titular" acima, então é pulado aqui para não duplicar.
+    nomes_detectados = doc.get("nomes_detectados")
+    nome_titular_norm = _normalize_nome(beneficiario) if beneficiario else ""
+    if isinstance(nomes_detectados, list):
+        for nome in nomes_detectados:
+            if nome and _normalize_nome(nome) == nome_titular_norm and nome_titular_norm:
+                continue
+            v = _vinculo_pf_por_nome(md5, nome, "listado")
+            if v:
+                vinculos.append(v)
+
+    return vinculos

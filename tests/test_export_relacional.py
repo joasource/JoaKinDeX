@@ -1,4 +1,8 @@
-from joakindex.export_relacional import resolve_pessoa_fisica_id, resolve_pessoa_juridica_id
+from joakindex.export_relacional import (
+    build_vinculos_for_doc,
+    resolve_pessoa_fisica_id,
+    resolve_pessoa_juridica_id,
+)
 
 CPF_VALIDO = "111.444.777-35"
 CPF_VALIDO_DIGITS = "11144477735"
@@ -48,9 +52,19 @@ def test_resolve_pessoa_fisica_sem_cpf_sem_rg_gera_provisoria_por_documento():
     id_b, incompleta_b, _ = resolve_pessoa_fisica_id(doc_b)
     # Mesmo nome, sem CPF/RG: NUNCA funde por nome isolado -> entidades distintas
     assert id_a != id_b
-    assert id_a == "PF_PROV_fff666"
-    assert id_b == "PF_PROV_ggg777"
+    assert id_a.startswith("PF_PROV_fff666")
+    assert id_b.startswith("PF_PROV_ggg777")
     assert incompleta_a is True and incompleta_b is True
+
+
+def test_resolve_pessoa_fisica_duas_pessoas_nao_identificadas_no_mesmo_documento():
+    # Mesmo documento (md5 igual), nomes diferentes -> não podem colidir
+    # (cenário real: comprador e vendedor de um contrato, ambos sem CPF/RG)
+    doc_comprador = {"md5": "contrato001", "beneficiario": "Comprador Um"}
+    doc_vendedor = {"md5": "contrato001", "beneficiario": "Vendedor Dois"}
+    id_a, _, _ = resolve_pessoa_fisica_id(doc_comprador)
+    id_b, _, _ = resolve_pessoa_fisica_id(doc_vendedor)
+    assert id_a != id_b
 
 
 def test_resolve_pessoa_fisica_sem_nenhum_indicio_retorna_none():
@@ -88,3 +102,82 @@ def test_resolve_pessoa_juridica_duas_pj_nao_identificadas_no_mesmo_documento():
     id_b, _, _ = resolve_pessoa_juridica_id("Empresa B", None, "mmm333")
     # Mesmo documento, razões sociais diferentes -> não colidem
     assert id_a != id_b
+
+
+def test_build_vinculos_documento_simples_so_titular():
+    doc = {"md5": "doc001", "beneficiario": "Fulano de Tal", "cpf": CPF_VALIDO}
+    vinculos = build_vinculos_for_doc(doc)
+    papeis = {v["papel"] for v in vinculos}
+    assert papeis == {"titular"}
+    assert vinculos[0]["entidade_id"] == f"PF_{CPF_VALIDO_DIGITS}"
+
+
+def test_build_vinculos_cartao_cnpj_titular_pj():
+    doc = {"md5": "doc002", "razao_social": "Empresa XYZ Ltda", "cnpj": CNPJ_VALIDO}
+    vinculos = build_vinculos_for_doc(doc)
+    assert len(vinculos) == 1
+    assert vinculos[0]["papel"] == "titular"
+    assert vinculos[0]["tipo_entidade"] == "PJ"
+    assert vinculos[0]["entidade_id"] == f"PJ_{CNPJ_VALIDO_DIGITS}"
+
+
+def test_build_vinculos_contrato_compra_venda_multiplas_partes():
+    doc = {
+        "md5": "doc003",
+        "beneficiario": "Comprador Um",
+        "vendedor": "Vendedor Dois",
+        "comprador": "Comprador Um",
+        "proprietario_anterior": "Vendedor Dois",
+    }
+    vinculos = build_vinculos_for_doc(doc)
+    papeis = [v["papel"] for v in vinculos]
+    assert "titular" in papeis
+    assert "vendedor" in papeis
+    assert "comprador" in papeis
+    assert "proprietario_anterior" in papeis
+    entidades = {v["entidade_id"] for v in vinculos}
+    # Comprador e vendedor são pessoas distintas, sem CPF/RG -> ids distintos
+    assert len(entidades) >= 2
+
+
+def test_build_vinculos_informe_rendimentos_titular_pf_e_fonte_pagadora_pj():
+    doc = {
+        "md5": "doc004",
+        "beneficiario": "Fulano de Tal",
+        "cpf": CPF_VALIDO,
+        "fonte_pagadora": "Empresa XYZ Ltda",
+        "cnpj_fonte_pagadora": CNPJ_VALIDO,
+    }
+    vinculos = build_vinculos_for_doc(doc)
+    assert len(vinculos) == 2
+    by_papel = {v["papel"]: v for v in vinculos}
+    assert by_papel["titular"]["tipo_entidade"] == "PF"
+    assert by_papel["fonte_pagadora"]["tipo_entidade"] == "PJ"
+    assert by_papel["fonte_pagadora"]["entidade_id"] == f"PJ_{CNPJ_VALIDO_DIGITS}"
+
+
+def test_build_vinculos_fonte_pagadora_sem_cnpj_valido_vira_pf():
+    doc = {"md5": "doc005", "beneficiario": "Fulano de Tal", "fonte_pagadora": "Sicrano Pagador"}
+    vinculos = build_vinculos_for_doc(doc)
+    by_papel = {v["papel"]: v for v in vinculos}
+    assert by_papel["fonte_pagadora"]["tipo_entidade"] == "PF"
+
+
+def test_build_vinculos_nomes_detectados_gera_um_vinculo_por_nome_extra():
+    doc = {
+        "md5": "doc006",
+        "beneficiario": "Fulano de Tal",
+        "nomes_detectados": ["Fulano de Tal", "Ciclano da Silva", "Beltrano Souza"],
+    }
+    vinculos = build_vinculos_for_doc(doc)
+    listados = [v for v in vinculos if v["papel"] == "listado"]
+    # O próprio beneficiário aparece em nomes_detectados (comportamento do prompt de extração
+    # para documentos de 1 pessoa só) e não deve duplicar o vínculo "titular"
+    assert len(listados) == 2
+    entidades_listadas = {v["entidade_id"] for v in listados}
+    assert len(entidades_listadas) == 2
+
+
+def test_build_vinculos_documento_sem_nenhum_campo_retorna_lista_vazia():
+    doc = {"md5": "doc007"}
+    assert build_vinculos_for_doc(doc) == []
